@@ -78,9 +78,3 @@ runs:
         echo "   private.fragment by the create-config-fragment action (fuse_bpf input) - not here."
 
         echo "fuse_bpf_applied=true" >> "$GITHUB_ENV"
-
-    - name: Skip FUSE-BPF (not kernel 5.10)
-      if: inputs.kernel_version != '5.10'
-      shell: bash
-      run: |
-        echo "::notice::fuse_bpf requested but kernel_version=${{ inputs.kernel_version }}; skipping backport (android13+ based common trees already ship FUSE_BPF natively for source_mode=google-lts)."
