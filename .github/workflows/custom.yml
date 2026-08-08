@@ -97,6 +97,7 @@ on:
         options: ["off", "on"]
         default: "off"
       baseband_guard:
+        description: "Apply Baseband Guard / BBG patches"
         type: choice
         required: true
         options: ["on", "off"]
@@ -301,12 +302,6 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
-
-      - name: Apply FUSE-BPF
-        if: inputs.kernel_version == '5.10'
-        uses: ./.github/actions/apply-fuse-bpf
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
 
       - name: Ensure expected Clang
         if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
