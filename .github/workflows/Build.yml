@@ -11,7 +11,7 @@ on:
       manager:
         type: choice
         required: true
-        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Next", "KowSU", "ResukiSU", "Rissu", "Wild_KSU"]
+        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Next", "KSUN-Susfs-Hookless", "KowSU", "ResukiSU", "Rissu", "Wild_KSU"]
         default: "Vanilla"
       manager_ref:
         description: "Optional manager git ref/commit/tag"
@@ -55,11 +55,35 @@ on:
         required: true
         options: ["on", "off"]
         default: "off"
+      add_nomount_maxsteeel:
+        description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
+        type: choice
+        required: true
+        options: ["off", "on"]
+        default: "off"
       baseband_guard:
         description: "Apply Baseband Guard / BBG patches"
         type: choice
         required: true
         options: ["on", "off"]
+        default: "off"
+      droidspaces:
+        description: "Droidspaces support (5.10~6.6: slot patch, 6.12: on/off)"
+        type: choice
+        required: true
+        options: ["off", "678", "123", "345"]
+        default: "off"
+      droidspaces_ntsync:
+        description: "NTSync support for Droidspaces containers"
+        type: choice
+        required: true
+        options: ["off", "on"]
+        default: "off"
+      re_kernel:
+        description: "启用 Re-Kernel 驱动"
+        type: choice
+        required: true
+        options: ["off", "on"]
         default: "off"
       publish_mode:
         description: "Choose where the build is uploaded"
@@ -252,12 +276,6 @@ jobs:
         with:
           enabled: "true"
           kernel_version: ${{ inputs.kernel_version }}
-
-      - name: Apply KernelSU Coccinelle manual hooks
-        if: inputs.manager == 'KernelSU'
-        uses: ./.github/actions/apply-kernelsu-coccinelle-hooks
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
           
       - name: Init manager
         if: inputs.manager != 'Vanilla'
@@ -269,7 +287,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           
       - name: Apply SUSFS4KSU patches
-        if: inputs.susfs == 'on' && inputs.manager != 'KernelSU-Next'
+        if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
         uses: ./.github/actions/apply-susfs
         with:
           kernel_version: ${{ inputs.kernel_version }}
@@ -280,6 +298,12 @@ jobs:
         uses: ./.github/actions/apply-resukisu-hooks
         with:
           kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply NoMount support (maxsteeel)
+        if: inputs.add_nomount_maxsteeel == 'on'
+        uses: ./.github/actions/apply-nomount
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
           
       - name: Apply Baseband Guard
         if: inputs.baseband_guard == 'on'
@@ -288,10 +312,39 @@ jobs:
           baseband_guard: ${{ inputs.baseband_guard }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply Droidspaces support
+        if: inputs.droidspaces != 'off'
+        uses: ./.github/actions/apply-droidspaces
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          droidspaces: ${{ inputs.droidspaces }}
+
+      - name: Apply NTSync support
+        if: inputs.droidspaces != 'off' && inputs.droidspaces_ntsync == 'on'
+        uses: ./.github/actions/apply-ntsync
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply Re-Kernel driver
+        if: inputs.re_kernel == 'on'
+        uses: ./.github/actions/apply-re-kernel
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply Unicode Fix Patch
+        uses: ./.github/actions/apply-unicode-fix
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          
+
       - name: Create private config fragment
         uses: ./.github/actions/create-config-fragment
         with:
           manager: ${{ inputs.manager }}
+          add_nomount_maxsteeel: ${{ inputs.add_nomount_maxsteeel }}
+          droidspaces: ${{ inputs.droidspaces }}
+          droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+          re_kernel: ${{ inputs.re_kernel }}
           ikconfig: ${{ env.IKCONFIG }}
           container_core: ${{ env.CONTAINER_CORE }}
           container_ipc: ${{ env.CONTAINER_IPC }}
