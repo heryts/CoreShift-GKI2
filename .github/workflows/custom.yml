@@ -303,31 +303,10 @@ jobs:
           source_mode: ${{ inputs.source_mode }}
 
       - name: Apply FUSE-BPF
+        if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/apply-fuse-bpf
         with:
           kernel_version: ${{ inputs.kernel_version }}
-
-      - name: "DEBUG: dump fuse_kill_sb_anon / fuse_mount_destroy"
-        shell: bash
-        run: |
-          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
-          echo "== fuse_kill_sb_anon in $COMMON_DIR/fs/fuse/inode.c =="
-          grep -n -B 2 -A 15 "fuse_kill_sb_anon" "$COMMON_DIR/fs/fuse/inode.c" || echo "not found"
-          echo
-          echo "== every mention of fuse_mount_destroy in inode.c =="
-          grep -n "fuse_mount_destroy" "$COMMON_DIR/fs/fuse/inode.c" || echo "not found"
-          echo
-          echo "== every mention of fuse_mount_destroy / fuse_conn_destroy prototype in fuse_i.h =="
-          grep -n "fuse_mount_destroy\|fuse_conn_destroy" "$COMMON_DIR/fs/fuse/fuse_i.h" || echo "not found"
-          
-      - name: Save Reject Files if Fails
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuse-bpf-rej-files
-          path: |
-            **/*.rej
-          if-no-files-found: warn
 
       - name: Ensure expected Clang
         if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
