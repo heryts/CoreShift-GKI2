@@ -234,7 +234,6 @@ jobs:
         uses: ./.github/actions/sync-kernel
         with:
           source_mode: ${{ inputs.source_mode }}
-          common_ref: "298dc7902435c8ca8ff46f30d8fcb0074a894cb6"
 
       - name: Resolve source repo
         id: source-repo
