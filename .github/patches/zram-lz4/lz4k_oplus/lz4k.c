@@ -82,7 +82,7 @@ static void __exit lz4k_oplus_mod_fini(void)
 	crypto_unregister_alg(&alg_lz4k);
 }
 
-module_init(lz4k_oplus_mod_init);
+subsys_initcall(lz4k_oplus_mod_init);
 module_exit(lz4k_oplus_mod_fini);
 
 MODULE_LICENSE("GPL");
