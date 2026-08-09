@@ -89,13 +89,13 @@ on:
         type: choice
         required: true
         options: ["on", "off"]
-        default: "off"
+        default: "on"
       add_nomount_maxsteeel:
         description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
         type: choice
         required: true
         options: ["off", "on"]
-        default: "off"
+        default: "on"
       baseband_guard:
         description: "Apply Baseband Guard / BBG patches"
         type: choice
