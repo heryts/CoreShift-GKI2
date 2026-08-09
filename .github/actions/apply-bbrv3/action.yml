@@ -18,7 +18,7 @@ runs:
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         set -euo pipefail
-        PATCH_DIR="${{ github.workspace }}/.github/patches/common/bbrv3"
+        PATCH_DIR="${{ github.workspace }}/.github/patches/bbrv3"
 
         if [[ "${{ inputs.version }}" == "android15-6.6" ]]; then
           patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android15-6.6.patch"
