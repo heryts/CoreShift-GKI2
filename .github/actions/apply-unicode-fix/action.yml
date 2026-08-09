@@ -16,7 +16,7 @@ runs:
         MIN_VERSION="5.16"
         echo "Patching unicode!"
         if [ "$(printf '%s\n' "$KERNEL_VERSION" "$MIN_VERSION" | sort -V | head -n1)" = "$KERNEL_VERSION" ]; then
-            patch -p1 --forward < "${{ github.workspace }}/.github/patches/common/unicode-bypass/unicode_bypass_fix_6.1-.patch"
+            patch -p1 --forward < "${{ github.workspace }}/.github/patches/unicode-bypass/unicode_bypass_fix_6.1-.patch"
         else
-            patch -p1 --forward < "${{ github.workspace }}/.github/patches/common/unicode-bypass/unicode_bypass_fix_6.1+.patch"
+            patch -p1 --forward < "${{ github.workspace }}/.github/patches/unicode-bypass/unicode_bypass_fix_6.1+.patch"
         fi
