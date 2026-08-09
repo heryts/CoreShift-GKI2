@@ -1,0 +1,83 @@
+name: "Apply network patches"
+description: >
+  Applies all kernel-version-dependent network/TCP patches in one step:
+  the CONFIG_IP_SET_MAX limit fix (5.10 only), deriving android_version /
+  version / sublevel from kernel_version, and applying the BBRv3 TCP
+  congestion control patch set (version-specific, plus the 5.10 sysctl
+  proc_dou8vec_minmax prerequisite patches when needed).
+
+inputs:
+  kernel_version:
+    description: "Kernel version being built (5.10 / 6.1 / 6.6 / 6.12)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Fix CONFIG_IP_SET_MAX limit (5.10)
+      if: inputs.kernel_version == '5.10'
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        echo "== raising ipset max sets limit for kernel 5.10 =="
+        sed -i 's/CONFIG_IP_SET_MAX/65534/g' net/netfilter/ipset/ip_set_core.c
+
+    - name: Derive kernel version vars
+      id: derive-version
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ inputs.kernel_version }}" in
+          5.10) ANDROID_VERSION="android12" ;;
+          6.1)  ANDROID_VERSION="android14" ;;
+          6.6)  ANDROID_VERSION="android15" ;;
+          6.12) ANDROID_VERSION="android16" ;;
+          *)
+            echo "::error::unsupported kernel_version: ${{ inputs.kernel_version }}"
+            exit 1
+            ;;
+        esac
+        VERSION="${ANDROID_VERSION}-${{ inputs.kernel_version }}"
+        {
+          echo "android_version=$ANDROID_VERSION"
+          echo "version=$VERSION"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Derive kernel sublevel
+      id: kernel-sublevel
+      shell: bash
+      run: |
+        set -euo pipefail
+        MAKEFILE="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}/Makefile"
+        SUBLEVEL="$(grep -m1 '^SUBLEVEL' "$MAKEFILE" | sed 's/^SUBLEVEL[[:space:]]*=[[:space:]]*//')"
+        echo "sublevel=$SUBLEVEL" >> "$GITHUB_OUTPUT"
+        echo "derived sublevel: $SUBLEVEL"
+
+    - name: Apply BBRv3 Patch
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        VERSION="${{ steps.derive-version.outputs.version }}"
+        PATCH_DIR="${{ github.workspace }}/.github/patches/common/bbrv3"
+
+        if [[ "$VERSION" == "android15-6.6" ]]; then
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android15-6.6.patch"
+        elif [[ "$VERSION" == "android14-6.1" ]]; then
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android14-6.1.patch"
+        elif [[ "$VERSION" == "android12-5.10" ]]; then
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android12-5.10.patch"
+        else
+          echo "::error::no BBRv3 patch available for version=$VERSION"
+          exit 1
+        fi
+
+        if [[ "$VERSION" == "android12-5.10" ]]; then
+          if ! grep -qF 'int proc_dou8vec_minmax(' ./include/linux/sysctl.h; then
+            patch -p1 < "$PATCH_DIR/sysctl_add_proc_dou8vec_minmax.patch"
+            patch -p1 < "$PATCH_DIR/sysctl_fix_data-races_in_proc_dou8vec_minmax.patch"
+          fi
+        fi
+
+        echo "BBRv3 patches applied for version=$VERSION"
