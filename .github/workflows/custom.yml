@@ -379,6 +379,11 @@ jobs:
         uses: ./.github/actions/apply-network-patches
         with:
           kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply ZRAM patches
+        uses: ./.github/actions/apply-zram-patches
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
  
       - name: Create private config fragment
         uses: ./.github/actions/create-config-fragment
