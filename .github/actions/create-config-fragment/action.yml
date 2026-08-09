@@ -93,7 +93,8 @@ runs:
         disable_config() {
         key="$1"
         printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
-  
+        }
+        
         add_str_config() {
           key="$1"
           val="$2"
