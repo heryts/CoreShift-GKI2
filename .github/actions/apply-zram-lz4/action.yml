@@ -44,7 +44,7 @@ runs:
         cp -r "$ZRAM_PATCHES/lz4k/crypto/." ./crypto/
         cp -r "$ZRAM_PATCHES/lz4k_oplus" ./lib/
 
-        PATCH_DIR="$ZRAM_PATCHES/lz4k/zram_patch/${{ inputs.kernel_version }}"
+        PATCH_DIR="$ZRAM_PATCHES/zram_patch/${{ inputs.kernel_version }}"
         if [ ! -d "$PATCH_DIR" ]; then
           echo "::error::No zram_patch directory for kernel_version=${{ inputs.kernel_version }} (expected $PATCH_DIR)"
           exit 1
