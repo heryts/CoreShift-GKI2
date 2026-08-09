@@ -77,6 +77,9 @@ runs:
           patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android14-6.1.patch"
         elif [[ "$VERSION" == "android12-5.10" ]]; then
           patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android12-5.10.patch"
+        elif [[ "$VERSION" == "android16-6.12" ]]; then
+          echo "::notice::no BBRv3 patch available yet for version=$VERSION - skipping (CONFIG_TCP_CONG_BBR3 will stay enabled in the config fragment but the actual BBRv3 algorithm won't be present in vmlinux for this version)"
+          echo "bbrv3_patch_applied=false" >> "$GITHUB_ENV"
         else
           echo "::error::no BBRv3 patch available for version=$VERSION"
           exit 1
@@ -89,7 +92,24 @@ runs:
           fi
         fi
 
+        if [[ "$VERSION" != "android16-6.12" ]]; then
+          echo "bbrv3_patch_applied=true" >> "$GITHUB_ENV"
+        fi
+
         echo "BBRv3 patches applied for version=$VERSION"
+
+    - name: Fix CIFS netfs.ko reference (android16-6.12)
+      if: inputs.kernel_version == '6.12'
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        if [ -f modules.bzl ] && grep -qF '"fs/netfs/netfs.ko",' modules.bzl; then
+          sed -i '/"fs\/netfs\/netfs\.ko",/d' modules.bzl
+          echo "removed fs/netfs/netfs.ko entry from modules.bzl"
+        else
+          echo "::notice::fs/netfs/netfs.ko entry not found in modules.bzl - nothing to remove (may already be fixed upstream)"
+        fi
 
     - name: Whitelist BBRv3 required KMI symbols
       if: inputs.kmi_bypass == 'off'
