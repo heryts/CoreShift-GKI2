@@ -108,7 +108,11 @@ runs:
 
         echo "== enabling BBRv3 TCP congestion control =="
         add_config TCP_CONG_ADVANCED y
-        add_config TCP_CONG_BBR3 y
+        if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+          add_config TCP_CONG_BBR3 y
+        else
+          echo "  skipping CONFIG_TCP_CONG_BBR3: no BBRv3 patch available yet for kernel_version=6.12 (apply-network-patches skips it)"
+        fi
         add_config TCP_CONG_BBR y
         add_config DEFAULT_BBR y
         add_str_config DEFAULT_TCP_CONG bbr
@@ -170,6 +174,11 @@ runs:
         add_config CIFS_XATTR y
         add_config CIFS_POSIX y
 
+        if [ "${{ inputs.ikconfig }}" = "on" ]; then
+          add_config IKCONFIG y
+          add_config IKCONFIG_PROC y
+        fi
+
         if [ "${{ inputs.container_core }}" = "on" ]; then
           add_config NAMESPACES y
           add_config USER_NS y
@@ -230,11 +239,6 @@ runs:
           add_config IP_NF_FILTER y
           add_config IP_NF_NAT y
           add_config IP_NF_TARGET_MASQUERADE y
-        fi
-
-        if [ "${{ inputs.ikconfig }}" = "on" ]; then
-          add_config IKCONFIG y
-          add_config IKCONFIG_PROC y
         fi
 
         if [ "${{ inputs.fq_codel_features }}" = "on" ]; then
