@@ -171,15 +171,6 @@ runs:
         add_config CIFS_XATTR y
         add_config CIFS_POSIX y
 
-        echo "== FUSE-BPF config (depends on FUSE_FS + BPF) =="
-        if grep -qxF "CONFIG_FUSE_FS=y" private.fragment 2>/dev/null; then
-          echo "  already requested via mount_filesystems: CONFIG_FUSE_FS"
-        else
-          add_config FUSE_FS y
-        fi
-        add_config BPF y
-        add_config FUSE_BPF y
-
         if [ "${{ inputs.container_core }}" = "on" ]; then
           add_config NAMESPACES y
           add_config USER_NS y
