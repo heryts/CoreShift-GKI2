@@ -115,7 +115,11 @@ runs:
         fi
         add_config TCP_CONG_BBR y
         add_config DEFAULT_BBR y
-        add_str_config DEFAULT_TCP_CONG bbr
+        if [ "${{ inputs.fq_codel_features }}" != "on" ]; then
+          add_str_config DEFAULT_TCP_CONG bbr
+        else
+          echo "  skipping DEFAULT_TCP_CONG=bbr here: fq_codel_features=on will set it to cubic below"
+        fi
 
         echo "== enabling base TCP congestion control algorithms =="
         add_config TCP_CONG_CUBIC y
@@ -123,34 +127,36 @@ runs:
         add_config TCP_CONG_WESTWOOD y
         add_config TCP_CONG_HTCP y
         
-        echo "== enabling IP Set & Firewall =="
-        add_config IP_SET y
-        add_config IP_SET_BITMAP_IP y
-        add_config IP_SET_BITMAP_IPMAC y
-        add_config IP_SET_BITMAP_PORT y
-        add_config IP_SET_HASH_IP y
-        add_config IP_SET_HASH_IPMARK y
-        add_config IP_SET_HASH_IPPORT y
-        add_config IP_SET_HASH_IPPORTIP y
-        add_config IP_SET_HASH_IPPORTNET y
-        add_config IP_SET_HASH_IPMAC y
-        add_config IP_SET_HASH_MAC y
-        add_config IP_SET_HASH_NETPORTNET y
-        add_config IP_SET_HASH_NET y
-        add_config IP_SET_HASH_NETNET y
-        add_config IP_SET_HASH_NETPORT y
-        add_config IP_SET_HASH_NETIFACE y
-        add_config IP_SET_LIST_SET y
-        add_config NETFILTER_XT_MATCH_ADDRTYPE y
-        add_config NETFILTER_XT_SET y
-        add_config NETFILTER_XT_TARGET_LOG y
-        add_config NETFILTER_XT_MATCH_RECENT y
-        add_config IP6_NF_NAT y
-        add_config IP6_NF_TARGET_MASQUERADE y
-
+        if [ "${{ inputs.container_networking }}" = "on" ]; then
+          echo "== enabling IP Set & Firewall =="
+          add_config IP_SET y
+          add_config IP_SET_BITMAP_IP y
+          add_config IP_SET_BITMAP_IPMAC y
+          add_config IP_SET_BITMAP_PORT y
+          add_config IP_SET_HASH_IP y
+          add_config IP_SET_HASH_IPMARK y
+          add_config IP_SET_HASH_IPPORT y
+          add_config IP_SET_HASH_IPPORTIP y
+          add_config IP_SET_HASH_IPPORTNET y
+          add_config IP_SET_HASH_IPMAC y
+          add_config IP_SET_HASH_MAC y
+          add_config IP_SET_HASH_NETPORTNET y
+          add_config IP_SET_HASH_NET y
+          add_config IP_SET_HASH_NETNET y
+          add_config IP_SET_HASH_NETPORT y
+          add_config IP_SET_HASH_NETIFACE y
+          add_config IP_SET_LIST_SET y
+          add_config NETFILTER_XT_MATCH_ADDRTYPE y
+          add_config NETFILTER_XT_SET y
+          add_config NETFILTER_XT_TARGET_LOG y
+          add_config NETFILTER_XT_MATCH_RECENT y
+          add_config IP6_NF_NAT y
+          add_config IP6_NF_TARGET_MASQUERADE y
+        else
+          echo "== skipping IP Set & Firewall: container_networking=off (depends on NETFILTER/NETFILTER_XTABLES enabled there) =="
+        fi
+        
         echo "== enabling traffic shaping (qdisc) =="
-        add_config NET_SCH_FQ y
-        add_config NET_SCH_FQ_CODEL y
         add_config NET_SCH_CAKE y
 
         echo "== enabling connection marking =="
@@ -252,7 +258,11 @@ runs:
           add_config TCP_CONG_BBR y
           add_config NET_SCH_FQ y
           add_config DEFAULT_BBR y
-          add_str_config DEFAULT_TCP_CONG bbr
+          if [ "${{ inputs.fq_codel_features }}" != "on" ]; then
+            add_str_config DEFAULT_TCP_CONG bbr
+          else
+            echo "  skipping DEFAULT_TCP_CONG=bbr here too: fq_codel_features=on already set it to cubic"
+          fi
         fi
 
         if [ "${{ inputs.debug_features }}" = "on" ]; then
