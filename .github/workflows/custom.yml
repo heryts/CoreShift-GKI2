@@ -125,7 +125,7 @@ on:
         options: ["off", "on"]
         default: "off"
       re_kernel:
-        description: "启用 Re-Kernel 驱动"
+        description: "Enable Re-Kernel Driver"
         type: choice
         required: true
         options: ["off", "on"]
@@ -380,8 +380,8 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply ZRAM patches
-        uses: ./.github/actions/apply-zram-patches
+      - name: Apply ZRAM/LZ$
+        uses: ./.github/actions/apply-zram-lz4
         with:
           kernel_version: ${{ inputs.kernel_version }}
  
