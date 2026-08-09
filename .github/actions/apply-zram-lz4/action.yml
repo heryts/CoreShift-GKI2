@@ -42,7 +42,7 @@ runs:
         cp -r "$ZRAM_PATCHES/lz4k/include/linux/." ./include/linux/
         cp -r "$ZRAM_PATCHES/lz4k/lib/." ./lib/
         cp -r "$ZRAM_PATCHES/lz4k/crypto/." ./crypto/
-        cp -r "$ZRAM_PATCHES/lz4k/lz4k_oplus" ./lib/
+        cp -r "$ZRAM_PATCHES/lz4k_oplus" ./lib/
 
         PATCH_DIR="$ZRAM_PATCHES/lz4k/zram_patch/${{ inputs.kernel_version }}"
         if [ ! -d "$PATCH_DIR" ]; then
