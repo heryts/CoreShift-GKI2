@@ -310,7 +310,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: "DEBUG: dump backing.c + fs internal.h for idmap fix"
-        if: inputs.fuse_bpf == 'on' && inputs.kernel_version == '5.10'
+        if: inputs.kernel_version == '5.10'
         shell: bash
         run: |
           set +e
@@ -353,7 +353,7 @@ jobs:
           set -e
 
       - name: Upload FUSE-BPF debug dump
-        if: always() && inputs.fuse_bpf == 'on' && inputs.kernel_version == '5.10'
+        if: always() && inputs.kernel_version == '5.10'
         uses: actions/upload-artifact@v4
         with:
           name: fuse-bpf-debug-${{ inputs.kernel_version }}-${{ steps.custom-name.outputs.date }}
