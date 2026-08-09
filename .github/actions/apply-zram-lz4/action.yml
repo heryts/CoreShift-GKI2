@@ -1,0 +1,63 @@
+name: Apply ZRAM patches
+description: >
+  Upgrades LZ4 to 1.10.0 with ARM64 NEON acceleration, then applies the
+  LZ4KD and LZ4K_OPLUS (Oplus) ZRAM compression patch stack. Patch sources
+  are read from .github/patches/common/zram in this repo (already present
+  after checkout - nothing is cloned).
+
+inputs:
+  kernel_version:
+    description: "Target kernel version (selects lz4k/zram_patch/<kernel_version>/*.patch)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # 统一处理 ZRAM 相关的 LZ4 变更，减少重复 step
+    - name: 配置 ZRAM LZ4 补丁栈
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      env:
+        ZRAM_PATCHES: ${{ github.workspace }}/.github/patches/common/zram
+      run: |
+        set -euo pipefail
+
+        if [ ! -d "$ZRAM_PATCHES" ]; then
+          echo "::error::ZRAM patch source directory not found: $ZRAM_PATCHES"
+          exit 1
+        fi
+
+        # 第一阶段：升级 LZ4 到 1.10.0 并添加 ARM64 NEON 加速
+        echo "升级 LZ4..."
+        rm -f lib/lz4/lz4_compress.c lib/lz4/lz4_decompress.c lib/lz4/lz4defs.h lib/lz4/lz4hc_compress.c
+        cp -r "$ZRAM_PATCHES/lz4/." ./lib/lz4/
+        cp -r "$ZRAM_PATCHES/include/linux/." ./include/linux/
+        bash "$ZRAM_PATCHES/apply_lz4_neon.sh"
+
+        if [ -f "fs/f2fs/Makefile" ] && ! grep -qF 'f2fs-$(CONFIG_F2FS_IOSTAT) += iostat.o' "fs/f2fs/Makefile"; then
+          echo 'f2fs-$(CONFIG_F2FS_IOSTAT) += iostat.o' >> "fs/f2fs/Makefile"
+        fi
+
+        # 第二阶段：应用 LZ4KD 和 LZ4K_OPLUS 补丁
+        cp -r "$ZRAM_PATCHES/lz4k/include/linux/." ./include/linux/
+        cp -r "$ZRAM_PATCHES/lz4k/lib/." ./lib/
+        cp -r "$ZRAM_PATCHES/lz4k/crypto/." ./crypto/
+        cp -r "$ZRAM_PATCHES/lz4k/lz4k_oplus" ./lib/
+
+        PATCH_DIR="$ZRAM_PATCHES/lz4k/zram_patch/${{ inputs.kernel_version }}"
+        if [ ! -d "$PATCH_DIR" ]; then
+          echo "::error::No zram_patch directory for kernel_version=${{ inputs.kernel_version }} (expected $PATCH_DIR)"
+          exit 1
+        fi
+
+        cp "$PATCH_DIR/lz4kd.patch" ./
+        if ! patch -p1 -F 10 < lz4kd.patch; then
+          echo "::warning::lz4kd.patch - Apply failed, possibly already applied or context mismatch"
+        fi
+        rm -f lz4kd.patch
+
+        cp "$PATCH_DIR/lz4k_oplus.patch" ./
+        if ! patch -p1 -F 3 < lz4k_oplus.patch; then
+          echo "::warning::lz4k_oplus.patch 应用失败，可能已应用或上下文不匹配"
+        fi
+        rm -f lz4k_oplus.patch
