@@ -233,6 +233,15 @@ runs:
           add_config IP_NF_TARGET_MASQUERADE y
         fi
 
+        echo "== FUSE-BPF config (depends on FUSE_FS + BPF) =="
+        if grep -qxF "CONFIG_FUSE_FS=y" private.fragment 2>/dev/null; then
+          echo "  already requested via mount_filesystems: CONFIG_FUSE_FS"
+        else
+          add_config FUSE_FS y
+        fi
+        add_config BPF y
+        add_config FUSE_BPF y
+
         if [ "${{ inputs.fq_codel_features }}" = "on" ]; then
           add_config NET_SCH_FQ y
           add_config NET_SCH_FQ_CODEL y
