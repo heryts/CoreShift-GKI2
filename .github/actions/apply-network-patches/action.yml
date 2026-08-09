@@ -18,14 +18,19 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Fix CONFIG_IP_SET_MAX limit (5.10)
-      if: inputs.kernel_version == '5.10'
+    - name: Fix CONFIG_IP_SET_MAX limit
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         set -euo pipefail
-        echo "== raising ipset max sets limit for kernel 5.10 =="
-        sed -i 's/CONFIG_IP_SET_MAX/65534/g' net/netfilter/ipset/ip_set_core.c
+        echo "== raising ipset max sets limit (kernel_version=${{ inputs.kernel_version }}) =="
+        TARGET="net/netfilter/ipset/ip_set_core.c"
+        if ! grep -qF "CONFIG_IP_SET_MAX" "$TARGET"; then
+          echo "::warning::CONFIG_IP_SET_MAX placeholder not found in $TARGET for kernel_version=${{ inputs.kernel_version }} - source layout may differ on this branch, nothing changed"
+        else
+          sed -i 's/CONFIG_IP_SET_MAX/65534/g' "$TARGET"
+          echo "raised ipset max sets limit to 65534 in $TARGET"
+        fi
 
     - name: Derive kernel version vars
       id: derive-version
