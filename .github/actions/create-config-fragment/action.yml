@@ -90,6 +90,10 @@ runs:
           fi
         }
 
+        disable_config() {
+        key="$1"
+        printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
+  
         add_str_config() {
           key="$1"
           val="$2"
@@ -155,6 +159,8 @@ runs:
         add_config CRYPTO_LZ4KD y
         add_config CRYPTO_842 y
         add_config CRYPTO_LZ4K_OPLUS y
+        
+        echo "# CONFIG_ZRAM_DEF_COMP_LZORLE is not set" >> "$FRAGMENT"
         add_config ZRAM_DEF_COMP_LZ4KD y
 
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
