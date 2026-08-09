@@ -149,6 +149,13 @@ runs:
         add_config CIFS_XATTR y
         add_config CIFS_POSIX y
 
+        echo "== enabling zram-lz4 =="
+        CONFIG_CRYPTO_LZ4HC y
+        CONFIG_CRYPTO_LZ4K y
+        CONFIG_CRYPTO_LZ4KD y
+        CONFIG_CRYPTO_842 y
+        CONFIG_CRYPTO_LZ4K_OPLUS y
+
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
           add_config IKCONFIG y
           add_config IKCONFIG_PROC y
