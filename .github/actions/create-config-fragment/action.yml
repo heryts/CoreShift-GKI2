@@ -161,7 +161,7 @@ runs:
         add_config CRYPTO_842 y
         add_config CRYPTO_LZ4K_OPLUS y
         
-        echo "# CONFIG_ZRAM_DEF_COMP_LZORLE is not set" >> "$FRAGMENT"
+        disable_config ZRAM_DEF_COMP_LZORLE
         add_config ZRAM_DEF_COMP_LZ4KD y
 
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
