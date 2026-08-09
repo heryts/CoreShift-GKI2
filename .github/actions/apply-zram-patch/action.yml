@@ -1,126 +1,63 @@
-name: "Apply ZRAM LZ4/LZ4KD/LZ4K_OPLUS patch stack"
+name: Apply ZRAM patches
 description: >
-  Applies a vendored ZRAM compression patch stack onto the checked out
-  kernel/common tree, sourced entirely from .github/patches/common/zram/ in
-  this repo (nothing fetched at build time). Structure expected under that
-  directory:
-    files/<mirrored kernel path>   - whole-file overrides, copied verbatim
-                                      into kernel/common (overwrites any
-                                      existing file at that path). Use this
-                                      for wholesale replacements like the
-                                      upgraded lib/lz4/*.c, NEON accel
-                                      headers under include/linux/, etc.
-    remove-files.txt               - optional. One kernel-relative path per
-                                      line; deleted from kernel/common
-                                      BEFORE files/ is copied over (for old
-                                      files that must disappear rather than
-                                      be overwritten, matching the original
-                                      `rm -f lib/lz4/lz4_compress.c ...`
-                                      step).
-    scripts/apply_lz4_neon.sh      - optional. Run (bash, cwd=kernel/common)
-                                      after files/ is copied, before patches
-                                      are applied.
-    patches/*.patch                - applied in filename order via `patch
-                                      -p1 -F <fuzz>` (matches the original
-                                      script's tolerance: a failed patch is
-                                      a ::warning, not a fatal error, since
-                                      upstream sometimes already carries an
-                                      equivalent change). Set
-                                      fail_on_patch_conflict: "true" input
-                                      to make conflicts fatal instead once
-                                      you've verified the stack is stable.
+  Upgrades LZ4 to 1.10.0 with ARM64 NEON acceleration, then applies the
+  LZ4KD and LZ4K_OPLUS (Oplus) ZRAM compression patch stack. Patch sources
+  are read from .github/patches/common/zram in this repo (already present
+  after checkout - nothing is cloned).
 
 inputs:
   kernel_version:
-    description: "Kernel version being built, used to pick patches/<kernel_version>/*.patch if that subfolder exists, else patches/*.patch"
+    description: "Target kernel version (selects lz4k/zram_patch/<kernel_version>/*.patch)"
     required: true
-  fail_on_patch_conflict:
-    description: "If true, a patch that fails to apply aborts the build instead of just warning"
-    required: false
-    default: "false"
 
 runs:
-  using: "composite"
+  using: composite
   steps:
-    - name: Apply vendored ZRAM patch stack
+    # 统一处理 ZRAM 相关的 LZ4 变更，减少重复 step
+    - name: 配置 ZRAM LZ4 补丁栈
       shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      env:
+        ZRAM_PATCHES: ${{ github.workspace }}/.github/patches/common/zram
       run: |
         set -euo pipefail
 
-        COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
-        ZRAM_DIR="$GITHUB_WORKSPACE/.github/patches/common/zram"
-
-        if [ ! -d "$COMMON_DIR" ]; then
-          echo "::error::$COMMON_DIR not found; kernel/common must be checked out before this step runs."
+        if [ ! -d "$ZRAM_PATCHES" ]; then
+          echo "::error::ZRAM patch source directory not found: $ZRAM_PATCHES"
           exit 1
         fi
 
-        if [ ! -d "$ZRAM_DIR" ]; then
-          echo "::error::vendored zram patch directory not found at $ZRAM_DIR"
+        # 第一阶段：升级 LZ4 到 1.10.0 并添加 ARM64 NEON 加速
+        echo "升级 LZ4..."
+        rm -f lib/lz4/lz4_compress.c lib/lz4/lz4_decompress.c lib/lz4/lz4defs.h lib/lz4/lz4hc_compress.c
+        cp -r "$ZRAM_PATCHES/lz4/." ./lib/lz4/
+        cp -r "$ZRAM_PATCHES/include/linux/." ./include/linux/
+        bash "$ZRAM_PATCHES/apply_lz4_neon.sh"
+
+        if [ -f "fs/f2fs/Makefile" ] && ! grep -qF 'f2fs-$(CONFIG_F2FS_IOSTAT) += iostat.o' "fs/f2fs/Makefile"; then
+          echo 'f2fs-$(CONFIG_F2FS_IOSTAT) += iostat.o' >> "fs/f2fs/Makefile"
+        fi
+
+        # 第二阶段：应用 LZ4KD 和 LZ4K_OPLUS 补丁
+        cp -r "$ZRAM_PATCHES/lz4k/include/linux/." ./include/linux/
+        cp -r "$ZRAM_PATCHES/lz4k/lib/." ./lib/
+        cp -r "$ZRAM_PATCHES/lz4k/crypto/." ./crypto/
+        cp -r "$ZRAM_PATCHES/lz4k/lz4k_oplus" ./lib/
+
+        PATCH_DIR="$ZRAM_PATCHES/lz4k/zram_patch/${{ inputs.kernel_version }}"
+        if [ ! -d "$PATCH_DIR" ]; then
+          echo "::error::No zram_patch directory for kernel_version=${{ inputs.kernel_version }} (expected $PATCH_DIR)"
           exit 1
         fi
 
-        # -- 1. remove-files.txt: delete listed files before copying overrides --
-        if [ -f "$ZRAM_DIR/remove-files.txt" ]; then
-          echo "== removing files listed in remove-files.txt =="
-          while IFS= read -r relpath; do
-            [ -z "$relpath" ] && continue
-            [ "${relpath:0:1}" = "#" ] && continue
-            target="$COMMON_DIR/$relpath"
-            if [ -f "$target" ]; then
-              rm -f "$target"
-              echo "  removed $relpath"
-            fi
-          done < "$ZRAM_DIR/remove-files.txt"
+        cp "$PATCH_DIR/lz4kd.patch" ./
+        if ! patch -p1 -F 10 < lz4kd.patch; then
+          echo "::warning::lz4kd.patch - Apply failed, possibly already applied or context mismatch"
         fi
+        rm -f lz4kd.patch
 
-        # -- 2. files/: whole-file overrides, copied verbatim --
-        if [ -d "$ZRAM_DIR/files" ]; then
-          echo "== copying whole-file overrides from files/ =="
-          cp -rv "$ZRAM_DIR/files/." "$COMMON_DIR/"
+        cp "$PATCH_DIR/lz4k_oplus.patch" ./
+        if ! patch -p1 -F 3 < lz4k_oplus.patch; then
+          echo "::warning::lz4k_oplus.patch 应用失败，可能已应用或上下文不匹配"
         fi
-
-        # -- 3. scripts/apply_lz4_neon.sh: optional helper script --
-        if [ -f "$ZRAM_DIR/scripts/apply_lz4_neon.sh" ]; then
-          echo "== running vendored apply_lz4_neon.sh =="
-          (cd "$COMMON_DIR" && bash "$ZRAM_DIR/scripts/apply_lz4_neon.sh")
-        fi
-
-        # -- 4. f2fs iostat.o Makefile fixup (self-contained, no external file needed) --
-        F2FS_MK="$COMMON_DIR/fs/f2fs/Makefile"
-        if [ -f "$F2FS_MK" ] && ! grep -qF 'f2fs-$(CONFIG_F2FS_IOSTAT) += iostat.o' "$F2FS_MK"; then
-          echo 'f2fs-$(CONFIG_F2FS_IOSTAT) += iostat.o' >> "$F2FS_MK"
-          echo "== appended CONFIG_F2FS_IOSTAT line to fs/f2fs/Makefile =="
-        fi
-
-        # -- 5. patches/: apply in filename order, prefer patches/<kernel_version>/ if present --
-        PATCH_SRC_DIR="$ZRAM_DIR/patches/${{ inputs.kernel_version }}"
-        if [ ! -d "$PATCH_SRC_DIR" ]; then
-          PATCH_SRC_DIR="$ZRAM_DIR/patches"
-        fi
-
-        if [ -d "$PATCH_SRC_DIR" ]; then
-          mapfile -t PATCHES < <(find "$PATCH_SRC_DIR" -maxdepth 1 -name '*.patch' | sort)
-          cd "$COMMON_DIR"
-          for PATCH_FILE in "${PATCHES[@]:-}"; do
-            [ -z "$PATCH_FILE" ] && continue
-            NAME="$(basename "$PATCH_FILE")"
-            echo "== applying $NAME =="
-            set +e
-            patch -p1 -F 10 < "$PATCH_FILE"
-            STATUS=$?
-            set -e
-            if [ "$STATUS" -ne 0 ]; then
-              if [ "${{ inputs.fail_on_patch_conflict }}" = "true" ]; then
-                echo "::error::$NAME failed to apply and fail_on_patch_conflict=true"
-                exit 1
-              else
-                echo "::warning::$NAME - apply failed, possibly already applied or context mismatch"
-              fi
-            fi
-          done
-        else
-          echo "::warning::no patches/ directory found under $ZRAM_DIR - skipping patch-apply step"
-        fi
-
-        echo "zram_patch_applied=true" >> "$GITHUB_ENV"
+        rm -f lz4k_oplus.patch
