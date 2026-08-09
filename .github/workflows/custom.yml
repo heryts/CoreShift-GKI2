@@ -374,11 +374,6 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply ZRAM-LZ4
-        uses: ./.github/actions/apply-zram-lz4
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
- 
       - name: Create private config fragment
         uses: ./.github/actions/create-config-fragment
         with:
