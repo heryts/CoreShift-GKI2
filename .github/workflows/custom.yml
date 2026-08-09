@@ -89,14 +89,15 @@ on:
         type: choice
         required: true
         options: ["on", "off"]
-        default: "off"
+        default: "on"
       add_nomount_maxsteeel:
         description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
         type: choice
         required: true
         options: ["off", "on"]
-        default: "off"
+        default: "on"
       baseband_guard:
+        description: "Apply Baseband Guard / BBG patches"
         type: choice
         required: true
         options: ["on", "off"]
@@ -124,7 +125,7 @@ on:
         options: ["off", "on"]
         default: "off"
       re_kernel:
-        description: "启用 Re-Kernel 驱动"
+        description: "Enable Re-Kernel Driver"
         type: choice
         required: true
         options: ["off", "on"]
@@ -367,74 +368,12 @@ jobs:
         uses: ./.github/actions/apply-unicode-fix
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          
-      - name: Fix CONFIG_IP_SET_MAX limit (5.10)
-        if: inputs.kernel_version == '5.10'
-        shell: bash
-        working-directory: ${{ github.workspace }}/kernel/common
-        run: |
-          set -euo pipefail
-          echo "== raising ipset max sets limit for kernel 5.10 =="
-          sed -i 's/CONFIG_IP_SET_MAX/65534/g' net/netfilter/ipset/ip_set_core.c
 
-      - name: Derive kernel version vars
-        id: derive-version
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "${{ inputs.kernel_version }}" in
-            5.10) ANDROID_VERSION="android12" ;;
-            6.1)  ANDROID_VERSION="android14" ;;
-            6.6)  ANDROID_VERSION="android15" ;;
-            6.12) ANDROID_VERSION="android16" ;;
-            *)
-              echo "::error::unsupported kernel_version: ${{ inputs.kernel_version }}"
-              exit 1
-              ;;
-          esac
-          VERSION="${ANDROID_VERSION}-${{ inputs.kernel_version }}"
-          {
-            echo "android_version=$ANDROID_VERSION"
-            echo "version=$VERSION"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Derive kernel sublevel
-        id: kernel-sublevel
-        shell: bash
-        run: |
-          set -euo pipefail
-          MAKEFILE="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}/Makefile"
-          SUBLEVEL="$(grep -m1 '^SUBLEVEL' "$MAKEFILE" | sed 's/^SUBLEVEL[[:space:]]*=[[:space:]]*//')"
-          echo "sublevel=$SUBLEVEL" >> "$GITHUB_OUTPUT"
-          echo "derived sublevel: $SUBLEVEL"
-
-      - name: Apply BBRv3 Patches
-        uses: ./.github/actions/apply-bbrv3
+      - name: Apply network patches
+        uses: ./.github/actions/apply-network-patches
         with:
-          version: ${{ steps.derive-version.outputs.version }}
           kernel_version: ${{ inputs.kernel_version }}
-          sublevel: ${{ steps.kernel-sublevel.outputs.sublevel }}
 
-      - name: Whitelist BBRv3 required KMI symbols
-        if: inputs.kmi_bypass == 'off'
-        shell: bash
-        run: |
-          set -euo pipefail
-          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
-          SYMBOL_LIST="$COMMON_DIR/android/abi_gki_aarch64"
-
-          if [ ! -f "$SYMBOL_LIST" ]; then
-            echo "::error::KMI symbol list not found: $SYMBOL_LIST"
-            exit 1
-          fi
-
-          if ! grep -qxF "  tcp_cong_avoid_ai" "$SYMBOL_LIST"; then
-            echo "  tcp_cong_avoid_ai" >> "$SYMBOL_LIST"
-            echo "added tcp_cong_avoid_ai to KMI symbol list"
-          else
-            echo "tcp_cong_avoid_ai already in KMI symbol list"
-          fi
- 
       - name: Create private config fragment
         uses: ./.github/actions/create-config-fragment
         with:
