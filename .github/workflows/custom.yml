@@ -303,12 +303,6 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
 
-      - name: Apply FUSE-BPF
-        if: inputs.kernel_version == '5.10'
-        uses: ./.github/actions/apply-fuse-bpf
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
       - name: Ensure expected Clang
         if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
         uses: ./.github/actions/ensure-expected-clang
