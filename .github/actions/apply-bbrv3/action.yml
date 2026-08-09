@@ -1,0 +1,41 @@
+name: 'Apply BBRv3 Patches'
+description: 'Apply BBRv3 TCP congestion control patches with version-specific logic'
+inputs:
+  version:
+    description: 'Kernel config version (e.g., android15-6.6)'
+    required: true
+  kernel_version:
+    description: 'Kernel version (e.g., 6.1)'
+    required: true
+  sublevel:
+    description: 'Kernel sublevel'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Apply BBRv3 Patch
+      shell: bash
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        set -euo pipefail
+        PATCH_DIR="${{ github.workspace }}/.github/patches/common/bbrv3"
+
+        if [[ "${{ inputs.version }}" == "android15-6.6" ]]; then
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android15-6.6.patch"
+        elif [[ "${{ inputs.version }}" == "android14-6.1" ]]; then
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android14-6.1.patch"
+        elif [[ "${{ inputs.version }}" == "android12-5.10" ]]; then
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android12-5.10.patch"
+        else
+          echo "::error::no BBRv3 patch available for version=${{ inputs.version }}"
+          exit 1
+        fi
+
+        if [[ "${{ inputs.version }}" == "android12-5.10" ]]; then
+          if ! grep -qF 'int proc_dou8vec_minmax(' ./include/linux/sysctl.h; then
+            patch -p1 < "$PATCH_DIR/sysctl_add_proc_dou8vec_minmax.patch"
+            patch -p1 < "$PATCH_DIR/sysctl_fix_data-races_in_proc_dou8vec_minmax.patch"
+          fi
+        fi
+
+        echo "BBRv3 patches applied for version=${{ inputs.version }}"
