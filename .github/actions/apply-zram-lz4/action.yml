@@ -18,7 +18,7 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       env:
-        ZRAM_PATCHES: ${{ github.workspace }}/.github/patches/common/zram
+        ZRAM_PATCHES: ${{ github.workspace }}/.github/patches/zram
       run: |
         set -euo pipefail
 
