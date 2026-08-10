@@ -165,6 +165,26 @@ runs:
         if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KowSU" ]; then
+          echo "== applying backslashxx-specific SUSFS enablement patch =="
+          echo "backslashxx's kernel/ tree (hook/, supercall/, selinux/) has a different"
+          echo "structure from stock KernelSU, so it needs its own SUSFS wiring patch"
+          echo "instead of the generic 10_enable_susfs_for_ksu.patch."
+
+          BXX_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/0001-xxKSU-kernel-implement-susfs-v2_2_0.patch"
+
+          if [ ! -e "$BXX_PATCH" ]; then
+            echo "::error::missing backslashxx SUSFS patch: $BXX_PATCH"
+            exit 1
+          fi
+
+          git apply --check "$BXX_PATCH"
+          git apply "$BXX_PATCH"
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after backslashxx SUSFS patch"
+            exit 1
+          fi
         else
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT =="
           git apply --check "$KSU_PATCH"
