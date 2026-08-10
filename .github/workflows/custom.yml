@@ -161,7 +161,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: false
           fetch-depth: 1
@@ -464,14 +464,14 @@ jobs:
 
       - name: Upload flashable artifact tree
         if: inputs.publish_mode == 'artifact' || inputs.publish_mode == 'both'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: flashable-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
           path: artifact-root/**
           if-no-files-found: error
 
       - name: Upload raw Image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: image-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
           path: |
@@ -480,7 +480,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload config artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: config-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
           path: |
