@@ -261,10 +261,6 @@ runs:
         else
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
-
-        if git -C "$KSU_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-          rm -rf "$KSU_ROOT/.git"
-        fi
         
         git add . 2>/dev/null
         git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
