@@ -16,10 +16,6 @@ inputs:
     required: false
     default: "off"
     description: Enable Re-Kernel driver Kconfig.
-  add_nomount_maxsteeel:
-    required: false
-    default: "off"
-    description: Enable maxsteeel/nomount (manager-agnostic VFS-level NoMount, independent from fork built-in NoMount).
   ikconfig:
     required: true
     description: Enable IKCONFIG.
@@ -41,6 +37,10 @@ inputs:
   susfs:
     required: true
     description: Add SUSFS4KSU configs.
+  nomount_maxsteeel:
+    required: false
+    default: "off"
+    description: Enable maxsteeel/nomount (manager-agnostic VFS-level NoMount, independent from fork built-in NoMount).
   baseband_guard:
     required: true
     description: Add Baseband Guard config.
