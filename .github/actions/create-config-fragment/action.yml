@@ -167,7 +167,7 @@ runs:
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
 
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KowSU" ]; then
           echo "== KernelSU-Backslashxx config: syscall table tamper hook mode =="
           echo "No CONFIG_KSU_MANUAL_HOOK in this fork; uses built-in"
           echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
@@ -175,6 +175,25 @@ runs:
           add_config KSU y
           add_config KSU_TAMPER_SYSCALL_TABLE y
           add_config KALLSYMS_ALL y
+
+          if [ "${{ inputs.susfs }}" = "on" ]; then
+            echo "== ${{ inputs.manager }}: SUSFS integration (xxKSU de-inlined patch) =="
+            echo "This fork family's SUSFS wiring comes from a manager-specific patch, not"
+            echo "susfs4ksu's generic 10_enable_susfs_for_ksu.patch, so the symbol list"
+            echo "can't be auto-scanned from SUSFS_PATCH_DIR and is hardcoded here"
+            echo "to match kernel/Kconfig added by 0001-xxKSU-...-v2_2_0.patch."
+            add_config KSU_SUSFS y
+            add_config KSU_SUSFS_SUS_PATH y
+            add_config KSU_SUSFS_SUS_MOUNT y
+            add_config KSU_SUSFS_SUS_KSTAT y
+            add_config KSU_SUSFS_TRY_UMOUNT y
+            add_config KSU_SUSFS_SPOOF_UNAME y
+            add_config KSU_SUSFS_ENABLE_LOG y
+            add_config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS y
+            add_config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG y
+            add_config KSU_SUSFS_OPEN_REDIRECT y
+            add_config KSU_SUSFS_SUS_MAP y
+          fi
   
         elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
           add_config KSU y
