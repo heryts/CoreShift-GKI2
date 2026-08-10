@@ -54,22 +54,6 @@ on:
         required: true
         options: ["on", "off"]
         default: "on"
-      container_features:
-        description: "Enable container-related kernel options"
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "off"
-      debug_features:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "off"
-      heavy_debug_features:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "off"
       susfs:
         type: choice
         required: true
@@ -87,16 +71,6 @@ on:
         required: true
         options: ["on", "off"]
         default: "off"
-      strict_config:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "on"
-      legacy_kmi_check:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "on"
       droidspaces:
         description: "Droidspaces support (5.10~6.6: slot patch, 6.12: on/off)"
         type: choice
@@ -109,11 +83,37 @@ on:
         required: true
         options: ["off", "on"]
         default: "off"
+      container_features:
+        description: "Enable container-related kernel options"
+        type: choice
+        required: true
+        options: ["on", "off"]
+        default: "off"
       re_kernel:
         description: "Enable Re-Kernel Driver"
         type: choice
         required: true
         options: ["off", "on"]
+        default: "off"
+      strict_config:
+        type: choice
+        required: true
+        options: ["on", "off"]
+        default: "on"
+      legacy_kmi_check:
+        type: choice
+        required: true
+        options: ["on", "off"]
+        default: "on"
+      debug_features:
+        type: choice
+        required: true
+        options: ["on", "off"]
+        default: "off"
+      heavy_debug_features:
+        type: choice
+        required: true
+        options: ["on", "off"]
         default: "off"
       publish_mode:
         type: choice
@@ -363,18 +363,18 @@ jobs:
         uses: ./.github/actions/create-config-fragment
         with:
           manager: ${{ inputs.manager }}
-          droidspaces: ${{ inputs.droidspaces }}
-          droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
-          re_kernel: ${{ inputs.re_kernel }}
           ikconfig: ${{ inputs.ikconfig }}
-          container_core: ${{ inputs.container_features }}
-          container_ipc: ${{ inputs.container_features }}
-          container_networking: ${{ inputs.container_features }}
-          debug_features: ${{ inputs.debug_features }}
-          heavy_debug_features: ${{ inputs.heavy_debug_features }}
           susfs: ${{ inputs.susfs }}
           nomount_maxsteeel: ${{ inputs.nomount_maxsteeel }}
           baseband_guard: ${{ inputs.baseband_guard }}
+          droidspaces: ${{ inputs.droidspaces }}
+          droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
+          container_core: ${{ inputs.container_features }}
+          container_ipc: ${{ inputs.container_features }}
+          container_networking: ${{ inputs.container_features }}
+          re_kernel: ${{ inputs.re_kernel }}
+          debug_features: ${{ inputs.debug_features }}
+          heavy_debug_features: ${{ inputs.heavy_debug_features }}
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply IPC KABI patches
