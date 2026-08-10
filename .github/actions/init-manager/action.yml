@@ -262,7 +262,9 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
-        git config --global advice.addEmbeddedRepo false
+        if git -C "$KSU_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          rm -rf "$KSU_ROOT/.git"
+        fi
         
         git add .
         git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
