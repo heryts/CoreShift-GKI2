@@ -17,7 +17,7 @@
 [submodule "manager/KernelSU-Backslashxx"]
 	path = manager/KernelSU-Backslashxx
 	url = https://github.com/backslashxx/KernelSU.git
-	branch = main
+	branch = master
 [submodule "manager/ResukiSU"]
 	path = manager/ResukiSU
 	url = https://github.com/ReSukiSU/ReSukiSU.git
