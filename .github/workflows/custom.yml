@@ -60,21 +60,6 @@ on:
         required: true
         options: ["on", "off"]
         default: "off"
-      mount_filesystems:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "on"
-      fq_codel_features:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "off"
-      performance_features:
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "off"
       debug_features:
         type: choice
         required: true
@@ -90,7 +75,7 @@ on:
         required: true
         options: ["on", "off"]
         default: "on"
-      add_nomount_maxsteeel:
+      nomount_maxsteeel:
         description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
         type: choice
         required: true
@@ -333,7 +318,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           
       - name: Apply NoMount support (maxsteeel)
-        if: inputs.add_nomount_maxsteeel == 'on'
+        if: inputs.nomount_maxsteeel == 'on'
         uses: ./.github/actions/apply-nomount
         with:
           kernel_version: ${{ inputs.kernel_version }}
@@ -378,20 +363,17 @@ jobs:
         uses: ./.github/actions/create-config-fragment
         with:
           manager: ${{ inputs.manager }}
-          add_nomount_maxsteeel: ${{ inputs.add_nomount_maxsteeel }}
           droidspaces: ${{ inputs.droidspaces }}
           droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
           re_kernel: ${{ inputs.re_kernel }}
           ikconfig: ${{ inputs.ikconfig }}
           container_core: ${{ inputs.container_features }}
           container_ipc: ${{ inputs.container_features }}
-          mount_filesystems: ${{ inputs.mount_filesystems }}
           container_networking: ${{ inputs.container_features }}
-          fq_codel_features: ${{ inputs.fq_codel_features }}
-          performance_features: ${{ inputs.performance_features }}
           debug_features: ${{ inputs.debug_features }}
           heavy_debug_features: ${{ inputs.heavy_debug_features }}
           susfs: ${{ inputs.susfs }}
+          nomount_maxsteeel: ${{ inputs.nomount_maxsteeel }}
           baseband_guard: ${{ inputs.baseband_guard }}
           kernel_version: ${{ inputs.kernel_version }}
 
