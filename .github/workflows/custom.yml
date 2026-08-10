@@ -140,11 +140,6 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "::error::SUSFS is not supported with manager=KernelSU-Backslashxx (this fork has no built-in SUSFS wiring and known instability when combined with SUSFS4KSU; use KernelSU, KernelSU-Next, or ResukiSU for SUSFS builds)"
-            exit 1
-          fi
-
           if [ "${{ inputs.source_mode }}" = "custom" ] && [ -z "${{ inputs.source_repo }}" ]; then
             echo "::error::source_repo is required when source_mode=custom"
             exit 1
