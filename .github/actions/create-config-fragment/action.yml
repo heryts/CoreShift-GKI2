@@ -16,10 +16,6 @@ inputs:
     required: false
     default: "off"
     description: Enable Re-Kernel driver Kconfig.
-  re_kernel_network:
-    required: false
-    default: "off"
-    description: Enable Re-Kernel NetReceive unfreeze support (REKERNEL_NETWORK).
   add_nomount_maxsteeel:
     required: false
     default: "off"
@@ -39,12 +35,6 @@ inputs:
   container_networking:
     required: true
     description: Enable container networking helpers.
-  fq_codel_features:
-    required: true
-    description: Enable FQ/FQ_CODEL features.
-  performance_features:
-    required: true
-    description: Enable performance features.
   debug_features:
     required: true
     description: Enable debug features.
@@ -111,10 +101,7 @@ runs:
         add_config TCP_CONG_BBR3 y
         add_config TCP_CONG_BBR y
         add_config DEFAULT_BBR y
-        if [ "${{ inputs.fq_codel_features }}" != "on" ]; then
-          add_str_config DEFAULT_TCP_CONG bbr
-        else
-          echo "  skipping DEFAULT_TCP_CONG=bbr here: fq_codel_features=on will set it to cubic below"
+        add_str_config DEFAULT_TCP_CONG bbr
         fi
 
         echo "== enabling base TCP congestion control algorithms =="
@@ -148,6 +135,9 @@ runs:
         add_config KEYS y
         add_config CIFS_XATTR y
         add_config CIFS_POSIX y
+
+        echo "== enabling performance feature =="
+        add_config PSI y
 
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
           add_config IKCONFIG y
@@ -239,14 +229,6 @@ runs:
           add_config NETFILTER_XT_MATCH_RECENT y
           add_config IP6_NF_NAT y
           add_config IP6_NF_TARGET_MASQUERADE y
-        fi
-
-        if [ "${{ inputs.fq_codel_features }}" = "on" ]; then
-          add_str_config DEFAULT_TCP_CONG cubic
-        fi
-
-        if [ "${{ inputs.performance_features }}" = "on" ]; then
-          add_config PSI y
         fi
 
         if [ "${{ inputs.debug_features }}" = "on" ]; then
@@ -386,9 +368,7 @@ runs:
         if [ "${{ inputs.re_kernel }}" = "on" ]; then
           echo "== Re-Kernel config =="
           add_config REKERNEL y
-          if [ "${{ inputs.re_kernel_network }}" = "on" ]; then
-            add_config REKERNEL_NETWORK y
-          fi
+          add_config REKERNEL_NETWORK y
         fi
 
         if [ "${{ inputs.add_nomount_maxsteeel }}" = "on" ]; then
