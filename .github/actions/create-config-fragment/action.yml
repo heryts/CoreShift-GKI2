@@ -29,9 +29,6 @@ inputs:
   container_ipc:
     required: true
     description: Enable IPC container primitives.
-  mount_filesystems:
-    required: true
-    description: Enable mount filesystem helpers.
   container_networking:
     required: true
     description: Enable container networking helpers.
@@ -136,6 +133,13 @@ runs:
         add_config CIFS_XATTR y
         add_config CIFS_POSIX y
 
+        echo "== enabling mount_filesystems =="
+        add_config TMPFS y
+        add_config TMPFS_XATTR y
+        add_config TMPFS_POSIX_ACL y
+        add_config OVERLAY_FS y
+        add_config FUSE_FS y
+
         echo "== enabling performance feature =="
         add_config PSI y
 
@@ -168,14 +172,6 @@ runs:
           add_config IPC_NS y
           add_config POSIX_MQUEUE y
           add_config POSIX_MQUEUE_SYSCTL y
-        fi
-
-        if [ "${{ inputs.mount_filesystems }}" = "on" ]; then
-          add_config TMPFS y
-          add_config TMPFS_XATTR y
-          add_config TMPFS_POSIX_ACL y
-          add_config OVERLAY_FS y
-          add_config FUSE_FS y
         fi
 
         if [ "${{ inputs.container_networking }}" = "on" ]; then
