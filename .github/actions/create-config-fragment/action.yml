@@ -167,7 +167,7 @@ runs:
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
 
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KowSU" ]; then
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
           echo "== KernelSU-Backslashxx config: syscall table tamper hook mode =="
           echo "No CONFIG_KSU_MANUAL_HOOK in this fork; uses built-in"
           echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
