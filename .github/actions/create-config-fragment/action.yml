@@ -4,36 +4,9 @@ inputs:
   manager:
     required: true
     description: Selected manager, used to select SUSFS Kconfig symbol source.
-  droidspaces:
-    required: false
-    default: "off"
-    description: Droidspaces slot selection (off/678/123/345), used to enable required container configs.
-  droidspaces_ntsync:
-    required: false
-    default: "off"
-    description: Enable NTSync-related Kconfig for Droidspaces containers.
-  re_kernel:
-    required: false
-    default: "off"
-    description: Enable Re-Kernel driver Kconfig.
   ikconfig:
     required: true
     description: Enable IKCONFIG.
-  container_core:
-    required: true
-    description: Enable core container primitives.
-  container_ipc:
-    required: true
-    description: Enable IPC container primitives.
-  container_networking:
-    required: true
-    description: Enable container networking helpers.
-  debug_features:
-    required: true
-    description: Enable debug features.
-  heavy_debug_features:
-    required: true
-    description: Enable heavy debug features.
   susfs:
     required: true
     description: Add SUSFS4KSU configs.
@@ -44,6 +17,33 @@ inputs:
   baseband_guard:
     required: true
     description: Add Baseband Guard config.
+  droidspaces:
+    required: false
+    default: "off"
+    description: Droidspaces slot selection (off/678/123/345), used to enable required container configs.
+  droidspaces_ntsync:
+    required: false
+    default: "off"
+    description: Enable NTSync-related Kconfig for Droidspaces containers.
+  container_core:
+    required: true
+    description: Enable core container primitives.
+  container_ipc:
+    required: true
+    description: Enable IPC container primitives.
+  container_networking:
+    required: true
+    description: Enable container networking helpers.
+  re_kernel:
+    required: false
+    default: "off"
+    description: Enable Re-Kernel driver Kconfig.
+  debug_features:
+    required: true
+    description: Enable debug features.
+  heavy_debug_features:
+    required: true
+    description: Enable heavy debug features.
   kernel_version:
     required: true
     description: Kernel version used to select SUSFS patch metadata.
@@ -148,102 +148,6 @@ runs:
           add_config IKCONFIG_PROC y
         fi
 
-        if [ "${{ inputs.container_core }}" = "on" ]; then
-          add_config NAMESPACES y
-          add_config USER_NS y
-          add_config UTS_NS y
-          add_config NET_NS y
-          add_config PID_NS y
-
-          add_config CGROUPS y
-          add_config CGROUP_PIDS y
-          add_config CGROUP_DEVICE y
-
-          add_config DEVTMPFS y
-
-          add_config SECCOMP y
-          add_config SECCOMP_FILTER y
-        fi
-
-        if [ "${{ inputs.container_ipc }}" = "on" ]; then
-          add_config SYSCTL y
-          add_config SYSVIPC y
-          add_config SYSVIPC_SYSCTL y
-          add_config IPC_NS y
-          add_config POSIX_MQUEUE y
-          add_config POSIX_MQUEUE_SYSCTL y
-        fi
-
-        if [ "${{ inputs.container_networking }}" = "on" ]; then
-          add_config TUN y
-          add_config VETH y
-          add_config BRIDGE y
-          add_config BRIDGE_NETFILTER y
-
-          add_config NETFILTER y
-          add_config NETFILTER_ADVANCED y
-          add_config NETFILTER_XTABLES y
-
-          add_config NETFILTER_XT_TARGET_MASQUERADE y
-          add_config NETFILTER_XT_TARGET_REDIRECT y
-          add_config NETFILTER_XT_TARGET_MARK y
-
-          add_config NETFILTER_XT_MATCH_CONNTRACK y
-          add_config NETFILTER_XT_MATCH_STATE y
-          add_config NETFILTER_XT_MATCH_MARK y
-          add_config NETFILTER_XT_MATCH_MULTIPORT y
-          add_config NETFILTER_XT_MATCH_OWNER y
-
-          add_config NF_CONNTRACK y
-          add_config NF_NAT y
-          add_config IP_NF_IPTABLES y
-          add_config IP_NF_FILTER y
-          add_config IP_NF_NAT y
-          add_config IP_NF_TARGET_MASQUERADE y
-
-          echo "== enabling IP Set & Firewall =="
-          add_config IP_SET y
-          add_config IP_SET_BITMAP_IP y
-          add_config IP_SET_BITMAP_IPMAC y
-          add_config IP_SET_BITMAP_PORT y
-          add_config IP_SET_HASH_IP y
-          add_config IP_SET_HASH_IPMARK y
-          add_config IP_SET_HASH_IPPORT y
-          add_config IP_SET_HASH_IPPORTIP y
-          add_config IP_SET_HASH_IPPORTNET y
-          add_config IP_SET_HASH_IPMAC y
-          add_config IP_SET_HASH_MAC y
-          add_config IP_SET_HASH_NETPORTNET y
-          add_config IP_SET_HASH_NET y
-          add_config IP_SET_HASH_NETNET y
-          add_config IP_SET_HASH_NETPORT y
-          add_config IP_SET_HASH_NETIFACE y
-          add_config IP_SET_LIST_SET y
-          add_config NETFILTER_XT_MATCH_ADDRTYPE y
-          add_config NETFILTER_XT_SET y
-          add_config NETFILTER_XT_TARGET_LOG y
-          add_config NETFILTER_XT_MATCH_RECENT y
-          add_config IP6_NF_NAT y
-          add_config IP6_NF_TARGET_MASQUERADE y
-        fi
-
-        if [ "${{ inputs.debug_features }}" = "on" ]; then
-          add_config KPROBES y
-          add_config KPROBE_EVENTS y
-          add_config UPROBES y
-          add_config FTRACE y
-          add_config FUNCTION_TRACER y
-          add_config DYNAMIC_FTRACE y
-        fi
-
-        if [ "${{ inputs.heavy_debug_features }}" = "on" ]; then
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-          add_config KASAN y
-          add_config KASAN_HW_TAGS y
-          add_config BTRFS_FS y
-        fi
-
         if [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
           if [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== SUSFS config: KernelSU-Next (hookless/kprobes fork) =="
@@ -254,8 +158,8 @@ runs:
             add_config KRETPROBES y
             add_config KALLSYMS y
             add_config KSU_KPROBES_SUSFS y
-            if [ "${{ inputs.add_nomount_maxsteeel }}" = "on" ]; then
-              echo "add_nomount_maxsteeel=on: standalone NoMount (maxsteeel/nomount) takes"
+            if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
+              echo "nomount_maxsteeel=on: standalone NoMount (maxsteeel/nomount) takes"
               echo "precedence; skipping fork's built-in KSU_KPROBES_NOMOUNT to avoid"
               echo "two independent NoMount implementations hooking the VFS layer at once."
             else
@@ -340,6 +244,11 @@ runs:
         else
           echo "== manager=${{ inputs.manager }}, susfs=off: no manager-specific KSU config block matched =="
         fi
+
+        if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
+          echo "== NoMount (maxsteeel) config =="
+          add_config NOMOUNT y
+        fi
         
         if [ "${{ inputs.baseband_guard }}" = "on" ]; then
           add_config BBG y
@@ -355,10 +264,89 @@ runs:
             fi
           done
         fi
-
+        
         if [ "${{ inputs.droidspaces_ntsync }}" = "on" ]; then
           echo "== NTSync config =="
           add_config NTSYNC y
+        fi
+
+        if [ "${{ inputs.container_core }}" = "on" ]; then
+          add_config NAMESPACES y
+          add_config USER_NS y
+          add_config UTS_NS y
+          add_config NET_NS y
+          add_config PID_NS y
+
+          add_config CGROUPS y
+          add_config CGROUP_PIDS y
+          add_config CGROUP_DEVICE y
+
+          add_config DEVTMPFS y
+
+          add_config SECCOMP y
+          add_config SECCOMP_FILTER y
+        fi
+
+        if [ "${{ inputs.container_ipc }}" = "on" ]; then
+          add_config SYSCTL y
+          add_config SYSVIPC y
+          add_config SYSVIPC_SYSCTL y
+          add_config IPC_NS y
+          add_config POSIX_MQUEUE y
+          add_config POSIX_MQUEUE_SYSCTL y
+        fi
+
+        if [ "${{ inputs.container_networking }}" = "on" ]; then
+          add_config TUN y
+          add_config VETH y
+          add_config BRIDGE y
+          add_config BRIDGE_NETFILTER y
+
+          add_config NETFILTER y
+          add_config NETFILTER_ADVANCED y
+          add_config NETFILTER_XTABLES y
+
+          add_config NETFILTER_XT_TARGET_MASQUERADE y
+          add_config NETFILTER_XT_TARGET_REDIRECT y
+          add_config NETFILTER_XT_TARGET_MARK y
+
+          add_config NETFILTER_XT_MATCH_CONNTRACK y
+          add_config NETFILTER_XT_MATCH_STATE y
+          add_config NETFILTER_XT_MATCH_MARK y
+          add_config NETFILTER_XT_MATCH_MULTIPORT y
+          add_config NETFILTER_XT_MATCH_OWNER y
+
+          add_config NF_CONNTRACK y
+          add_config NF_NAT y
+          add_config IP_NF_IPTABLES y
+          add_config IP_NF_FILTER y
+          add_config IP_NF_NAT y
+          add_config IP_NF_TARGET_MASQUERADE y
+
+          echo "== enabling IP Set & Firewall =="
+          add_config IP_SET y
+          add_config IP_SET_BITMAP_IP y
+          add_config IP_SET_BITMAP_IPMAC y
+          add_config IP_SET_BITMAP_PORT y
+          add_config IP_SET_HASH_IP y
+          add_config IP_SET_HASH_IPMARK y
+          add_config IP_SET_HASH_IPPORT y
+          add_config IP_SET_HASH_IPPORTIP y
+          add_config IP_SET_HASH_IPPORTNET y
+          add_config IP_SET_HASH_IPMAC y
+          add_config IP_SET_HASH_MAC y
+          add_config IP_SET_HASH_NETPORTNET y
+          add_config IP_SET_HASH_NET y
+          add_config IP_SET_HASH_NETNET y
+          add_config IP_SET_HASH_NETPORT y
+          add_config IP_SET_HASH_NETIFACE y
+          add_config IP_SET_LIST_SET y
+          add_config NETFILTER_XT_MATCH_ADDRTYPE y
+          add_config NETFILTER_XT_SET y
+          add_config NETFILTER_XT_TARGET_LOG y
+          add_config NETFILTER_XT_MATCH_RECENT y
+          add_config IP6_NF_NAT y
+          add_config IP6_NF_TARGET_MASQUERADE y
         fi
 
         if [ "${{ inputs.re_kernel }}" = "on" ]; then
@@ -367,9 +355,21 @@ runs:
           add_config REKERNEL_NETWORK y
         fi
 
-        if [ "${{ inputs.add_nomount_maxsteeel }}" = "on" ]; then
-          echo "== NoMount (maxsteeel) config =="
-          add_config NOMOUNT y
+        if [ "${{ inputs.debug_features }}" = "on" ]; then
+          add_config KPROBES y
+          add_config KPROBE_EVENTS y
+          add_config UPROBES y
+          add_config FTRACE y
+          add_config FUNCTION_TRACER y
+          add_config DYNAMIC_FTRACE y
+        fi
+
+        if [ "${{ inputs.heavy_debug_features }}" = "on" ]; then
+          add_config KALLSYMS y
+          add_config KALLSYMS_ALL y
+          add_config KASAN y
+          add_config KASAN_HW_TAGS y
+          add_config BTRFS_FS y
         fi
         
         if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
