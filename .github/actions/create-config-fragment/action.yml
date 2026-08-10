@@ -98,8 +98,7 @@ runs:
         add_config TCP_CONG_BBR3 y
         add_config TCP_CONG_BBR y
         add_config DEFAULT_BBR y
-        add_str_config DEFAULT_TCP_CONG bbr
-        fi
+        add_str_config DEFAULT_TCP_CONG bbr3
 
         echo "== enabling base TCP congestion control algorithms =="
         add_config TCP_CONG_CUBIC y
