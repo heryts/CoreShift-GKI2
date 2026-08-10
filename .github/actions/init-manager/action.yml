@@ -266,5 +266,5 @@ runs:
           rm -rf "$KSU_ROOT/.git"
         fi
         
-        git add .
+        git add . 2>/dev/null
         git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
