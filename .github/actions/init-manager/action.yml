@@ -77,10 +77,7 @@ runs:
             'KernelSU  6.1     3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
             'KernelSU  6.6     3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
             'KernelSU  6.12    3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
-            'KowSU     5.10    cf087d755af8e322e6840d02b082a7b3871726c7' \
-            'KowSU     6.1     cf087d755af8e322e6840d02b082a7b3871726c7' \
-            'KowSU     6.6     cf087d755af8e322e6840d02b082a7b3871726c7' \
-            'KowSU     6.12    cf087d755af8e322e6840d02b082a7b3871726c7' \
+            'KowSU     *       (no pin; uses submodule HEAD, same as KernelSU-Backslashxx)' \
             'KernelSU-Next 5.10 (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.1  (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.6  (pinned via .gitmodules branch)' \
@@ -92,8 +89,19 @@ runs:
               MANAGER_REF_SOURCE="susfs-default"
               ;;
             KowSU:5.10|KowSU:6.1|KowSU:6.6|KowSU:6.12)
-              SELECTED_MANAGER_REF="cf087d755af8e322e6840d02b082a7b3871726c7"
-              MANAGER_REF_SOURCE="susfs-default"
+              # No reliable SUSFS-pinned commit for KowSU: KowSU's kernel/setup.sh
+              # does its own internal git clone of KernelSU which does not
+              # necessarily resolve arbitrary KowSU-fork-only commit hashes
+              # (observed: "fatal: unable to read tree" on cf087d7...,
+              # setup.sh then silently falls back to its own default branch,
+              # which later fails the HEAD verification below).
+              # Treat KowSU like KernelSU-Backslashxx instead: fall through to
+              # the no-pin case so the "Critical fix" block below feeds
+              # setup.sh the actual submodule HEAD (guaranteed reachable,
+              # since it's exactly what git submodule update already checked
+              # out from KowSU's own remote).
+              SELECTED_MANAGER_REF=""
+              MANAGER_REF_SOURCE="submodule-default (no reliable SUSFS-pinned commit for KowSU)"
               ;;
             KSUN-Susfs-Hookless:5.10|KSUN-Susfs-Hookless:6.1|KSUN-Susfs-Hookless:6.6|KSUN-Susfs-Hookless:6.12)
               # susfs+nomount-hookless branch is already SUSFS-integrated at the source
