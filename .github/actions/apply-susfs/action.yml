@@ -221,6 +221,31 @@ runs:
 
           grep -n 'struct policydb \*db' "$RULES_C"
           grep -n -A1 'if (db)' "$RULES_C"
+
+          echo
+          echo "== check for missing SUS_SU/selinux-hide symbols (generic susfs enable patch) =="
+          SUSFS_ENABLE_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/10_enable_susfs_for_ksu.patch"
+
+          if [ ! -e "$SUSFS_ENABLE_PATCH" ]; then
+            echo "::error::missing patch: $SUSFS_ENABLE_PATCH"
+            exit 1
+          fi
+
+          if git apply --check "$SUSFS_ENABLE_PATCH" 2>/tmp/enable_check.log; then
+            echo "patch applies cleanly, applying"
+            git apply "$SUSFS_ENABLE_PATCH"
+          else
+            echo "::warning::10_enable_susfs_for_ksu.patch does not apply cleanly on top of BXX_PATCH"
+            cat /tmp/enable_check.log
+            echo "::error::manual review needed — see log above for which hunks conflict"
+            exit 1
+          fi
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after 10_enable_susfs_for_ksu.patch"
+            exit 1
+          fi
+          
         else
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT =="
           git apply --check "$KSU_PATCH"
