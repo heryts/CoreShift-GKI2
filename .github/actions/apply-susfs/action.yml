@@ -167,14 +167,15 @@ runs:
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
         elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KowSU" ]; then
           echo "== applying backslashxx-family SUSFS enablement patch (manager=${{ inputs.manager }}) =="
-          echo "backslashxx's kernel/ tree (hook/, supercall/, selinux/) has a different"
-          echo "structure from stock KernelSU, so it needs its own SUSFS wiring patch"
-          echo "instead of the generic 10_enable_susfs_for_ksu.patch."
+          echo "backslashxx's kernel/ tree has been refactored into core/, feature/,"
+          echo "policy/, runtime/, sulog/ (no longer just hook/+selinux/+supercall/),"
+          echo "so it needs a matching manager-specific SUSFS wiring patch instead of"
+          echo "the generic 10_enable_susfs_for_ksu.patch under $PATCH_DIR."
           echo "KowSU is a fork of backslashxx and shares this structure, so the same"
           echo "patch is used here. If KowSU has since drifted from upstream backslashxx,"
           echo "this git apply --check will fail loudly rather than silently miswiring SUSFS."
 
-          BXX_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/0001-xxKSU-kernel-implement-susfs-v2_2_0.patch"
+          BXX_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/10_enable_susfs_for_ksu.patch"
 
           if [ ! -e "$BXX_PATCH" ]; then
             echo "::error::missing backslashxx SUSFS patch: $BXX_PATCH"
@@ -188,72 +189,6 @@ runs:
             echo "::error::conflict markers found after backslashxx-family SUSFS patch (manager=${{ inputs.manager }})"
             exit 1
           fi
-
-          echo
-          echo "== post-patch fix: uninitialized 'db' in kernel/selinux/rules.c (-Werror) =="
-          echo "The upstream xxKSU SUSFS patch injects ksu_allow(db, ...) right after the"
-          echo "out_flush: label, which is also reached via the early IS_ERR(pol) exit"
-          echo "path where db is never assigned. Initialize db and guard the call so it's"
-          echo "both -Werror-clean and doesn't dereference an invalid pointer at runtime."
-
-          RULES_C="kernel/selinux/rules.c"
-
-          if ! grep -qF 'struct policydb *db;' "$RULES_C"; then
-            echo "::error::expected declaration 'struct policydb *db;' not found in $RULES_C; upstream xxKSU patch or fork source may have changed, re-check this fix"
-            exit 1
-          fi
-          if ! grep -qF 'ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");' "$RULES_C"; then
-            echo "::error::expected injected line 'ksu_allow(db, ...)' not found in $RULES_C; upstream xxKSU patch or fork source may have changed, re-check this fix"
-            exit 1
-          fi
-
-          sed -i 's/struct policydb \*db;/struct policydb *db = NULL;/' "$RULES_C"
-          sed -i -E 's/^([[:space:]]*)ksu_allow\(db, "zygote", "labeledfs", "filesystem", "unmount"\);/\1if (db)\n\1    ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");/' "$RULES_C"
-
-          if ! grep -qF 'struct policydb *db = NULL;' "$RULES_C"; then
-            echo "::error::post-patch fix failed: db declaration was not initialized in $RULES_C"
-            exit 1
-          fi
-          if ! grep -qF 'if (db)' "$RULES_C"; then
-            echo "::error::post-patch fix failed: ksu_allow(db, ...) guard was not inserted in $RULES_C"
-            exit 1
-          fi
-
-          grep -n 'struct policydb \*db' "$RULES_C"
-          grep -n -A1 'if (db)' "$RULES_C"
-
-          echo
-          echo "== check for missing SUS_SU/selinux-hide symbols (generic susfs enable patch) =="
-          SUSFS_ENABLE_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/10_enable_susfs_for_ksu.patch"
-
-          if [ ! -e "$SUSFS_ENABLE_PATCH" ]; then
-            echo "::error::missing patch: $SUSFS_ENABLE_PATCH"
-            exit 1
-          fi
-
-          if git apply --check "$SUSFS_ENABLE_PATCH" 2>/tmp/enable_check.log; then
-            echo "patch applies cleanly, applying"
-            git apply "$SUSFS_ENABLE_PATCH"
-          else
-            echo "::warning::10_enable_susfs_for_ksu.patch does not apply cleanly on top of BXX_PATCH"
-            cat /tmp/enable_check.log
-            echo "::error::manual review needed — see log above for which hunks conflict"
-            exit 1
-          fi
-
-          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
-            echo "::error::conflict markers found after 10_enable_susfs_for_ksu.patch"
-            exit 1
-          fi
-
-          echo "== dump actual backslashxx source for manual SUS_SU porting =="
-          mkdir -p /tmp/bxx-dump
-          cp kernel/selinux/selinux.c /tmp/bxx-dump/
-          cp kernel/selinux/selinux.h /tmp/bxx-dump/
-          cp kernel/include/ksu.h /tmp/bxx-dump/
-          cp kernel/feature/sucompat.c /tmp/bxx-dump/ 2>/dev/null || echo "no sucompat.c"
-          cp kernel/feature/sucompat.h /tmp/bxx-dump/ 2>/dev/null || echo "no sucompat.h"
-          
         else
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT =="
           git apply --check "$KSU_PATCH"
