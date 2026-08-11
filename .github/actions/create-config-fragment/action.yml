@@ -14,6 +14,10 @@ inputs:
     required: false
     default: "off"
     description: Enable maxsteeel/nomount (manager-agnostic VFS-level NoMount, independent from fork built-in NoMount).
+  kpm_support:
+    required: false
+    default: "off"
+    description: Enable base Kconfig requirement for KPM (KPatch-Next-EXP) support - the actual image patching happens post-build in apply-kpm-support.
   baseband_guard:
     required: true
     description: Add Baseband Guard config.
@@ -146,7 +150,25 @@ runs:
           add_config IKCONFIG_PROC y
         fi
 
-        if [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
+        if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+          echo "== ${{ inputs.manager }} config: syscall table tamper hook mode =="
+          echo "No CONFIG_KSU_MANUAL_HOOK in this fork family; uses built-in"
+          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
+          echo "newfstat/reboot) instead of source-patched call sites."
+          add_config KSU y
+          add_config KSU_TAMPER_SYSCALL_TABLE y
+          add_config KALLSYMS_ALL y
+
+          if [ "${{ inputs.susfs }}" = "on" ]; then
+            echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
+            exit 1
+          fi
+
+        elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
+          exit 1
+
+        elif [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
           if [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== SUSFS config: KernelSU-Next (hookless/kprobes fork) =="
             echo "Using fork-native symbols KSU_KPROBES_SUSFS + KSU_KPROBES_NOMOUNT."
@@ -166,24 +188,6 @@ runs:
             echo "Enabling ARM64 branch-link hook mode (KSU_HACK_ARM64_BRANCH_LINK)."
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
-
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== ${{ inputs.manager }} config: syscall table tamper hook mode =="
-          echo "No CONFIG_KSU_MANUAL_HOOK in this fork family; uses built-in"
-          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
-          echo "newfstat/reboot) instead of source-patched call sites."
-          add_config KSU y
-          add_config KSU_TAMPER_SYSCALL_TABLE y
-          add_config KALLSYMS_ALL y
-
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
-            exit 1
-          fi
-
-        elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-          echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
-          exit 1
 
         elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
           add_config KSU y
@@ -255,6 +259,18 @@ runs:
         if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
           echo "== NoMount (maxsteeel) config =="
           add_config NOMOUNT y
+        fi
+
+        if [ "${{ inputs.kpm_support }}" = "on" ]; then
+          echo "== KPM (KPatch-Next-EXP) support: base Kconfig requirement =="
+          echo "kptools/kpimg patch the built Image post-build (see apply-kpm-support);"
+          echo "the only thing needed at kernel-config time is CONFIG_KALLSYMS=y so kptools"
+          echo "can resolve kernel symbols from the image at patch time."
+          if grep -qxF "CONFIG_KALLSYMS=y" private.fragment 2>/dev/null; then
+            echo "  already requested: CONFIG_KALLSYMS=y"
+          else
+            add_config KALLSYMS y
+          fi
         fi
         
         if [ "${{ inputs.baseband_guard }}" = "on" ]; then
