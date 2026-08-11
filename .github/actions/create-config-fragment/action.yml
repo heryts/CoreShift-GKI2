@@ -183,6 +183,7 @@ runs:
             echo "can't be auto-scanned from SUSFS_PATCH_DIR and is hardcoded here"
             echo "to match kernel/Kconfig added by 0001-xxKSU-...-v2_2_0.patch."
             add_config KSU_SUSFS y
+            add_config KSU_SUSFS_SUS_SU y
             add_config KSU_SUSFS_SUS_PATH y
             add_config KSU_SUSFS_SUS_MOUNT y
             add_config KSU_SUSFS_SUS_KSTAT y
