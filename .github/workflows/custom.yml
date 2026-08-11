@@ -65,6 +65,16 @@ on:
         required: true
         options: ["off", "on"]
         default: "on"
+      kpm_support:
+        description: "Build kptools+kpimg from KPatch-Next-EXP (always latest) and patch the built Image for KPM (Kernel Patch Module) support"
+        type: choice
+        required: true
+        options: ["off", "on"]
+        default: "off"
+      kpm_superkey:
+        description: "Optional superkey to embed into the KPM-patched image (leave empty for no superkey)"
+        required: false
+        default: ""
       baseband_guard:
         description: "Apply Baseband Guard / BBG patches"
         type: choice
@@ -123,7 +133,7 @@ on:
 
 jobs:
   build:
-    name: ${{ inputs.kernel_version }} / ${{ inputs.manager }} / SUSFS ${{ inputs.susfs }}
+    name: ${{ inputs.kernel_version }} / ${{ inputs.manager }} / SUSFS ${{ inputs.susfs }} / KPM ${{ inputs.kpm_support }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -192,12 +202,17 @@ jobs:
             susfs_label="-susfs"
           fi
 
+          kpm_label=""
+          if [ "${{ inputs.kpm_support }}" = "on" ]; then
+            kpm_label="-kpm"
+          fi
+          
           bbg_label=""
           if [ "${{ inputs.baseband_guard }}" = "on" ]; then
             bbg_label="-bbg"
           fi
 
-          variant_suffix="${susfs_label}${bbg_label}"
+          variant_suffix="${susfs_label}${kpm_label}${bbg_label}"
           final_name="custom-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}-${DATE}-${{ github.run_number }}"
           config_base="config-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}"
 
@@ -304,6 +319,16 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply Unicode Fix Patch
+        uses: ./.github/actions/apply-unicode-fix
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply network patches
+        uses: ./.github/actions/apply-network-patches
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          
       - name: Apply SUSFS4KSU patches
         if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
         uses: ./.github/actions/apply-susfs
@@ -343,19 +368,15 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply IPC KABI patches
+        if: inputs.container_features == 'on'
+        uses: ./.github/actions/apply-ipc-kabi-patches
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          
       - name: Apply Re-Kernel driver
         if: inputs.re_kernel == 'on'
         uses: ./.github/actions/apply-re-kernel
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
-      - name: Apply Unicode Fix Patch
-        uses: ./.github/actions/apply-unicode-fix
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
-      - name: Apply network patches
-        uses: ./.github/actions/apply-network-patches
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
@@ -366,6 +387,7 @@ jobs:
           ikconfig: ${{ inputs.ikconfig }}
           susfs: ${{ inputs.susfs }}
           nomount_maxsteeel: ${{ inputs.nomount_maxsteeel }}
+          kpm_support: ${{ inputs.kpm_support }}
           baseband_guard: ${{ inputs.baseband_guard }}
           droidspaces: ${{ inputs.droidspaces }}
           droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
@@ -376,13 +398,7 @@ jobs:
           debug_features: ${{ inputs.debug_features }}
           heavy_debug_features: ${{ inputs.heavy_debug_features }}
           kernel_version: ${{ inputs.kernel_version }}
-
-      - name: Apply IPC KABI patches
-        if: inputs.container_features == 'on'
-        uses: ./.github/actions/apply-ipc-kabi-patches
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
+          
       - name: Install legacy CoreShift build config
         if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/install-legacy-private-fragment
@@ -419,6 +435,14 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
           kmi_bypass: ${{ inputs.kmi_bypass }}
+
+      - name: Apply KPM support
+        if: inputs.kpm_support == 'on'
+        uses: ./.github/actions/apply-kpm-support
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          image_path: out/Image-${{ steps.custom-name.outputs.final_name }}
+          kpm_superkey: ${{ inputs.kpm_superkey }}
 
       - name: Write compiler metadata
         uses: ./.github/actions/write-compiler-metadata
@@ -518,6 +542,11 @@ jobs:
             susfs_label="Enabled"
           fi
 
+          kpm_label="Disabled"
+          if [ "${{ inputs.kpm_support }}" = "on" ]; then
+            kpm_label="Enabled"
+          fi
+
           bbg_label="Disabled"
           if [ "${{ inputs.baseband_guard }}" = "on" ]; then
             bbg_label="Enabled"
@@ -530,6 +559,7 @@ jobs:
           - Manager: ${{ inputs.manager }}
           - LTO: ${{ inputs.lto }}
           - SUSFS: ${susfs_label}
+          - KPM: ${kpm_label}
           - BBG: ${bbg_label}
           - Date: ${DATE}
 
