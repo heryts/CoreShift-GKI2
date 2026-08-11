@@ -23,6 +23,11 @@ runs:
           exit 1
         fi
 
+        if [ "${{ inputs.manager }}" = "KowSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+          echo "::error::SUSFS4KSU is not yet supported for manager=${{ inputs.manager }}."
+          exit 1
+        fi
+
         case "${{ inputs.kernel_version }}" in
           5.10) SUSFS_BRANCH="gki-android12-5.10" ;;
           6.1)  SUSFS_BRANCH="gki-android14-6.1" ;;
@@ -106,88 +111,37 @@ runs:
         ls -l fs/susfs.c include/linux/susfs*.h
 
         echo
-        if { [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KowSU" ]; } && [ "${{ inputs.kernel_version }}" != "5.10" ]; then
-          echo "== applying backslashxx-family de-inlined SUSFS hooks patch (COMMON_DIR) =="
-          echo "backslashxx-family managers don't use the classic ksu_handle_* manual-hook"
-          echo "call sites that the generic 50_add_susfs_in_*.patch inserts into fs/,"
-          echo "kernel/, mm/, drivers/input/ - applying that generic patch here would"
-          echo "wire up hook points nothing in backslashxx's driver actually defines"
-          echo "(confirmed: that's exactly what caused the earlier undefined symbol"
-          echo "errors at link time). Using a manager-specific de-inlined hooks patch"
-          echo "instead, matched to kernel_version=${{ inputs.kernel_version }}."
-          echo "Note: kernel_version=5.10 does NOT take this branch - backslashxx's"
-          echo "5.10 source is still the old pre-refactor layout, which is compatible"
-          echo "with the generic core patch (see the else branch below)."
+        echo "== check/apply core SUSFS patch =="
+        if ! git apply --check "$SUSFS_PATCH"; then
+          echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree"
+          exit 1
+        fi
 
-          case "${{ inputs.kernel_version }}" in
-            6.1)
-              BXX_COMMON_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/51_deinlined_susfs_hooks_gki-android14-6_1.patch"
-              ;;
-            *)
-              echo "::error::no backslashxx-family de-inlined SUSFS hooks patch available yet for kernel_version=${{ inputs.kernel_version }} (only 6.1 is currently supported for manager=${{ inputs.manager }} with susfs=on; 5.10 uses the generic core patch path instead)"
-              exit 1
-              ;;
-          esac
+        git apply "$SUSFS_PATCH"
 
-          if [ ! -e "$BXX_COMMON_PATCH" ]; then
-            echo "::error::missing backslashxx-family de-inlined SUSFS hooks patch: $BXX_COMMON_PATCH"
-            exit 1
-          fi
+        if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
+          echo "== fixing set_nameidata() call-site/declaration mismatch =="
+          echo "50_add_susfs_in_*.patch adds a 4th arg at call sites but this source tree's"
+          echo "set_nameidata() declaration wasn't updated to accept it; strip the extra arg."
+          sed -i -E 's/set_nameidata\(([^,]+), ([^,]+), ([^,]+), NULL\);/set_nameidata(\1, \2, \3);/' fs/namei.c
+          grep -n 'set_nameidata(' fs/namei.c
+        fi
 
-          if ! git apply --check "$BXX_COMMON_PATCH"; then
-            echo "::error::backslashxx-family de-inlined SUSFS hooks patch does not apply to this source tree"
-            exit 1
-          fi
+        if find . -name '*.rej' -print -quit | grep -q .; then
+          echo "::error::reject files found after SUSFS patch"
+          find . -name '*.rej' -print
+          exit 1
+        fi
 
-          git apply "$BXX_COMMON_PATCH"
-
-          if find . -name '*.rej' -print -quit | grep -q .; then
-            echo "::error::reject files found after backslashxx-family de-inlined SUSFS hooks patch"
-            find . -name '*.rej' -print
-            exit 1
-          fi
-
-          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' \
-            fs \
-            kernel \
-            mm \
-            drivers/input; then
-            echo "::error::conflict markers found after backslashxx-family de-inlined SUSFS hooks patch"
-            exit 1
-          fi
-        else
-          echo "== check/apply core SUSFS patch =="
-          if ! git apply --check "$SUSFS_PATCH"; then
-            echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree"
-            exit 1
-          fi
-
-          git apply "$SUSFS_PATCH"
-
-          if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
-            echo "== fixing set_nameidata() call-site/declaration mismatch =="
-            echo "50_add_susfs_in_*.patch adds a 4th arg at call sites but this source tree's"
-            echo "set_nameidata() declaration wasn't updated to accept it; strip the extra arg."
-            sed -i -E 's/set_nameidata\(([^,]+), ([^,]+), ([^,]+), NULL\);/set_nameidata(\1, \2, \3);/' fs/namei.c
-            grep -n 'set_nameidata(' fs/namei.c
-          fi
-
-          if find . -name '*.rej' -print -quit | grep -q .; then
-            echo "::error::reject files found after SUSFS patch"
-            find . -name '*.rej' -print
-            exit 1
-          fi
-
-          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' \
-            fs \
-            include/linux/susfs.h \
-            include/linux/susfs_def.h \
-            drivers/input/input.c \
-            kernel \
-            security/selinux; then
-            echo "::error::conflict markers found after core SUSFS patch"
-            exit 1
-          fi
+        if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' \
+          fs \
+          include/linux/susfs.h \
+          include/linux/susfs_def.h \
+          drivers/input/input.c \
+          kernel \
+          security/selinux; then
+          echo "::error::conflict markers found after core SUSFS patch"
+          exit 1
         fi
 
         echo
@@ -216,80 +170,6 @@ runs:
         if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KowSU" ]; then
-          echo "== applying backslashxx-family SUSFS enablement patch (manager=${{ inputs.manager }}) =="
-          echo "backslashxx's kernel/ tree structure differs by kernel_version:"
-          echo "5.10 is still the old simple layout (hook/+selinux/+supercall/), while"
-          echo "6.1/6.6/6.12 have been refactored into core/, feature/, policy/,"
-          echo "runtime/, sulog/. Selecting the matching manager-specific SUSFS wiring"
-          echo "patch for kernel_version=${{ inputs.kernel_version }} instead of the"
-          echo "generic 10_enable_susfs_for_ksu.patch under $PATCH_DIR."
-          echo "KowSU is a fork of backslashxx and shares this structure, so the same"
-          echo "patch is used here. If KowSU has since drifted from upstream backslashxx,"
-          echo "this git apply --check will fail loudly rather than silently miswiring SUSFS."
-
-          case "${{ inputs.kernel_version }}" in
-            5.10)
-              BXX_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/0001-xxKSU-kernel-implement-susfs-v2_2_0.patch"
-              BXX_PATCH_IS_OLD_STRUCTURE=1
-              ;;
-            6.1|6.6|6.12)
-              BXX_PATCH="$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/10_enable_susfs_for_ksu.patch"
-              BXX_PATCH_IS_OLD_STRUCTURE=0
-              ;;
-            *)
-              echo "::error::no backslashxx-family SUSFS wiring patch known for kernel_version=${{ inputs.kernel_version }}"
-              exit 1
-              ;;
-          esac
-
-          if [ ! -e "$BXX_PATCH" ]; then
-            echo "::error::missing backslashxx SUSFS patch: $BXX_PATCH"
-            exit 1
-          fi
-
-          git apply --check "$BXX_PATCH"
-          git apply "$BXX_PATCH"
-
-          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
-            echo "::error::conflict markers found after backslashxx-family SUSFS patch (manager=${{ inputs.manager }})"
-            exit 1
-          fi
-
-          if [ "$BXX_PATCH_IS_OLD_STRUCTURE" = "1" ]; then
-            echo
-            echo "== post-patch fix: uninitialized 'db' in kernel/selinux/rules.c (-Werror) =="
-            echo "The old-structure xxKSU SUSFS patch injects ksu_allow(db, ...) right after"
-            echo "the out_flush: label, which is also reached via the early IS_ERR(pol) exit"
-            echo "path where db is never assigned. Initialize db and guard the call so it's"
-            echo "both -Werror-clean and doesn't dereference an invalid pointer at runtime."
-
-            RULES_C="kernel/selinux/rules.c"
-
-            if ! grep -qF 'struct policydb *db;' "$RULES_C"; then
-              echo "::error::expected declaration 'struct policydb *db;' not found in $RULES_C; upstream xxKSU patch or fork source may have changed, re-check this fix"
-              exit 1
-            fi
-            if ! grep -qF 'ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");' "$RULES_C"; then
-              echo "::error::expected injected line 'ksu_allow(db, ...)' not found in $RULES_C; upstream xxKSU patch or fork source may have changed, re-check this fix"
-              exit 1
-            fi
-
-            sed -i 's/struct policydb \*db;/struct policydb *db = NULL;/' "$RULES_C"
-            sed -i -E 's/^([[:space:]]*)ksu_allow\(db, "zygote", "labeledfs", "filesystem", "unmount"\);/\1if (db)\n\1    ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");/' "$RULES_C"
-
-            if ! grep -qF 'struct policydb *db = NULL;' "$RULES_C"; then
-              echo "::error::post-patch fix failed: db declaration was not initialized in $RULES_C"
-              exit 1
-            fi
-            if ! grep -qF 'if (db)' "$RULES_C"; then
-              echo "::error::post-patch fix failed: ksu_allow(db, ...) guard was not inserted in $RULES_C"
-              exit 1
-            fi
-
-            grep -n 'struct policydb \*db' "$RULES_C"
-            grep -n -A1 'if (db)' "$RULES_C"
-          fi
         else
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT =="
           git apply --check "$KSU_PATCH"
