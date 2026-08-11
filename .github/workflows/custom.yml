@@ -299,6 +299,16 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: DEBUG - test xxKSU patch against midori01/KernelSU
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/midori01/KernelSU.git /tmp/midori-ksu
+          cd /tmp/midori-ksu
+          git apply --check --verbose \
+            "$GITHUB_WORKSPACE/.github/patches/susfs4ksu/backslashxx/0001-xxKSU-kernel-implement-susfs-v2_2_0.patch" \
+            2>&1 | tee /tmp/midori_check.log
+
       - name: Apply SUSFS4KSU patches
         if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
         uses: ./.github/actions/apply-susfs
