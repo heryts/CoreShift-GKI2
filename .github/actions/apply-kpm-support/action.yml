@@ -1,0 +1,143 @@
+name: Apply KPM support
+description: >
+  Build kptools + kpimg from KPatch-Next-EXP source (always the latest commit on the
+  default branch) and patch the already-built kernel Image so it gains KPM (Kernel
+  Patch Module) support. This is a post-build image patch (like a boot.img-level patch),
+  NOT a kernel source patch - it must run AFTER the kernel Image is built and BEFORE
+  packaging.
+inputs:
+  kernel_version:
+    required: true
+    description: Kernel version being built (used for logging only; kptools/kpimg are architecture-generic, not per-kernel_version).
+  image_path:
+    required: true
+    description: Path (relative to GITHUB_WORKSPACE, or absolute) to the built kernel Image to patch, e.g. out/Image-<final_name>.
+  kpm_superkey:
+    required: false
+    default: ""
+    description: Optional superkey (-s) to embed into the patched image. Leave empty to build without a superkey.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        echo "== KPM support: build from source (741afb7/KPatch-Next-EXP, latest) =="
+        echo "kernel_version=${{ inputs.kernel_version }} (informational only - kptools/kpimg are not per-kernel_version)"
+        echo "Note: this always builds the current HEAD of the default branch - no pinned"
+        echo "commit. Upstream breakage there will break this step too; that's expected"
+        echo "in exchange for always tracking the latest KPatch-Next-EXP."
+
+        IMAGE_PATH="${{ inputs.image_path }}"
+        if [ ! -f "$IMAGE_PATH" ]; then
+          echo "::error::built kernel Image not found at IMAGE_PATH=$IMAGE_PATH; apply-kpm-support must run AFTER the 'Build kernel' step"
+          exit 1
+        fi
+
+        KPM_CLONE_DIR="${RUNNER_TEMP:-/tmp}/kpatch-next-exp"
+        rm -rf "$KPM_CLONE_DIR"
+
+        echo "== cloning 741afb7/KPatch-Next-EXP (latest) =="
+        git clone --depth 1 https://github.com/741afb7/KPatch-Next-EXP.git "$KPM_CLONE_DIR"
+
+        KPM_COMMIT="$(git -C "$KPM_CLONE_DIR" rev-parse --short HEAD)"
+        KPM_COMMIT_MSG="$(git -C "$KPM_CLONE_DIR" log -1 --format='%s')"
+        echo "KPatch-Next-EXP resolved commit: $KPM_COMMIT - $KPM_COMMIT_MSG"
+
+        LOCAL_PATCH_DIR="$GITHUB_WORKSPACE/.github/patches/kpm-support"
+        if [ -d "$LOCAL_PATCH_DIR" ] && find "$LOCAL_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print -quit | grep -q .; then
+          echo "== applying local CI-compatibility patches from $LOCAL_PATCH_DIR =="
+          echo "(overlay patches to make KPatch-Next-EXP's own source/build.sh work in this CI"
+          echo "environment - NOT kernel source patches. Applied on top of commit $KPM_COMMIT.)"
+
+          cd "$KPM_CLONE_DIR"
+          for p in "$LOCAL_PATCH_DIR"/*.patch; do
+            echo "-- $p"
+            if ! git apply --check "$p"; then
+              echo "::error::local KPM patch does not apply to KPatch-Next-EXP @ $KPM_COMMIT: $p"
+              exit 1
+            fi
+            git apply "$p"
+          done
+
+          if find . -name '*.rej' -print -quit | grep -q .; then
+            echo "::error::reject files found after applying local KPM patches"
+            find . -name '*.rej' -print
+            exit 1
+          fi
+          cd - > /dev/null
+        else
+          echo "== no local patches in $LOCAL_PATCH_DIR, building KPatch-Next-EXP unmodified =="
+        fi
+
+        echo
+        echo "== building kptools + kpimg (./build.sh) =="
+        cd "$KPM_CLONE_DIR"
+        chmod +x build.sh
+        ./build.sh
+        cd - > /dev/null
+
+        echo
+        echo "== locating built kptools binary =="
+        KPTOOLS_BIN="$(
+          find "$KPM_CLONE_DIR" -maxdepth 4 -type f -name 'kptools*' -perm -u+x -print |
+            sort |
+            head -n 1
+        )"
+
+        if [ -z "$KPTOOLS_BIN" ]; then
+          echo "::error::could not locate a built kptools binary under $KPM_CLONE_DIR after ./build.sh"
+          echo "== directory listing (depth 4) for troubleshooting =="
+          find "$KPM_CLONE_DIR" -maxdepth 4 2>/dev/null || true
+          exit 1
+        fi
+        echo "KPTOOLS_BIN=$KPTOOLS_BIN"
+
+        echo
+        echo "== locating built kpimg payload =="
+        KPIMG_BIN="$(
+          find "$KPM_CLONE_DIR" -maxdepth 4 -type f -iname 'kpimg*' ! -name '*.o' ! -name '*.d' -print |
+            sort |
+            head -n 1
+        )"
+
+        if [ -z "$KPIMG_BIN" ]; then
+          echo "::error::could not locate a built kpimg payload under $KPM_CLONE_DIR after ./build.sh"
+          echo "== directory listing (depth 4) for troubleshooting =="
+          find "$KPM_CLONE_DIR" -maxdepth 4 2>/dev/null || true
+          exit 1
+        fi
+        echo "KPIMG_BIN=$KPIMG_BIN"
+
+        echo
+        echo "== patching kernel Image =="
+        echo "IMAGE_PATH=$IMAGE_PATH"
+
+        IMAGE_ORI="${IMAGE_PATH}.ori"
+        IMAGE_PATCHED="${IMAGE_PATH}.kpm-patched"
+
+        cp "$IMAGE_PATH" "$IMAGE_ORI"
+        chmod +x "$KPTOOLS_BIN"
+
+        KPM_SUPERKEY="${{ inputs.kpm_superkey }}"
+
+        if [ -n "$KPM_SUPERKEY" ]; then
+          echo "== patching with superkey set =="
+          "$KPTOOLS_BIN" -p -i "$IMAGE_ORI" -k "$KPIMG_BIN" -s "$KPM_SUPERKEY" -o "$IMAGE_PATCHED"
+        else
+          echo "== patching without superkey =="
+          "$KPTOOLS_BIN" -p -i "$IMAGE_ORI" -k "$KPIMG_BIN" -o "$IMAGE_PATCHED"
+        fi
+
+        if [ ! -s "$IMAGE_PATCHED" ]; then
+          echo "::error::kptools did not produce a non-empty patched image at $IMAGE_PATCHED"
+          exit 1
+        fi
+
+        mv "$IMAGE_PATCHED" "$IMAGE_PATH"
+        rm -f "$IMAGE_ORI"
+
+        echo
+        echo "== KPM patch applied =="
+        ls -l "$IMAGE_PATH"
