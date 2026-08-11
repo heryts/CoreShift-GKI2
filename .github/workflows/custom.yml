@@ -10,7 +10,7 @@ on:
       manager:
         type: choice
         required: true
-        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Next", "KSUN-Susfs-Hookless", "KowSU", "ResukiSU", "Rissu", "Wild_KSU"]
+        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "Rissu", "Wild_KSU"]
         default: "Vanilla"
       manager_ref:
         description: "Optional manager git ref/commit/tag"
