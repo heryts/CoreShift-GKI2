@@ -168,8 +168,8 @@ runs:
           fi
 
         elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== KernelSU-Backslashxx config: syscall table tamper hook mode =="
-          echo "No CONFIG_KSU_MANUAL_HOOK in this fork; uses built-in"
+          echo "== ${{ inputs.manager }} config: syscall table tamper hook mode =="
+          echo "No CONFIG_KSU_MANUAL_HOOK in this fork family; uses built-in"
           echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
           echo "newfstat/reboot) instead of source-patched call sites."
           add_config KSU y
@@ -177,16 +177,17 @@ runs:
           add_config KALLSYMS_ALL y
 
           if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ${{ inputs.manager }}: SUSFS integration (xxKSU de-inlined patch) =="
+            echo "== ${{ inputs.manager }}: SUSFS integration (10_enable_susfs_for_ksu.patch) =="
             echo "This fork family's SUSFS wiring comes from a manager-specific patch, not"
-            echo "susfs4ksu's generic 10_enable_susfs_for_ksu.patch, so the symbol list"
-            echo "can't be auto-scanned from SUSFS_PATCH_DIR and is hardcoded here"
-            echo "to match kernel/Kconfig added by 0001-xxKSU-...-v2_2_0.patch."
+            echo "susfs4ksu's generic 10_enable_susfs_for_ksu.patch under \$SUSFS_PATCH_DIR,"
+            echo "so the symbol list can't be auto-scanned and is hardcoded here to match"
+            echo "kernel/Kconfig as added by the current backslashxx-family patch."
+            echo "Note: KSU_SUSFS_TRY_UMOUNT does NOT exist in this patch's Kconfig (unlike"
+            echo "the older 0001-xxKSU patch) - do not add it back without re-checking."
             add_config KSU_SUSFS y
             add_config KSU_SUSFS_SUS_PATH y
             add_config KSU_SUSFS_SUS_MOUNT y
             add_config KSU_SUSFS_SUS_KSTAT y
-            add_config KSU_SUSFS_TRY_UMOUNT y
             add_config KSU_SUSFS_SPOOF_UNAME y
             add_config KSU_SUSFS_ENABLE_LOG y
             add_config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS y
