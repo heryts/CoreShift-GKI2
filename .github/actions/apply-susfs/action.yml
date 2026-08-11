@@ -245,6 +245,14 @@ runs:
             echo "::error::conflict markers found after 10_enable_susfs_for_ksu.patch"
             exit 1
           fi
+
+          echo "== dump actual backslashxx source for manual SUS_SU porting =="
+          mkdir -p /tmp/bxx-dump
+          cp kernel/selinux/selinux.c /tmp/bxx-dump/
+          cp kernel/selinux/selinux.h /tmp/bxx-dump/
+          cp kernel/include/ksu.h /tmp/bxx-dump/
+          cp kernel/feature/sucompat.c /tmp/bxx-dump/ 2>/dev/null || echo "no sucompat.c"
+          cp kernel/feature/sucompat.h /tmp/bxx-dump/ 2>/dev/null || echo "no sucompat.h"
           
         else
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT =="
