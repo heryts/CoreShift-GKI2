@@ -177,25 +177,14 @@ runs:
           add_config KALLSYMS_ALL y
 
           if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ${{ inputs.manager }}: SUSFS integration (10_enable_susfs_for_ksu.patch) =="
-            echo "This fork family's SUSFS wiring comes from a manager-specific patch, not"
-            echo "susfs4ksu's generic 10_enable_susfs_for_ksu.patch under \$SUSFS_PATCH_DIR,"
-            echo "so the symbol list can't be auto-scanned and is hardcoded here to match"
-            echo "kernel/Kconfig as added by the current backslashxx-family patch."
-            echo "Note: KSU_SUSFS_TRY_UMOUNT does NOT exist in this patch's Kconfig (unlike"
-            echo "the older 0001-xxKSU patch) - do not add it back without re-checking."
-            add_config KSU_SUSFS y
-            add_config KSU_SUSFS_SUS_PATH y
-            add_config KSU_SUSFS_SUS_MOUNT y
-            add_config KSU_SUSFS_SUS_KSTAT y
-            add_config KSU_SUSFS_SPOOF_UNAME y
-            add_config KSU_SUSFS_ENABLE_LOG y
-            add_config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS y
-            add_config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG y
-            add_config KSU_SUSFS_OPEN_REDIRECT y
-            add_config KSU_SUSFS_SUS_MAP y
+            echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
+            exit 1
           fi
-  
+
+        elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
+          exit 1
+
         elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
           add_config KSU y
           if [ "${{ inputs.susfs }}" = "on" ]; then
