@@ -140,6 +140,11 @@ jobs:
             exit 1
           fi
 
+          if { [ "${{ inputs.manager }}" = "KowSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; } && [ "${{ inputs.susfs }}" = "on" ]; then
+            echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; set susfs=off or choose a different manager"
+            exit 1
+          fi
+
           if [ "${{ inputs.source_mode }}" = "custom" ] && [ -z "${{ inputs.source_repo }}" ]; then
             echo "::error::source_repo is required when source_mode=custom"
             exit 1
