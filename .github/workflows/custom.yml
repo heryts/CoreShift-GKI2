@@ -369,7 +369,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply IPC KABI patches
-        if: inputs.container_features == 'on'
+        if: inputs.container_features == 'on' && inputs.droidspaces == 'off'
         uses: ./.github/actions/apply-ipc-kabi-patches
         with:
           kernel_version: ${{ inputs.kernel_version }}
