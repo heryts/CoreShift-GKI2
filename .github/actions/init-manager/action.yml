@@ -73,10 +73,10 @@ runs:
           echo "== SUSFS manager compatibility table =="
           printf '%s\n' \
             'manager   kernel  ref' \
-            'KernelSU  5.10    3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
-            'KernelSU  6.1     3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
-            'KernelSU  6.6     3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
-            'KernelSU  6.12    3c30f77db1802d68a1cfcfb77d49c92fe93873ac' \
+            'KernelSU  5.10    aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KernelSU  6.1     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KernelSU  6.6     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KernelSU  6.12    aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
             'KowSU     *       (no pin; uses submodule HEAD, same as KernelSU-Backslashxx)' \
             'KernelSU-Next 5.10 (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.1  (pinned via .gitmodules branch)' \
@@ -85,7 +85,12 @@ runs:
 
           case "${MANAGER}:${KERNEL_VERSION}" in
             KernelSU:5.10|KernelSU:6.1|KernelSU:6.6|KernelSU:6.12)
-              SELECTED_MANAGER_REF="3c30f77db1802d68a1cfcfb77d49c92fe93873ac"
+              # Verified compatible with susfs4ksu commit e5b013b (gki-android12-5.10-dev,
+              # 2026-08-07), the same ref manager=KernelSU dynamically resolves to in
+              # apply-susfs. Update this alongside susfs4ksu dev-branch drift; if the KSU
+              # SUSFS patch starts failing again with a diverged directory layout, this
+              # pin is most likely stale again.
+              SELECTED_MANAGER_REF="aab67974f1210cad94880ce1fdc14cf63f6e30e0"
               MANAGER_REF_SOURCE="susfs-default"
               ;;
             KowSU:5.10|KowSU:6.1|KowSU:6.6|KowSU:6.12)
