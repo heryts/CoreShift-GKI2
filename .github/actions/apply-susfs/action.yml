@@ -47,8 +47,20 @@ runs:
         SUSFS_CLONE_DIR="${RUNNER_TEMP:-/tmp}/susfs4ksu"
         rm -rf "$SUSFS_CLONE_DIR"
 
-        echo "== cloning susfs4ksu (branch: $SUSFS_BRANCH) from $SUSFS_REPO =="
-        git clone --branch "$SUSFS_BRANCH" "$SUSFS_REPO" "$SUSFS_CLONE_DIR"
+        # For kernel_version=5.10, source the tree from the "-dev" branch instead
+        # of the stable branch (temporary fix while chasing Backslashxx issues).
+        # SUSFS_BRANCH itself stays as the stable name ("gki-android12-5.10") since
+        # that's still what the 50_add_susfs_in_*.patch filename uses on the -dev
+        # branch too, and it's what the manager=KernelSU "-dev" pin logic below
+        # appends "-dev" to. 6.1/6.6/6.12 are untouched for now.
+        SUSFS_CLONE_BRANCH="$SUSFS_BRANCH"
+        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+          SUSFS_CLONE_BRANCH="${SUSFS_BRANCH}-dev"
+          echo "== kernel_version=5.10: sourcing susfs4ksu from -dev branch =="
+        fi
+
+        echo "== cloning susfs4ksu (branch: $SUSFS_CLONE_BRANCH) from $SUSFS_REPO =="
+        git clone --branch "$SUSFS_CLONE_BRANCH" "$SUSFS_REPO" "$SUSFS_CLONE_DIR"
 
         if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping susfs_ref pin for KernelSU-Next; using branch HEAD =="
@@ -228,7 +240,7 @@ runs:
           echo "is not compatible with upstream's generic KernelSU/10_enable_susfs_for_ksu.patch,"
           echo "so a maintained local patch is applied instead."
 
-          BACKSLASHXX_SUSFS_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/KernelSU-Backslashxx/0001-xxKSU-kernel-implement-susfs-v2_2_0-De-inlined.patch"
+          BACKSLASHXX_SUSFS_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/KernelSU-Backslashxx/11_enable_susfs_for_ksu.patch"
 
           if [ ! -f "$BACKSLASHXX_SUSFS_PATCH" ]; then
             echo "::error::missing Backslashxx SUSFS enablement patch: $BACKSLASHXX_SUSFS_PATCH"
