@@ -13,8 +13,26 @@ runs:
 
         cd kernel/common
 
-        PATCH_URL="https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
-        PATCH_FILE="/tmp/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
+        PATCH_ROOT="https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI"
+
+        case "${{ inputs.kernel_version }}" in
+          5.10|6.1|6.6)
+            PATCH_URL="$PATCH_ROOT/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
+            PATCH_FILE="/tmp/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch"
+            ;;
+          6.12)
+            echo "== kernel_version=6.12 uses the dedicated 6.12+ SYSVIPC KABI patch =="
+            echo "(no slot suffix here - unlike below-kernel-6.12, this one isn't split"
+            echo "into 6_7_8/1_2_3/3_4_5 variants; same single patch regardless of the"
+            echo "droidspaces slot input, matching apply-droidspaces' own 6.12 handling.)"
+            PATCH_URL="$PATCH_ROOT/kernel-6.12/001.GKI-6.12-or-above-fix_sysvipc_kabi.patch"
+            PATCH_FILE="/tmp/001.GKI-6.12-or-above-fix_sysvipc_kabi.patch"
+            ;;
+          *)
+            echo "::error::Apply IPC KABI patches: unsupported kernel_version=${{ inputs.kernel_version }}"
+            exit 1
+            ;;
+        esac
 
         echo "== downloading SYSVIPC KABI patch =="
         curl -fsSL "$PATCH_URL" -o "$PATCH_FILE"
@@ -32,7 +50,7 @@ runs:
         fi
 
         if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-          PATCH_URL="https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch"
+          PATCH_URL="$PATCH_ROOT/below-kernel-6.12/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch"
           PATCH_FILE="/tmp/002.5.10_or_lower_use_android_abi_padding_for_posix_mqueue.patch"
 
           echo "== downloading POSIX_MQUEUE KABI patch =="
