@@ -150,7 +150,7 @@ jobs:
             exit 1
           fi
 
-          if { [ "${{ inputs.manager }}" = "KowSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; } && [ "${{ inputs.susfs }}" = "on" ]; then
+          if [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
             echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; set susfs=off or choose a different manager"
             exit 1
           fi
