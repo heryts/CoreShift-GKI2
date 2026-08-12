@@ -436,12 +436,40 @@ jobs:
           source_mode: ${{ inputs.source_mode }}
           kmi_bypass: ${{ inputs.kmi_bypass }}
 
+      - name: Locate built kernel Image
+        if: inputs.kpm_support == 'on'
+        id: locate-image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+
+          # Same lookup package-kernel uses, so KPM patches the exact file
+          # that will later be copied into out/Image-<final_name>.
+          IMAGE="$(
+            find kernel/out "$COMMON_DIR/out" \
+              -type f \
+              -name Image \
+              2>/dev/null |
+            head -n 1 || true
+          )"
+
+          if [ -z "$IMAGE" ]; then
+            echo "::error::No built kernel Image found under kernel/out or $COMMON_DIR/out; cannot apply KPM support"
+            find kernel -type f -name Image | sort || true
+            exit 1
+          fi
+
+          echo "Resolved built Image: $IMAGE"
+          echo "image_path=$IMAGE" >> "$GITHUB_OUTPUT"
+
       - name: Apply KPM support
         if: inputs.kpm_support == 'on'
         uses: ./.github/actions/apply-kpm-support
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          image_path: out/Image-${{ steps.custom-name.outputs.final_name }}
+          image_path: ${{ steps.locate-image.outputs.image_path }}
           kpm_superkey: ${{ inputs.kpm_superkey }}
 
       - name: Write compiler metadata
