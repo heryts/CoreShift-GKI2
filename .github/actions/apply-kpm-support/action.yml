@@ -31,7 +31,28 @@ runs:
 
         IMAGE_PATH="${{ inputs.image_path }}"
         if [ ! -f "$IMAGE_PATH" ]; then
-          echo "::error::built kernel Image not found at IMAGE_PATH=$IMAGE_PATH; apply-kpm-support must run AFTER the 'Build kernel' step"
+          echo "::error::built kernel Image not found at IMAGE_PATH=$IMAGE_PATH; apply-kpm-support must run AFTER the 'Build kernel' step (and after any rename/packaging step that produces this exact filename)"
+          echo
+          echo "== debug: does the parent directory of IMAGE_PATH exist? =="
+          IMAGE_DIR="$(dirname -- "$IMAGE_PATH")"
+          if [ -d "$IMAGE_DIR" ]; then
+            echo "yes: $IMAGE_DIR"
+            echo "== debug: contents of $IMAGE_DIR =="
+            ls -la "$IMAGE_DIR" 2>/dev/null || true
+          else
+            echo "no: $IMAGE_DIR does not exist"
+          fi
+          echo
+          echo "== debug: any file literally named 'Image*' under GITHUB_WORKSPACE (depth 6) =="
+          find "${GITHUB_WORKSPACE:-.}" -maxdepth 6 -type f -iname 'Image*' -print 2>/dev/null | sort || true
+          echo
+          echo "== debug: any file whose basename matches IMAGE_PATH's basename, anywhere under GITHUB_WORKSPACE (depth 8) =="
+          find "${GITHUB_WORKSPACE:-.}" -maxdepth 8 -type f -iname "$(basename -- "$IMAGE_PATH")" -print 2>/dev/null | sort || true
+          echo
+          echo "Hint: image_path is supplied by the caller workflow, not computed in this action."
+          echo "If a rename/packaging step is meant to create this exact filename before this step runs,"
+          echo "confirm that step (a) ran, (b) ran before 'Apply KPM support' in the job, and (c) used the"
+          echo "same name template as image_path=$IMAGE_PATH."
           exit 1
         fi
 
@@ -70,6 +91,29 @@ runs:
         else
           echo "== no local patches in $LOCAL_PATCH_DIR, building KPatch-Next-EXP unmodified =="
         fi
+
+        echo
+        echo "== ensuring aarch64-none-elf-gcc toolchain is available =="
+        if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
+          TOOLCHAIN_VER="14.2.rel1"
+          TOOLCHAIN_ARCHIVE="arm-gnu-toolchain-${TOOLCHAIN_VER}-x86_64-aarch64-none-elf"
+          TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${TOOLCHAIN_VER}/binrel/${TOOLCHAIN_ARCHIVE}.tar.xz"
+          TOOLCHAIN_DIR="${RUNNER_TEMP:-/tmp}/${TOOLCHAIN_ARCHIVE}"
+
+          echo "aarch64-none-elf-gcc not found in PATH; downloading Arm GNU Toolchain ${TOOLCHAIN_VER}"
+          mkdir -p "$TOOLCHAIN_DIR"
+          curl -fsSL "$TOOLCHAIN_URL" -o "${RUNNER_TEMP:-/tmp}/arm-gnu-toolchain.tar.xz"
+          tar -xJf "${RUNNER_TEMP:-/tmp}/arm-gnu-toolchain.tar.xz" -C "$TOOLCHAIN_DIR" --strip-components=1
+
+          echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+        else
+          echo "aarch64-none-elf-gcc already available in PATH, skipping download"
+        fi
+
+        echo "== toolchain check =="
+        command -v aarch64-none-elf-gcc
+        aarch64-none-elf-gcc --version | head -n 1
 
         echo
         echo "== building kptools + kpimg (./build.sh) =="
