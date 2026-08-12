@@ -1,8 +1,8 @@
 name: Apply KPM support
 description: >
-  Build kptools + kpimg from KPatch-Next-EXP source (always the latest commit on the
-  default branch) and patch the already-built kernel Image so it gains KPM (Kernel
-  Patch Module) support. This is a post-build image patch (like a boot.img-level patch),
+  Download prebuilt kptools + kpimg from a KPatch-Next-EXP GitHub Release (kptools-linux,
+  kpimg-linux) and patch the already-built kernel Image so it gains KPM (Kernel Patch
+  Module) support. This is a post-build image patch (like a boot.img-level patch),
   NOT a kernel source patch - it must run AFTER the kernel Image is built and BEFORE
   packaging.
 inputs:
@@ -16,6 +16,12 @@ inputs:
     required: false
     default: ""
     description: Optional superkey (-s) to embed into the patched image. Leave empty to build without a superkey.
+  kpm_release_tag:
+    required: false
+    default: ""
+    description: >
+      KPatch-Next-EXP release tag to pull kptools-linux/kpimg-linux from, e.g. "0.13.10".
+      Leave empty to always use the latest published release.
 runs:
   using: composite
   steps:
@@ -23,11 +29,8 @@ runs:
       run: |
         set -euo pipefail
 
-        echo "== KPM support: build from source (741afb7/KPatch-Next-EXP, latest) =="
+        echo "== KPM support: fetch prebuilt release (741afb7/KPatch-Next-EXP) =="
         echo "kernel_version=${{ inputs.kernel_version }} (informational only - kptools/kpimg are not per-kernel_version)"
-        echo "Note: this always builds the current HEAD of the default branch - no pinned"
-        echo "commit. Upstream breakage there will break this step too; that's expected"
-        echo "in exchange for always tracking the latest KPatch-Next-EXP."
 
         IMAGE_PATH="${{ inputs.image_path }}"
         if [ ! -f "$IMAGE_PATH" ]; then
@@ -56,173 +59,54 @@ runs:
           exit 1
         fi
 
-        KPM_CLONE_DIR="${RUNNER_TEMP:-/tmp}/kpatch-next-exp"
-        rm -rf "$KPM_CLONE_DIR"
+        KPM_DL_DIR="${RUNNER_TEMP:-/tmp}/kpatch-next-exp-release"
+        rm -rf "$KPM_DL_DIR"
+        mkdir -p "$KPM_DL_DIR"
 
-        echo "== cloning 741afb7/KPatch-Next-EXP (latest) =="
-        git clone --depth 1 https://github.com/741afb7/KPatch-Next-EXP.git "$KPM_CLONE_DIR"
-
-        KPM_COMMIT="$(git -C "$KPM_CLONE_DIR" rev-parse --short HEAD)"
-        KPM_COMMIT_MSG="$(git -C "$KPM_CLONE_DIR" log -1 --format='%s')"
-        echo "KPatch-Next-EXP resolved commit: $KPM_COMMIT - $KPM_COMMIT_MSG"
-
-        LOCAL_PATCH_DIR="$GITHUB_WORKSPACE/.github/patches/kpm-support"
-        if [ -d "$LOCAL_PATCH_DIR" ] && find "$LOCAL_PATCH_DIR" -maxdepth 1 -type f -name '*.patch' -print -quit | grep -q .; then
-          echo "== applying local CI-compatibility patches from $LOCAL_PATCH_DIR =="
-          echo "(overlay patches to make KPatch-Next-EXP's own source/build.sh work in this CI"
-          echo "environment - NOT kernel source patches. Applied on top of commit $KPM_COMMIT.)"
-
-          cd "$KPM_CLONE_DIR"
-          for p in "$LOCAL_PATCH_DIR"/*.patch; do
-            echo "-- $p"
-            if ! git apply --whitespace=fix --check "$p"; then
-              echo "::error::local KPM patch does not apply to KPatch-Next-EXP @ $KPM_COMMIT: $p"
-              exit 1
-            fi
-            git apply --whitespace=fix "$p"
-          done
-
-          if find . -name '*.rej' -print -quit | grep -q .; then
-            echo "::error::reject files found after applying local KPM patches"
-            find . -name '*.rej' -print
+        KPM_RELEASE_TAG="${{ inputs.kpm_release_tag }}"
+        if [ -z "$KPM_RELEASE_TAG" ]; then
+          echo "== no kpm_release_tag pinned, resolving latest KPatch-Next-EXP release =="
+          KPM_RELEASE_TAG="$(
+            curl -fsSL https://api.github.com/repos/741afb7/KPatch-Next-EXP/releases/latest |
+              grep -m1 '"tag_name"' |
+              sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
+          )"
+          if [ -z "$KPM_RELEASE_TAG" ]; then
+            echo "::error::could not resolve latest KPatch-Next-EXP release tag from GitHub API (rate-limited? API shape changed?)"
             exit 1
           fi
-          cd - > /dev/null
-        else
-          echo "== no local patches in $LOCAL_PATCH_DIR, building KPatch-Next-EXP unmodified =="
         fi
+        echo "KPM_RELEASE_TAG=$KPM_RELEASE_TAG"
 
         echo
-        echo "== CI compatibility: ensure kernel Makefile disables loop-idiom recognition =="
-        KPM_KERNEL_MAKEFILE="$KPM_CLONE_DIR/kernel/Makefile"
-        if [ ! -f "$KPM_KERNEL_MAKEFILE" ]; then
-          echo "::error::expected $KPM_KERNEL_MAKEFILE not found; KPatch-Next-EXP layout may have changed"
-          exit 1
-        fi
-
-        if grep -q -- '-fno-tree-loop-distribute-patterns' "$KPM_KERNEL_MAKEFILE"; then
-          echo "kernel/Makefile already has -fno-tree-loop-distribute-patterns, skipping"
-        else
-          echo "Adding -fno-tree-loop-distribute-patterns to kernel/Makefile CFLAGS"
-          echo "(prevents GCC's loop-idiom-recognition pass from emitting implicit memcpy()/"
-          echo "memset() calls, which are undefined symbols in this freestanding -nostdlib build)"
-
-          sed -i -E \
-            's/^(CFLAGS[[:space:]]*\+=[[:space:]]*-Wall[[:space:]]+-fno-builtin[[:space:]]+-std=gnu11[[:space:]]+-nostdinc[[:space:]]+-mgeneral-regs-only)[[:space:]]*$/\1 -fno-tree-loop-distribute-patterns/' \
-            "$KPM_KERNEL_MAKEFILE"
-
-          if ! grep -q -- '-fno-tree-loop-distribute-patterns' "$KPM_KERNEL_MAKEFILE"; then
-            echo "::error::failed to patch $KPM_KERNEL_MAKEFILE (expected CFLAGS line not found; upstream Makefile may have changed)"
-            echo "== current CFLAGS lines =="
-            grep -n 'CFLAGS' "$KPM_KERNEL_MAKEFILE" || true
+        echo "== downloading release assets =="
+        for asset in kptools-linux kpimg-linux; do
+          url="https://github.com/741afb7/KPatch-Next-EXP/releases/download/${KPM_RELEASE_TAG}/${asset}"
+          echo "-- $url"
+          if ! curl -fsSL -o "$KPM_DL_DIR/$asset" "$url"; then
+            echo "::error::failed to download $asset from release $KPM_RELEASE_TAG"
+            echo "Check available assets at: https://github.com/741afb7/KPatch-Next-EXP/releases/tag/$KPM_RELEASE_TAG"
             exit 1
           fi
+        done
 
-          echo "Patched line:"
-          grep -n -- '-fno-tree-loop-distribute-patterns' "$KPM_KERNEL_MAKEFILE"
-        fi
+        KPTOOLS_BIN="$KPM_DL_DIR/kptools-linux"
+        KPIMG_BIN="$KPM_DL_DIR/kpimg-linux"
+        chmod +x "$KPTOOLS_BIN"
 
-        echo
-        echo "== ensuring aarch64-none-elf-gcc toolchain is available =="
-        if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
-          TOOLCHAIN_VER="14.2.rel1"
-          TOOLCHAIN_ARCHIVE="arm-gnu-toolchain-${TOOLCHAIN_VER}-x86_64-aarch64-none-elf"
-          TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/${TOOLCHAIN_VER}/binrel/${TOOLCHAIN_ARCHIVE}.tar.xz"
-          TOOLCHAIN_DIR="${RUNNER_TEMP:-/tmp}/${TOOLCHAIN_ARCHIVE}"
-
-          echo "aarch64-none-elf-gcc not found in PATH; downloading Arm GNU Toolchain ${TOOLCHAIN_VER}"
-          mkdir -p "$TOOLCHAIN_DIR"
-          curl -fsSL "$TOOLCHAIN_URL" -o "${RUNNER_TEMP:-/tmp}/arm-gnu-toolchain.tar.xz"
-          tar -xJf "${RUNNER_TEMP:-/tmp}/arm-gnu-toolchain.tar.xz" -C "$TOOLCHAIN_DIR" --strip-components=1
-
-          echo "$TOOLCHAIN_DIR/bin" >> "$GITHUB_PATH"
-          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
-        else
-          echo "aarch64-none-elf-gcc already available in PATH, skipping download"
-        fi
-
-        echo "== toolchain check =="
-        command -v aarch64-none-elf-gcc
-        aarch64-none-elf-gcc --version | head -n 1
-
-        echo
-        echo "== ensuring ANDROID_NDK is set (build.sh needs it for the cmake-based kpatch/kptools builds) =="
-        if [ -z "${ANDROID_NDK:-}" ]; then
-          if [ -n "${ANDROID_NDK_HOME:-}" ]; then
-            export ANDROID_NDK="$ANDROID_NDK_HOME"
-          elif [ -n "${ANDROID_NDK_LATEST_HOME:-}" ]; then
-            export ANDROID_NDK="$ANDROID_NDK_LATEST_HOME"
-          elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/ndk" ]; then
-            export ANDROID_NDK="$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)"
-          fi
-        fi
-
-        if [ -z "${ANDROID_NDK:-}" ] || [ ! -f "$ANDROID_NDK/build/cmake/android.toolchain.cmake" ]; then
-          echo "::error::ANDROID_NDK is not set to a valid NDK install (build.sh needs \$ANDROID_NDK/build/cmake/android.toolchain.cmake)"
-          echo "ANDROID_NDK=${ANDROID_NDK:-<unset>}"
-          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-<unset>}"
-          echo "ANDROID_NDK_LATEST_HOME=${ANDROID_NDK_LATEST_HOME:-<unset>}"
-          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+        if [ ! -s "$KPTOOLS_BIN" ] || [ ! -s "$KPIMG_BIN" ]; then
+          echo "::error::downloaded asset(s) are empty"
+          ls -la "$KPM_DL_DIR"
           exit 1
         fi
-        echo "ANDROID_NDK=$ANDROID_NDK"
 
-        echo
-        echo "== building kptools + kpimg (./build.sh) =="
-        cd "$KPM_CLONE_DIR"
-        chmod +x build.sh
-        ./build.sh
-        cd - > /dev/null
-
-        echo
-        echo "== building host-native kptools =="
-        echo "(build.sh cross-compiles kptools for Android arm64-v8a via the NDK toolchain file -"
-        echo "that binary is meant to run ON-DEVICE (adb/Termux), not on this x86_64 CI runner."
-        echo "tools/CMakeLists.txt has no Android-specific dependencies, just zlib, so build it"
-        echo "again here targeting the host directly, and use THIS binary to patch the Image.)"
-
-        if ! dpkg -s zlib1g-dev >/dev/null 2>&1; then
-          echo "zlib1g-dev not present on runner, installing"
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq zlib1g-dev
-        fi
-
-        (
-          cd "$KPM_CLONE_DIR/tools"
-          mkdir -p build/host
-          cd build/host
-          cmake -DCMAKE_BUILD_TYPE=Release ../..
-          cmake --build .
-        )
-
-        echo
-        echo "== locating built kptools binary (host build) =="
-        KPTOOLS_BIN="$KPM_CLONE_DIR/tools/build/host/kptools"
-
-        if [ ! -x "$KPTOOLS_BIN" ]; then
-          echo "::error::host kptools build did not produce an executable at $KPTOOLS_BIN"
-          echo "== directory listing (depth 4) for troubleshooting =="
-          find "$KPM_CLONE_DIR/tools/build/host" -maxdepth 4 2>/dev/null || true
-          exit 1
-        fi
         echo "KPTOOLS_BIN=$KPTOOLS_BIN"
         file "$KPTOOLS_BIN" || true
+        echo "KPIMG_BIN=$KPIMG_BIN ($(wc -c < "$KPIMG_BIN") bytes)"
 
         echo
-        echo "== locating built kpimg payload =="
-        KPIMG_BIN="$(
-          find "$KPM_CLONE_DIR" -maxdepth 4 -type f -iname 'kpimg*' ! -name '*.o' ! -name '*.d' -print |
-            sort |
-            head -n 1
-        )"
-
-        if [ -z "$KPIMG_BIN" ]; then
-          echo "::error::could not locate a built kpimg payload under $KPM_CLONE_DIR after ./build.sh"
-          echo "== directory listing (depth 4) for troubleshooting =="
-          find "$KPM_CLONE_DIR" -maxdepth 4 2>/dev/null || true
-          exit 1
-        fi
-        echo "KPIMG_BIN=$KPIMG_BIN"
+        echo "== sanity-check kptools runs on this runner =="
+        "$KPTOOLS_BIN" -v -k "$KPIMG_BIN"
 
         echo
         echo "== patching kernel Image =="
@@ -232,7 +116,6 @@ runs:
         IMAGE_PATCHED="${IMAGE_PATH}.kpm-patched"
 
         cp "$IMAGE_PATH" "$IMAGE_ORI"
-        chmod +x "$KPTOOLS_BIN"
 
         KPM_SUPERKEY="${{ inputs.kpm_superkey }}"
 
