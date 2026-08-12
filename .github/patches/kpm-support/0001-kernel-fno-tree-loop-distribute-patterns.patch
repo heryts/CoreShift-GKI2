@@ -1,0 +1,15 @@
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -19,6 +19,11 @@
+ X86_LD ?= ld
+ X86_OBJCOPY ?= objcopy
+-CFLAGS += -Wall -fno-builtin -std=gnu11 -nostdinc -mgeneral-regs-only
++# CI compatibility: stop GCC's loop-idiom-recognition pass (on by default at
++# -O2) from turning plain copy/fill loops into implicit calls to memcpy()/
++# memset(). -fno-builtin alone does not disable this pass, and this build is
++# -nostdlib, so those calls are left undefined at link time on some GCC
++# versions.
++CFLAGS += -Wall -fno-builtin -std=gnu11 -nostdinc -mgeneral-regs-only -fno-tree-loop-distribute-patterns
+ CFLAGS += -g
+ X86_CFLAGS := -Wall -Wextra -fno-builtin -fpic -fvisibility=hidden -fno-stack-protector
+ X86_CFLAGS += -fcf-protection=none -m64 -mno-red-zone
