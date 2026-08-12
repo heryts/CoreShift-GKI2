@@ -175,20 +175,38 @@ runs:
         cd - > /dev/null
 
         echo
-        echo "== locating built kptools binary =="
-        KPTOOLS_BIN="$(
-          find "$KPM_CLONE_DIR" -maxdepth 4 -type f -name 'kptools*' -perm -u+x -print |
-            sort |
-            head -n 1
-        )"
+        echo "== building host-native kptools =="
+        echo "(build.sh cross-compiles kptools for Android arm64-v8a via the NDK toolchain file -"
+        echo "that binary is meant to run ON-DEVICE (adb/Termux), not on this x86_64 CI runner."
+        echo "tools/CMakeLists.txt has no Android-specific dependencies, just zlib, so build it"
+        echo "again here targeting the host directly, and use THIS binary to patch the Image.)"
 
-        if [ -z "$KPTOOLS_BIN" ]; then
-          echo "::error::could not locate a built kptools binary under $KPM_CLONE_DIR after ./build.sh"
+        if ! dpkg -s zlib1g-dev >/dev/null 2>&1; then
+          echo "zlib1g-dev not present on runner, installing"
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq zlib1g-dev
+        fi
+
+        (
+          cd "$KPM_CLONE_DIR/tools"
+          mkdir -p build/host
+          cd build/host
+          cmake -DCMAKE_BUILD_TYPE=Release ../..
+          cmake --build .
+        )
+
+        echo
+        echo "== locating built kptools binary (host build) =="
+        KPTOOLS_BIN="$KPM_CLONE_DIR/tools/build/host/kptools"
+
+        if [ ! -x "$KPTOOLS_BIN" ]; then
+          echo "::error::host kptools build did not produce an executable at $KPTOOLS_BIN"
           echo "== directory listing (depth 4) for troubleshooting =="
-          find "$KPM_CLONE_DIR" -maxdepth 4 2>/dev/null || true
+          find "$KPM_CLONE_DIR/tools/build/host" -maxdepth 4 2>/dev/null || true
           exit 1
         fi
         echo "KPTOOLS_BIN=$KPTOOLS_BIN"
+        file "$KPTOOLS_BIN" || true
 
         echo
         echo "== locating built kpimg payload =="
