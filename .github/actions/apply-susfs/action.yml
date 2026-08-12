@@ -23,7 +23,7 @@ runs:
           exit 1
         fi
 
-        if [ "${{ inputs.manager }}" = "KowSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+        if [ "${{ inputs.manager }}" = "KowSU" ]; then
           echo "::error::SUSFS4KSU is not yet supported for manager=${{ inputs.manager }}."
           exit 1
         fi
@@ -170,6 +170,26 @@ runs:
         if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+          echo "== applying Backslashxx-specific SUSFS enablement patch =="
+          echo "Backslashxx's kernel/ layout (supercall/, hook/setuid_hook.c, no core_hook.c)"
+          echo "is not compatible with upstream's generic KernelSU/10_enable_susfs_for_ksu.patch,"
+          echo "so a maintained local patch is applied instead."
+
+          BACKSLASHXX_SUSFS_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/KernelSU-Backslashxx/0001-xxKSU-kernel-implement-susfs-v2_2_0-De-inlined.patch"
+
+          if [ ! -f "$BACKSLASHXX_SUSFS_PATCH" ]; then
+            echo "::error::missing Backslashxx SUSFS enablement patch: $BACKSLASHXX_SUSFS_PATCH"
+            exit 1
+          fi
+
+          git apply --check "$BACKSLASHXX_SUSFS_PATCH"
+          git apply "$BACKSLASHXX_SUSFS_PATCH"
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after Backslashxx SUSFS patch"
+            exit 1
+          fi
         else
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT =="
           git apply --check "$KSU_PATCH"
