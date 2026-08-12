@@ -160,8 +160,39 @@ runs:
           add_config KALLSYMS_ALL y
 
           if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
-            exit 1
+            echo "== ${{ inputs.manager }}: SUSFS integration mode (custom enablement patch) =="
+            case "${{ inputs.kernel_version }}" in
+              5.10) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10" ;;
+              6.1)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android14-6.1" ;;
+              6.6)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android15-6.6" ;;
+              6.12) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12" ;;
+              *)
+                echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
+                exit 1
+                ;;
+            esac
+
+            echo "== SUSFS config scan: $SUSFS_PATCH_DIR =="
+
+            if [ ! -d "$SUSFS_PATCH_DIR" ]; then
+              echo "::error::missing SUSFS patch directory: $SUSFS_PATCH_DIR"
+              exit 1
+            fi
+
+            SUSFS_CONFIGS="$(
+              { grep -RhoE '^\+[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_PATCH_DIR" 2>/dev/null || true; } |
+              sed -E 's/^\+[[:space:]]*config[[:space:]]+//' |
+              sort -u
+            )"
+
+            if [ -z "$SUSFS_CONFIGS" ]; then
+              echo "::warning::No required SUSFS CONFIG_* names found in selected patches/Kconfig."
+            else
+              echo "$SUSFS_CONFIGS" | while read -r key; do
+                [ -z "$key" ] && continue
+                add_config "$key" y
+              done
+            fi
           fi
 
         elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
