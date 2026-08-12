@@ -1,0 +1,21 @@
+diff --git a/kernel/base/baselib.c b/kernel/base/baselib.c
+index f726515..b724b76 100644
+--- a/kernel/base/baselib.c
++++ b/kernel/base/baselib.c
+@@ -352,4 +352,14 @@ void *memset(void *s, int c, size_t n) {
+         *p++ = (unsigned char)c;
+     }
+     return s;
+-}
+\ No newline at end of file
++}
++
++void *memcpy(void *dst, const void *src, size_t n)
++{
++    return lib_memcpy(dst, src, n);
++}
++
++void *memmove(void *dst, const void *src, size_t n)
++{
++    return lib_memmove(dst, src, n);
++}
