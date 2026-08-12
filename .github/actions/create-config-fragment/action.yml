@@ -211,9 +211,19 @@ runs:
             else
               echo "$SUSFS_CONFIGS" | while read -r key; do
                 [ -z "$key" ] && continue
+                if [ "$key" = "KSU_SUSFS_SUS_SU" ]; then
+                  echo "skipping KSU_SUSFS_SUS_SU for manager=${{ inputs.manager }}"
+                  echo "(this fork already has its own non-kprobe hooks via KSU_TAMPER_SYSCALL_TABLE;"
+                  echo "SUS_SU's manual-hook call sites - ksu_handle_setresuid/faccessat/stat/execveat etc -"
+                  echo "are undefined in this fork's hook layer and fail to link if left enabled)"
+                  continue
+                fi
                 add_config "$key" y
               done
             fi
+
+            echo "== ${{ inputs.manager }}: forcing KSU_SUSFS_SUS_SU off =="
+            add_config KSU_SUSFS_SUS_SU n
           fi
 
         elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
