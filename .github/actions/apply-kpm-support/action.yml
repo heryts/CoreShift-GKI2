@@ -75,11 +75,11 @@ runs:
           cd "$KPM_CLONE_DIR"
           for p in "$LOCAL_PATCH_DIR"/*.patch; do
             echo "-- $p"
-            if ! git apply --check "$p"; then
+            if ! git apply --whitespace=fix --check "$p"; then
               echo "::error::local KPM patch does not apply to KPatch-Next-EXP @ $KPM_COMMIT: $p"
               exit 1
             fi
-            git apply "$p"
+            git apply --whitespace=fix "$p"
           done
 
           if find . -name '*.rej' -print -quit | grep -q .; then
@@ -90,6 +90,36 @@ runs:
           cd - > /dev/null
         else
           echo "== no local patches in $LOCAL_PATCH_DIR, building KPatch-Next-EXP unmodified =="
+        fi
+
+        echo
+        echo "== CI compatibility: ensure kernel Makefile disables loop-idiom recognition =="
+        KPM_KERNEL_MAKEFILE="$KPM_CLONE_DIR/kernel/Makefile"
+        if [ ! -f "$KPM_KERNEL_MAKEFILE" ]; then
+          echo "::error::expected $KPM_KERNEL_MAKEFILE not found; KPatch-Next-EXP layout may have changed"
+          exit 1
+        fi
+
+        if grep -q -- '-fno-tree-loop-distribute-patterns' "$KPM_KERNEL_MAKEFILE"; then
+          echo "kernel/Makefile already has -fno-tree-loop-distribute-patterns, skipping"
+        else
+          echo "Adding -fno-tree-loop-distribute-patterns to kernel/Makefile CFLAGS"
+          echo "(prevents GCC's loop-idiom-recognition pass from emitting implicit memcpy()/"
+          echo "memset() calls, which are undefined symbols in this freestanding -nostdlib build)"
+
+          sed -i -E \
+            's/^(CFLAGS[[:space:]]*\+=[[:space:]]*-Wall[[:space:]]+-fno-builtin[[:space:]]+-std=gnu11[[:space:]]+-nostdinc[[:space:]]+-mgeneral-regs-only)[[:space:]]*$/\1 -fno-tree-loop-distribute-patterns/' \
+            "$KPM_KERNEL_MAKEFILE"
+
+          if ! grep -q -- '-fno-tree-loop-distribute-patterns' "$KPM_KERNEL_MAKEFILE"; then
+            echo "::error::failed to patch $KPM_KERNEL_MAKEFILE (expected CFLAGS line not found; upstream Makefile may have changed)"
+            echo "== current CFLAGS lines =="
+            grep -n 'CFLAGS' "$KPM_KERNEL_MAKEFILE" || true
+            exit 1
+          fi
+
+          echo "Patched line:"
+          grep -n -- '-fno-tree-loop-distribute-patterns' "$KPM_KERNEL_MAKEFILE"
         fi
 
         echo
