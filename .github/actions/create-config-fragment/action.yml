@@ -75,6 +75,9 @@ runs:
           elif [ "$val" = "m" ]; then
             printf 'CONFIG_%s=m\n' "$key" >> private.fragment
             printf 'CONFIG_%s=m\n' "$key" >> private.required
+          elif [ "$val" = "n" ]; then
+            printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
+            printf '# CONFIG_%s is not set\n' "$key" >> private.required
           else
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.fragment
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.required
