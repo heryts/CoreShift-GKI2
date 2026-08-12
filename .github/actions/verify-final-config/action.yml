@@ -178,11 +178,7 @@ runs:
 
           if ! grep -qxF "$line" "$BEST"; then
             if [ "${line##*=}" = "n" ] && ! grep -Eq "^${key}=y$|^${key}=m$" "$BEST"; then
-              : # Requested disable is satisfied: the symbol is not asserted
-                # on in the final config, whether it shows up as
-                # "# KEY is not set" or is entirely absent because an unmet
-                # dependency (e.g. MODULE_SIG_FORCE depends on MODULE_SIG)
-                # made it inapplicable. Neither case is a real miss.
+              :
             else
               echo "::warning::$line did not land in final .config"
               warn_dependency_blockers "$BEST" "$key"
