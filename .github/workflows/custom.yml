@@ -66,13 +66,13 @@ on:
         options: ["off", "on"]
         default: "on"
       kpm_support:
-        description: "Build kptools+kpimg from KPatch-Next-EXP and patch the built Image for KPM support"
+        description: "Patch the built Image for KPM support"
         type: choice
         required: true
         options: ["off", "on"]
         default: "off"
       kpm_superkey:
-        description: "Optional superkey to embed into the KPM-patched image (leave empty for no superkey)"
+        description: "Optional superkey to embed (leave empty for no superkey)"
         required: false
         default: ""
       baseband_guard:
