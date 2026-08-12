@@ -66,13 +66,29 @@ runs:
         KPM_RELEASE_TAG="${{ inputs.kpm_release_tag }}"
         if [ -z "$KPM_RELEASE_TAG" ]; then
           echo "== no kpm_release_tag pinned, resolving latest KPatch-Next-EXP release =="
+          # NOTE: capture full response into a variable first, then grep it -
+          # piping curl directly into `grep -m1`/`head` closes the pipe as soon as
+          # the first match is found, curl gets SIGPIPE trying to write the rest of
+          # the body, and fails with exit 23 ("Failure writing output to destination").
+          # Also authenticate with the run's own GITHUB_TOKEN: unauthenticated
+          # api.github.com calls are capped at 60/hr per source IP, and Actions
+          # runner IPs are shared across many concurrent jobs/orgs, so unauthenticated
+          # calls here get rate-limited (403) fairly often in practice.
+          KPM_LATEST_JSON="$(
+            curl -fsSL \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/741afb7/KPatch-Next-EXP/releases/latest
+          )"
           KPM_RELEASE_TAG="$(
-            curl -fsSL https://api.github.com/repos/741afb7/KPatch-Next-EXP/releases/latest |
+            printf '%s' "$KPM_LATEST_JSON" |
               grep -m1 '"tag_name"' |
               sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
           )"
           if [ -z "$KPM_RELEASE_TAG" ]; then
-            echo "::error::could not resolve latest KPatch-Next-EXP release tag from GitHub API (rate-limited? API shape changed?)"
+            echo "::error::could not resolve latest KPatch-Next-EXP release tag from GitHub API"
+            echo "== raw API response for troubleshooting =="
+            printf '%s\n' "$KPM_LATEST_JSON"
             exit 1
           fi
         fi
