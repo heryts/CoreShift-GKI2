@@ -240,7 +240,7 @@ runs:
           echo "is not compatible with upstream's generic KernelSU/10_enable_susfs_for_ksu.patch,"
           echo "so a maintained local patch is applied instead."
 
-          BACKSLASHXX_SUSFS_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/KernelSU-Backslashxx/11_enable_susfs_for_ksu.patch"
+          BACKSLASHXX_SUSFS_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/backslashxx/11_enable_susfs_for_ksu.patch"
 
           if [ ! -f "$BACKSLASHXX_SUSFS_PATCH" ]; then
             echo "::error::missing Backslashxx SUSFS enablement patch: $BACKSLASHXX_SUSFS_PATCH"
