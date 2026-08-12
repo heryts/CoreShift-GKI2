@@ -10,7 +10,7 @@ inputs:
   susfs_ref:
     required: false
     default: "d4c3914"
-    description: "susfs4ksu commit to pin (default: v2.2.0 release, before the OPEN_REDIRECT refactor that broke set_nameidata compat). Ignored for manager=KernelSU and manager=KernelSU-Next, which auto-resolve HEAD instead."
+    description: "susfs4ksu commit to pin (default: v2.2.0 release, before the OPEN_REDIRECT refactor that broke set_nameidata compat). Ignored for manager=KernelSU-Next, which auto-resolves HEAD instead. For manager=KernelSU, ignored in favor of a fixed per-kernel_version pin verified against init-manager's KernelSU pin (see apply-susfs's KernelSU branch) - set this explicitly only to override that pin."
   susfs_repo:
     required: false
     default: "https://gitlab.com/simonpunk/susfs4ksu.git"
@@ -55,21 +55,50 @@ runs:
           echo "(pershoot coexistence patches below are designed against current HEAD, not an old pin)"
         elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
           # KernelSU (original tiann/KernelSU) moves fast and has undergone
-          # directory-structure refactors in the past, which can outdate a
-          # pinned susfs4ksu ref. Auto-resolve instead: prefer "<branch>-dev"
-          # if it exists on the remote (fixes often land there first), else
-          # fall back to plain branch HEAD. Set susfs_ref explicitly to
-          # override this and pin to a known-good commit again.
-          echo "== resolving susfs_ref for manager=KernelSU (dynamic, not pinned) =="
+          # directory-structure refactors in the past. Previously this
+          # auto-resolved to "<branch>-dev" HEAD, but that let susfs4ksu
+          # drift independently of the KernelSU commit pinned in
+          # init-manager's SUSFS compatibility table (manager/init-manager
+          # action.yml) - the two sides went out of sync silently and broke
+          # the KSU SUSFS patch (missing kernel/feature/selinux_hide.c etc).
+          #
+          # Pin to a fixed, known-good commit per kernel_version instead,
+          # each verified compatible with KernelSU commit
+          # aab67974f1210cad94880ce1fdc14cf63f6e30e0 (the ref pinned for
+          # manager=KernelSU in init-manager's SUSFS compatibility table).
+          # If you update either side, re-verify and update the other by
+          # hand - never let either move on its own. Only 5.10 has been
+          # manually verified so far; other kernel_versions still fall back
+          # to dynamic "-dev" HEAD resolution until verified and added here.
+          case "${{ inputs.kernel_version }}" in
+            5.10) KERNELSU_SUSFS_PIN="e5b013b" ;;
+            *)    KERNELSU_SUSFS_PIN="" ;;
+          esac
+
+          echo "== resolving susfs_ref for manager=KernelSU =="
           if [ -n "${{ inputs.susfs_ref }}" ] && [ "${{ inputs.susfs_ref }}" != "d4c3914" ]; then
             echo "== pinning to explicitly-provided ref: ${{ inputs.susfs_ref }} =="
             git -C "$SUSFS_CLONE_DIR" checkout "${{ inputs.susfs_ref }}"
-          elif git ls-remote --heads "$SUSFS_REPO" "${SUSFS_BRANCH}-dev" | grep -q .; then
-            echo "== ${SUSFS_BRANCH}-dev exists on remote, using it =="
-            git -C "$SUSFS_CLONE_DIR" fetch --depth 1 origin "${SUSFS_BRANCH}-dev"
-            git -C "$SUSFS_CLONE_DIR" checkout --detach FETCH_HEAD
+          elif [ -n "$KERNELSU_SUSFS_PIN" ]; then
+            echo "== pinning to known-good commit for manager=KernelSU: $KERNELSU_SUSFS_PIN =="
+            echo "(paired with KernelSU commit aab67974f1210cad94880ce1fdc14cf63f6e30e0 in init-manager)"
+            # This commit lives on the "-dev" branch, not the base branch
+            # already cloned above, so fetch it explicitly (unshallowed,
+            # since it may no longer be the branch tip).
+            git -C "$SUSFS_CLONE_DIR" fetch origin "${SUSFS_BRANCH}-dev"
+            git -C "$SUSFS_CLONE_DIR" checkout "$KERNELSU_SUSFS_PIN"
           else
-            echo "== no -dev branch found, using $SUSFS_BRANCH HEAD =="
+            echo "::warning::no verified susfs4ksu pin for manager=KernelSU, kernel_version=${{ inputs.kernel_version }} yet;"
+            echo "::warning::falling back to dynamic -dev branch HEAD resolution (same risk this fix was meant to remove)."
+            echo "::warning::once a working combination is confirmed, add its commit to the case statement above,"
+            echo "::warning::and pair it with a matching entry in init-manager's SUSFS compatibility table."
+            if git ls-remote --heads "$SUSFS_REPO" "${SUSFS_BRANCH}-dev" | grep -q .; then
+              echo "== ${SUSFS_BRANCH}-dev exists on remote, using it =="
+              git -C "$SUSFS_CLONE_DIR" fetch --depth 1 origin "${SUSFS_BRANCH}-dev"
+              git -C "$SUSFS_CLONE_DIR" checkout --detach FETCH_HEAD
+            else
+              echo "== no -dev branch found, using $SUSFS_BRANCH HEAD =="
+            fi
           fi
         else
           echo "== pinning to ref: ${{ inputs.susfs_ref }} =="
@@ -228,15 +257,54 @@ runs:
           elif (patch --dry-run -R --fuzz=3 -p1 < "$KSU_PATCH") >/tmp/ksu-patch-reverse.log 2>&1; then
             echo "== KernelSU SUSFS patch already applied, skipping =="
           else
-            echo "::error::KernelSU SUSFS patch does not apply to this source tree (susfs commit $SUSFS_COMMIT)"
-            echo "---- dry-run output ----"
-            sed -n '1,120p' /tmp/ksu-patch-dry-run.log
-            echo "-------------------------"
-            echo "If every target path is missing (not just an offset), tiann/KernelSU's"
-            echo "directory layout has likely diverged from what this susfs4ksu ref expects."
-            echo "Try susfs_repo=https://github.com/WildKernels/susfs4ksu.git (kept in sync"
-            echo "with upstream KernelSU main), or pin manager_ref to an older KernelSU commit."
-            exit 1
+            echo "== primary susfs4ksu KernelSU patch failed structurally, trying WildKernels/susfs4ksu fallback =="
+            echo "(kept in sync with upstream KernelSU main; may tolerate directory-layout drift better)"
+
+            FALLBACK_REPO="https://github.com/WildKernels/susfs4ksu.git"
+            if [ "$SUSFS_REPO" = "$FALLBACK_REPO" ]; then
+              echo "::error::already using fallback repo ($FALLBACK_REPO), no further fallback available"
+              echo "---- dry-run output ----"
+              sed -n '1,120p' /tmp/ksu-patch-dry-run.log
+              echo "-------------------------"
+              echo "tiann/KernelSU's directory layout has diverged from what this susfs4ksu"
+              echo "ref expects. This likely needs a manually maintained KSU patch (see how"
+              echo "manager=KernelSU-Backslashxx uses a local .github/patches/susfs4ksu patch)."
+              exit 1
+            fi
+
+            FALLBACK_DIR="${RUNNER_TEMP:-/tmp}/susfs4ksu-fallback"
+            rm -rf "$FALLBACK_DIR"
+            if ! git clone --depth 1 --branch "$SUSFS_BRANCH" "$FALLBACK_REPO" "$FALLBACK_DIR" >/tmp/fallback-clone.log 2>&1; then
+              echo "::error::failed to clone fallback repo $FALLBACK_REPO (branch $SUSFS_BRANCH)"
+              cat /tmp/fallback-clone.log
+              exit 1
+            fi
+
+            FALLBACK_KSU_PATCH="$FALLBACK_DIR/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
+            if [ ! -f "$FALLBACK_KSU_PATCH" ]; then
+              echo "::error::fallback repo has no $FALLBACK_KSU_PATCH"
+              exit 1
+            fi
+
+            if (patch --dry-run --fuzz=3 -p1 < "$FALLBACK_KSU_PATCH") >/tmp/ksu-patch-fallback-dry-run.log 2>&1; then
+              echo "== fallback KernelSU SUSFS patch applies cleanly, using it =="
+              patch --fuzz=3 -p1 < "$FALLBACK_KSU_PATCH"
+            elif (patch --dry-run -R --fuzz=3 -p1 < "$FALLBACK_KSU_PATCH") >/tmp/ksu-patch-fallback-reverse.log 2>&1; then
+              echo "== fallback KernelSU SUSFS patch already applied, skipping =="
+            else
+              echo "::error::KernelSU SUSFS patch does not apply to this source tree, from either"
+              echo "primary (susfs commit $SUSFS_COMMIT) or WildKernels fallback"
+              echo "---- primary dry-run output ----"
+              sed -n '1,120p' /tmp/ksu-patch-dry-run.log
+              echo "---- fallback dry-run output ----"
+              sed -n '1,120p' /tmp/ksu-patch-fallback-dry-run.log
+              echo "-------------------------"
+              echo "This tiann/KernelSU tree uses a modular layout (kernel/feature/, kernel/hook/,"
+              echo "kernel/policy/, kernel/runtime/, kernel/supercall/) that neither susfs4ksu source"
+              echo "expects. A manually maintained local KSU patch is likely needed, similar to"
+              echo "manager=KernelSU-Backslashxx's .github/patches/susfs4ksu approach."
+              exit 1
+            fi
           fi
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
