@@ -66,7 +66,7 @@ on:
         options: ["off", "on"]
         default: "on"
       kpm_support:
-        description: "Build kptools+kpimg from KPatch-Next-EXP (always latest) and patch the built Image for KPM (Kernel Patch Module) support"
+        description: "Build kptools+kpimg from KPatch-Next-EXP and patch the built Image for KPM support"
         type: choice
         required: true
         options: ["off", "on"]
