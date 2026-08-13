@@ -61,3 +61,63 @@ runs:
           echo "::warning::lz4k_oplus.patch 应用失败，可能已应用或上下文不匹配"
         fi
         rm -f lz4k_oplus.patch
+
+        # 显示所有被拒绝的 hunk，方便定位具体哪个文件/哪段没打上
+        reject_files="$(find . -name '*.rej' 2>/dev/null || true)"
+        if [ -n "$reject_files" ]; then
+          echo "::warning::Found .rej files from ZRAM patch application:"
+          echo "$reject_files" | while read -r rej; do
+            [ -z "$rej" ] && continue
+            echo "---- $rej ----"
+            cat "$rej"
+          done
+        fi
+
+        # 硬性校验：backends[] 是否真的包含新算法名，否则 Kconfig 打开了也不会出现在 sysfs comp_algorithm 里
+        ZCOMP_C="drivers/block/zram/zcomp.c"
+        if [ ! -f "$ZCOMP_C" ]; then
+          echo "::error::$ZCOMP_C not found, cannot verify backends[] registration"
+          exit 1
+        fi
+
+        missing_backends=""
+        for algo in lz4k lz4kd lz4k_oplus; do
+          if ! grep -qF "\"$algo\"" "$ZCOMP_C"; then
+            missing_backends="$missing_backends $algo"
+          fi
+        done
+
+        if [ -n "$missing_backends" ]; then
+          echo "::error::ZRAM backends[] in $ZCOMP_C is missing:$missing_backends"
+          echo "::error::Kconfig symbols will still be =y, but these won't show up in /sys/block/zram0/comp_algorithm."
+          echo "::error::Check the .rej output above and manually reconcile the zcomp.c hunk for this kernel source."
+          exit 1
+        fi
+
+        echo "Verified backends[] in $ZCOMP_C contains: lz4k lz4kd lz4k_oplus"
+
+        # 诊断：检查是否有重复定义导致依赖解析异常（choice/depends 失效的常见原因）
+        echo "== duplicate Kconfig symbol check =="
+        for pair in "CRYPTO_LZ4KD:crypto/Kconfig" "CRYPTO_LZ4K:crypto/Kconfig" "CRYPTO_LZ4K_OPLUS:lib/lz4k_oplus/Kconfig" "ZRAM_DEF_COMP_LZ4KD:drivers/block/zram/Kconfig"; do
+          symbol="${pair%%:*}"
+          kfile="${pair##*:}"
+
+          if [ ! -f "$kfile" ]; then
+            echo "-- $symbol: $kfile not found --"
+            continue
+          fi
+
+          count="$(grep -cE "^[[:space:]]*config[[:space:]]+${symbol}\$" "$kfile" || true)"
+          echo "-- $symbol in $kfile: $count definition(s) --"
+          if [ "$count" -gt 1 ]; then
+            echo "::warning::Duplicate 'config $symbol' definitions found in $kfile - later one wins and may have different depends/select"
+            grep -nE "^[[:space:]]*config[[:space:]]+${symbol}\$" "$kfile" | while IFS=: read -r lineno _; do
+              echo "  block starting at line $lineno:"
+              sed -n "${lineno},$((lineno+8))p" "$kfile" | sed 's/^/    /'
+            done
+          fi
+        done
+
+        # 也确认全仓库范围没有其它同名重复定义（比如另一份被 cp -r 带进来的 Kconfig）
+        echo "== repo-wide duplicate check for CRYPTO_LZ4KD / ZRAM_DEF_COMP_LZ4KD =="
+        grep -rnE "^[[:space:]]*config[[:space:]]+(CRYPTO_LZ4KD|ZRAM_DEF_COMP_LZ4KD)\$" . --include=Kconfig || echo "  none found via recursive grep"
