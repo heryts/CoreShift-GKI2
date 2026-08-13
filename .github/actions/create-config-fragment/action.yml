@@ -149,7 +149,6 @@ runs:
         add_config CRYPTO_LZ4K y
         add_config CRYPTO_LZ4KD y
         add_config CRYPTO_LZ4K_OPLUS y
-        add_config ZRAM_DEF_COMP_LZ4KD y
 
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
           add_config IKCONFIG y
