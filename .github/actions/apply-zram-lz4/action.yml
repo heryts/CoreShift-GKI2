@@ -114,7 +114,6 @@ runs:
 
         echo
         == zcomp_available_show / crypto_has_comp context in zcomp.c ==
-        == .cra_name registered by lz4k/lz4kd/lz4k_oplus crypto modules ==
         grep -n "available_show\|crypto_has_comp\|crypto_has_acomp\|comp_algorithm_show" "$ZCOMP_C" | while IFS=: read -r lineno _; do
           echo "-- match at line $lineno --"
           sed -n "${lineno},$((lineno+15))p" "$ZCOMP_C" | cat -n
