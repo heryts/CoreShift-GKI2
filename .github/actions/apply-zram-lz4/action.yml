@@ -112,7 +112,17 @@ runs:
         echo "== value of CONFIG_ZRAM / CONFIG_CRYPTO_ALGAPI in current .config (if present) =="
         find . -maxdepth 3 -name ".config" -exec grep -H -E "^CONFIG_(ZRAM|CRYPTO_ALGAPI|CRYPTO_LZ4KD)=" {} \; || echo "  no .config found yet at this stage (expected - config generated later in pipeline)"
 
-        # 诊断：检查是否有重复定义导致依赖解析异常（choice/depends 失效的常见原因）
+        echo
+        == zcomp_available_show / crypto_has_comp context in zcomp.c ==
+        == .cra_name registered by lz4k/lz4kd/lz4k_oplus crypto modules ==
+        grep -n "available_show\|crypto_has_comp\|crypto_has_acomp\|comp_algorithm_show" "$ZCOMP_C" | while IFS=: read -r lineno _; do
+          echo "-- match at line $lineno --"
+          sed -n "${lineno},$((lineno+15))p" "$ZCOMP_C" | cat -n
+        done
+
+        echo
+        echo "== .cra_name registered by lz4k/lz4kd/lz4k_oplus crypto modules =="
+        grep -rn "cra_name" crypto/lz4k.c crypto/lz4kd.c lib/lz4k_oplus/*.c 2>/dev/null || echo "  (no matches - check actual filenames under crypto/ and lib/lz4k_oplus/)"
         echo "== duplicate Kconfig symbol check =="
         for pair in "CRYPTO_LZ4KD:crypto/Kconfig" "CRYPTO_LZ4K:crypto/Kconfig" "CRYPTO_LZ4K_OPLUS:lib/lz4k_oplus/Kconfig" "ZRAM_DEF_COMP_LZ4KD:drivers/block/zram/Kconfig"; do
           symbol="${pair%%:*}"
