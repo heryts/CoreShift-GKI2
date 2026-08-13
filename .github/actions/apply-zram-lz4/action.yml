@@ -88,21 +88,19 @@ runs:
           cfg="${pair##*:}"
           if ! grep -qF "\"$algo\"" "$ZCOMP_C"; then
             echo "::warning::$algo missing from backends[] after patch, injecting directly"
-            python3 - "$ZCOMP_C" "$algo" "$cfg" <<'PYEOF'
-import re, sys
-path, algo, cfg = sys.argv[1], sys.argv[2], sys.argv[3]
-s = open(path).read()
-# Anchor on the first #if IS_ENABLED(...) line inside backends[] that isn't
-# for one of our own algos - CONFIG_CRYPTO_842 is present in every known
-# ACK/GKI zcomp.c revision and always comes after lz4/lz4hc/lz4k*.
-anchor = re.compile(r'(#if IS_ENABLED\(CONFIG_CRYPTO_842\)\n)')
-if not anchor.search(s):
-    print(f"::error::backends[] anchor (CONFIG_CRYPTO_842) not found in {path}")
-    sys.exit(1)
-block = f'#if IS_ENABLED({cfg})\n\t"{algo}",\n#endif\n'
-s = anchor.sub(block + r'\1', s, count=1)
-open(path, "w").write(s)
-PYEOF
+            if ! grep -qF '#if IS_ENABLED(CONFIG_CRYPTO_842)' "$ZCOMP_C"; then
+              echo "::error::backends[] anchor (CONFIG_CRYPTO_842) not found in $ZCOMP_C"
+              exit 1
+            fi
+            awk -v algo="$algo" -v cfg="$cfg" '
+              !done && /^#if IS_ENABLED\(CONFIG_CRYPTO_842\)/ {
+                print "#if IS_ENABLED(" cfg ")"
+                print "\t\"" algo "\","
+                print "#endif"
+                done=1
+              }
+              { print }
+            ' "$ZCOMP_C" > "$ZCOMP_C.tmp" && mv "$ZCOMP_C.tmp" "$ZCOMP_C"
           fi
         done
 
