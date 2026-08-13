@@ -320,11 +320,11 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply ZRAM patches
-        uses: ./.github/actions/apply-zram-patches
+        uses: ./.github/actions/apply-zram-lz4
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply Unicode Fix Patch
+      - name: Apply Unicode Patches
         uses: ./.github/actions/apply-unicode-fix
         with:
           kernel_version: ${{ inputs.kernel_version }}
