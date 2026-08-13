@@ -75,9 +75,6 @@ runs:
           elif [ "$val" = "m" ]; then
             printf 'CONFIG_%s=m\n' "$key" >> private.fragment
             printf 'CONFIG_%s=m\n' "$key" >> private.required
-          elif [ "$val" = "n" ]; then
-            printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
-            printf 'CONFIG_%s=n\n' "$key" >> private.required
           else
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.fragment
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.required
@@ -147,24 +144,6 @@ runs:
 
         echo "== enabling performance feature =="
         add_config PSI y
-
-        echo "== enabling loadable kernel module (LKM) support (all variants) =="
-        add_config MODULES y
-        add_config MODULE_UNLOAD y
-        add_config MODULE_FORCE_UNLOAD y
-        add_config MODULE_SIG n
-        add_config MODULE_SIG_FORCE n
-        if has_kconfig_symbol "init/Kconfig" TRIM_UNUSED_KSYMS; then
-          echo "  disabling TRIM_UNUSED_KSYMS so out-of-tree/external modules can resolve symbols"
-          add_config TRIM_UNUSED_KSYMS n
-        fi
-        if has_kconfig_symbol "kernel/Kconfig" TRIM_UNUSED_KSYMS; then
-          add_config TRIM_UNUSED_KSYMS n
-        fi
-        if has_kconfig_symbol "kernel/module/Kconfig" TRIM_UNUSED_KSYMS; then
-          echo "  (kernel/module/Kconfig location, newer kernel layout)"
-          add_config TRIM_UNUSED_KSYMS n
-        fi
 
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
           add_config IKCONFIG y
