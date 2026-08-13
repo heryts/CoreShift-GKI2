@@ -177,13 +177,9 @@ runs:
           fi
 
           if ! grep -qxF "$line" "$BEST"; then
-            if [ "${line##*=}" = "n" ] && ! grep -Eq "^${key}=y$|^${key}=m$" "$BEST"; then
-              :
-            else
-              echo "::warning::$line did not land in final .config"
-              warn_dependency_blockers "$BEST" "$key"
-              FAIL=1
-            fi
+            echo "::warning::$line did not land in final .config"
+            warn_dependency_blockers "$BEST" "$key"
+            FAIL=1
           fi
         done < "$REQUIRED"
 
