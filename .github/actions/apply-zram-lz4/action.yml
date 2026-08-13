@@ -56,6 +56,11 @@ runs:
         fi
         rm -f lz4kd.patch
 
+        # --- DEBUG SEMENTARA ---
+        echo "== isi choice block ZRAM_DEF_COMP setelah patch =="
+        grep -n -A 20 'prompt "Default zram compressor"' drivers/block/zram/Kconfig || echo "PATTERN GAK KETEMU!"
+        # --- END DEBUG ---
+
         cp "$PATCH_DIR/lz4k_oplus.patch" ./
         if ! patch -p1 -F 3 < lz4k_oplus.patch; then
           echo "::warning::lz4k_oplus.patch 应用失败，可能已应用或上下文不匹配"
