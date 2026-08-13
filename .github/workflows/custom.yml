@@ -319,6 +319,11 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply ZRAM patches
+        uses: ./.github/actions/apply-zram-patches
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Apply Unicode Fix Patch
         uses: ./.github/actions/apply-unicode-fix
         with:
