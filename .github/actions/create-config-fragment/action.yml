@@ -88,10 +88,6 @@ runs:
           printf 'CONFIG_%s="%s"\n' "$key" "$val" >> private.fragment
           printf 'CONFIG_%s="%s"\n' "$key" "$val" >> private.required
         }
-
-        disable_config() {
-          key="$1"
-          printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
         
         has_kconfig_symbol() {
           local kconfig_file="$1"
@@ -155,7 +151,6 @@ runs:
         add_config CRYPTO_LZ4KD y
         add_config CRYPTO_842 y
         add_config CRYPTO_LZ4K_OPLUS y
-        disable_config ZRAM_DEF_COMP_LZORLE
         add_config ZRAM_DEF_COMP_LZ4KD y
 
         if [ "${{ inputs.ikconfig }}" = "on" ]; then
