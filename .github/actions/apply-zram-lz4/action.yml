@@ -96,6 +96,22 @@ runs:
 
         echo "Verified backends[] in $ZCOMP_C contains: lz4k lz4kd lz4k_oplus"
 
+        # 诊断：完整打印 zram Kconfig 结构，确认 ZRAM_DEF_COMP_LZ4KD 是否嵌套在
+        # choice/if ZRAM 块内，是否有除 CRYPTO_LZ4KD 之外的隐藏依赖
+        echo "== FULL drivers/block/zram/Kconfig =="
+        cat -n drivers/block/zram/Kconfig
+
+        echo
+        echo "== CRYPTO_LZ4KD context in crypto/Kconfig (20 lines before/after) =="
+        grep -n "config CRYPTO_LZ4KD" crypto/Kconfig | while IFS=: read -r lineno _; do
+          start=$((lineno > 20 ? lineno - 20 : 1))
+          sed -n "${start},$((lineno+10))p" crypto/Kconfig | cat -n
+        done
+
+        echo
+        echo "== value of CONFIG_ZRAM / CONFIG_CRYPTO_ALGAPI in current .config (if present) =="
+        find . -maxdepth 3 -name ".config" -exec grep -H -E "^CONFIG_(ZRAM|CRYPTO_ALGAPI|CRYPTO_LZ4KD)=" {} \; || echo "  no .config found yet at this stage (expected - config generated later in pipeline)"
+
         # 诊断：检查是否有重复定义导致依赖解析异常（choice/depends 失效的常见原因）
         echo "== duplicate Kconfig symbol check =="
         for pair in "CRYPTO_LZ4KD:crypto/Kconfig" "CRYPTO_LZ4K:crypto/Kconfig" "CRYPTO_LZ4K_OPLUS:lib/lz4k_oplus/Kconfig" "ZRAM_DEF_COMP_LZ4KD:drivers/block/zram/Kconfig"; do
