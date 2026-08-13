@@ -73,13 +73,40 @@ runs:
           done
         fi
 
-        # 硬性校验：backends[] 是否真的包含新算法名，否则 Kconfig 打开了也不会出现在 sysfs comp_algorithm 里
         ZCOMP_C="drivers/block/zram/zcomp.c"
         if [ ! -f "$ZCOMP_C" ]; then
           echo "::error::$ZCOMP_C not found, cannot verify backends[] registration"
           exit 1
         fi
 
+        # 兜底注入：如果 context patch 因为 base 文件结构不同而没打上
+        # （常见于 lzo/lzo-rle 的 #if 包裹在不同内核版本间不一致），
+        # 直接在 backends[] 内定位一个稳定的锚点行插入缺失的算法，
+        # 而不是完全依赖 fuzzy context patch。
+        for pair in "lz4k:CONFIG_CRYPTO_LZ4K" "lz4k_oplus:CONFIG_CRYPTO_LZ4K_OPLUS" "lz4kd:CONFIG_CRYPTO_LZ4KD"; do
+          algo="${pair%%:*}"
+          cfg="${pair##*:}"
+          if ! grep -qF "\"$algo\"" "$ZCOMP_C"; then
+            echo "::warning::$algo missing from backends[] after patch, injecting directly"
+            python3 - "$ZCOMP_C" "$algo" "$cfg" <<'PYEOF'
+import re, sys
+path, algo, cfg = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(path).read()
+# Anchor on the first #if IS_ENABLED(...) line inside backends[] that isn't
+# for one of our own algos - CONFIG_CRYPTO_842 is present in every known
+# ACK/GKI zcomp.c revision and always comes after lz4/lz4hc/lz4k*.
+anchor = re.compile(r'(#if IS_ENABLED\(CONFIG_CRYPTO_842\)\n)')
+if not anchor.search(s):
+    print(f"::error::backends[] anchor (CONFIG_CRYPTO_842) not found in {path}")
+    sys.exit(1)
+block = f'#if IS_ENABLED({cfg})\n\t"{algo}",\n#endif\n'
+s = anchor.sub(block + r'\1', s, count=1)
+open(path, "w").write(s)
+PYEOF
+          fi
+        done
+
+        # 硬性校验：backends[] 是否真的包含新算法名，否则 Kconfig 打开了也不会出现在 sysfs comp_algorithm 里
         missing_backends=""
         for algo in lz4k lz4kd lz4k_oplus; do
           if ! grep -qF "\"$algo\"" "$ZCOMP_C"; then
@@ -113,8 +140,7 @@ runs:
         find . -maxdepth 3 -name ".config" -exec grep -H -E "^CONFIG_(ZRAM|CRYPTO_ALGAPI|CRYPTO_LZ4KD)=" {} \; || echo "  no .config found yet at this stage (expected - config generated later in pipeline)"
 
         echo
-        == zcomp_available_show / crypto_has_comp context in zcomp.c ==
-        == .cra_name registered by lz4k/lz4kd/lz4k_oplus crypto modules ==
+        echo "== zcomp_available_show / crypto_has_comp context in zcomp.c =="
         grep -n "available_show\|crypto_has_comp\|crypto_has_acomp\|comp_algorithm_show" "$ZCOMP_C" | while IFS=: read -r lineno _; do
           echo "-- match at line $lineno --"
           sed -n "${lineno},$((lineno+15))p" "$ZCOMP_C" | cat -n
@@ -123,6 +149,7 @@ runs:
         echo
         echo "== .cra_name registered by lz4k/lz4kd/lz4k_oplus crypto modules =="
         grep -rn "cra_name" crypto/lz4k.c crypto/lz4kd.c lib/lz4k_oplus/*.c 2>/dev/null || echo "  (no matches - check actual filenames under crypto/ and lib/lz4k_oplus/)"
+
         echo "== duplicate Kconfig symbol check =="
         for pair in "CRYPTO_LZ4KD:crypto/Kconfig" "CRYPTO_LZ4K:crypto/Kconfig" "CRYPTO_LZ4K_OPLUS:lib/lz4k_oplus/Kconfig" "ZRAM_DEF_COMP_LZ4KD:drivers/block/zram/Kconfig"; do
           symbol="${pair%%:*}"
