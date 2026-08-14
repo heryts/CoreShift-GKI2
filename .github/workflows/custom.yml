@@ -319,11 +319,6 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply ZRAM patches
-        uses: ./.github/actions/apply-zram-lz4
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
       - name: Apply Unicode Patches
         uses: ./.github/actions/apply-unicode-fix
         with:
@@ -476,46 +471,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           image_path: ${{ steps.locate-image.outputs.image_path }}
           kpm_superkey: ${{ inputs.kpm_superkey }}
-
-      - name: Verify ZRAM backends compiled into vmlinux
-        shell: bash
-        env:
-          KERNEL_COMMON_DIR: ${{ env.KERNEL_COMMON_DIR }}
-        run: |
-          set -euo pipefail
-
-          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
-
-          VMLINUX="$(
-            find kernel/out "$COMMON_DIR/out" \
-              -type f \
-              -name vmlinux \
-              2>/dev/null |
-            head -n 1 || true
-          )"
-
-          if [ -z "$VMLINUX" ]; then
-            echo "::error::No vmlinux found under kernel/out or $COMMON_DIR/out"
-            find kernel -type f -name vmlinux | sort || true
-            exit 1
-          fi
-
-          echo "Resolved vmlinux: $VMLINUX"
-
-          missing=""
-          for algo in lz4k lz4kd lz4k_oplus; do
-            if ! strings "$VMLINUX" | grep -qx "$algo"; then
-              missing="$missing $algo"
-            fi
-          done
-
-          if [ -n "$missing" ]; then
-            echo "::error::These backends were NOT compiled into vmlinux (likely wrong #if guard macro in zcomp.c, or crypto_has_comp() name mismatch):$missing"
-            exit 1
-          fi
-
-          echo "All zram backends (lz4k lz4kd lz4k_oplus) confirmed present in compiled vmlinux."
-        
+          
       - name: Write compiler metadata
         uses: ./.github/actions/write-compiler-metadata
         with:
