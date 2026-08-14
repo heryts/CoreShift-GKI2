@@ -159,22 +159,6 @@ runs:
           add_config KSU_TAMPER_SYSCALL_TABLE y
           add_config KALLSYMS_ALL y
 
-          echo "== ${{ inputs.manager }}: enabling manual-hook framework symbols =="
-          echo "susfs4ksu's -dev core patch now inserts unconditional call sites"
-          echo "(ksu_su_compat_enabled, ksu_is_init_rc_hook_enabled, ksu_is_input_hook_enabled,"
-          echo "fake_status_initialize_key, etc.) into sys.c/open.c/exec.c/stat.c/selinux/input.c."
-          echo "These are defined by the shared manual-hook layer, gated on KSU_MANUAL_HOOK -"
-          echo "enable it (and its AUTO_* sub-hooks) purely so those symbols compile in;"
-          echo "actual syscall interception for this fork still goes through"
-          echo "KSU_TAMPER_SYSCALL_TABLE above, not through these manual hooks."
-          echo "NOTE: unverified guess based on ResukiSU using the same symbol names -"
-          echo "if the link error persists or a Kconfig symbol doesn't exist for this fork,"
-          echo "this needs adjusting (path to KSU_ROOT's Kconfig may differ from ResukiSU's)."
-          add_config KSU_MANUAL_HOOK y
-          add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK y
-          add_config KSU_MANUAL_HOOK_AUTO_INPUT_HOOK y
-          add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK y
-
           if [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== ${{ inputs.manager }}: SUSFS integration mode (custom enablement patch) =="
             case "${{ inputs.kernel_version }}" in
