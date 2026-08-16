@@ -61,6 +61,7 @@ runs:
           rm -rf "manager/${MANAGER}"
           git clone --branch "xx" --depth 1 "https://github.com/midori01/KernelSU.git" "manager/${MANAGER}"
           echo "cloned midori01/KernelSU @ xx"
+        fi
 
         if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
           echo "== unshallow KernelSU-Next-family submodule =="
