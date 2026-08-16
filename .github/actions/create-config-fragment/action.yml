@@ -151,12 +151,17 @@ runs:
         fi
 
         if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== ${{ inputs.manager }} config: syscall table tamper hook mode =="
-          echo "No CONFIG_KSU_MANUAL_HOOK in this fork family; uses built-in"
-          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
-          echo "newfstat/reboot) instead of source-patched call sites."
+          echo "== ${{ inputs.manager }} config: ARM64 branch-link inline hook mode =="
+          echo "No CONFIG_KSU_MANUAL_HOOK in this fork family. Using"
+          echo "CONFIG_KSU_HACK_ARM64_BRANCH_LINK (inline call-site hijacking by patching"
+          echo "the ARM64 'bl' branch instruction at each call site) instead of"
+          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE - the two are mutually exclusive in this"
+          echo "fork's Kconfig (KSU_HACK_ARM64_BRANCH_LINK depends on !KSU_TAMPER_SYSCALL_TABLE),"
+          echo "and only one avoids the duplicate hook/syscall_table_hook_arm64.c include"
+          echo "guarded in init-manager for the tinyfs branch."
           add_config KSU y
-          add_config KSU_TAMPER_SYSCALL_TABLE y
+          add_config KSU_HACK_ARM64_BRANCH_LINK y
+          add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
           if [ "${{ inputs.susfs }}" = "on" ]; then
@@ -192,7 +197,8 @@ runs:
                 [ -z "$key" ] && continue
                 if [ "$key" = "KSU_SUSFS_SUS_SU" ]; then
                   echo "skipping KSU_SUSFS_SUS_SU for manager=${{ inputs.manager }}"
-                  echo "(this fork already has its own non-kprobe hooks via KSU_TAMPER_SYSCALL_TABLE;"
+                  echo "(this fork already has its own non-kprobe hooks via"
+                  echo "KSU_HACK_ARM64_BRANCH_LINK / KSU_TAMPER_SYSCALL_TABLE;"
                   echo "SUS_SU's manual-hook call sites - ksu_handle_setresuid/faccessat/stat/execveat etc -"
                   echo "are undefined in this fork's hook layer and fail to link if left enabled)"
                   continue
