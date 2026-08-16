@@ -78,6 +78,17 @@ runs:
         if [ -n "${{ inputs.manager_ref }}" ]; then
           SELECTED_MANAGER_REF="${{ inputs.manager_ref }}"
           MANAGER_REF_SOURCE="explicit"
+        elif [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" != "on" ]; then
+          # backslashxx/KernelSU master is known to cause a CFI panic bootloop
+          # (kernel_panic, cfi_faihard on __arm64_sys_setgroups.cfi_jt), observed
+          # on kernel 5.10 as of the commit that landed describe=v3.2.5-60
+          # (2e4dcf03cf9cafcda52f4dcd70cceb3fc42eb4f1). This happens regardless of
+          # susfs on/off and regardless of KSU_HACK_ARM64_BRANCH_LINK vs
+          # KSU_TAMPER_SYSCALL_TABLE hook mode. Pin to the last known-good commit
+          # until upstream fixes it. Override with the manager_ref input to test
+          # a newer commit.
+          SELECTED_MANAGER_REF="fcf657a04afaed4eebbbec0d245c07d9db1b0359"
+          MANAGER_REF_SOURCE="known-good-default (master causes CFI panic bootloop, see comment)"
         elif [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== SUSFS manager compatibility table =="
           printf '%s\n' \
