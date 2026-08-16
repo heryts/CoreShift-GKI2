@@ -285,10 +285,28 @@ runs:
 
           if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; }; then
             if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
-              echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
-              echo "::error::expected=$SELECTED_MANAGER_REF"
-              echo "::error::actual=$INTEGRATED_KSU_HEAD"
-              exit 1
+              echo "::warning::Integrated KernelSU HEAD does not match selected manager ref; setup.sh's own"
+              echo "::warning::clone of KSU_ROOT is likely shallow and did not contain the pinned commit,"
+              echo "::warning::so it silently fell back to its default branch. Forcing the correct commit"
+              echo "::warning::into KSU_ROOT directly."
+              echo "expected=$SELECTED_MANAGER_REF"
+              echo "actual (pre-fix)=$INTEGRATED_KSU_HEAD"
+
+              git -C "$KSU_ROOT" fetch --depth=1 origin "$SELECTED_MANAGER_REF" ||
+                git -C "$KSU_ROOT" fetch origin "$SELECTED_MANAGER_REF"
+              git -C "$KSU_ROOT" checkout -f FETCH_HEAD
+
+              INTEGRATED_KSU_HEAD="$(git -C "$KSU_ROOT" rev-parse HEAD)"
+              echo "actual (post-fix)=$INTEGRATED_KSU_HEAD"
+
+              if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
+                echo "::error::Integrated KernelSU HEAD still does not match selected manager ref after forced fetch+checkout"
+                echo "::error::expected=$SELECTED_MANAGER_REF"
+                echo "::error::actual=$INTEGRATED_KSU_HEAD"
+                exit 1
+              fi
+
+              echo "integrated KSU HEAD corrected: $INTEGRATED_KSU_HEAD"
             fi
           fi
         else
