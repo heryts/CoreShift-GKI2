@@ -54,8 +54,16 @@ runs:
           echo "repo already pinned via .gitmodules (susfs+nomount-hookless branch)"
         fi
 
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
-          echo "== KernelSU-Backslashxx: switching to backslashxx/KernelSU tinyfs branch (master causes bootloop) =="
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "== KernelSU-Backslashxx + SUSFS: switching to midori01/KernelSU xx branch =="
+          echo "(xx branch ships CONFIG_KSU_SUSFS wiring natively; backslashxx/KernelSU master"
+          echo "causes bootloop, and tinyfs has no SUSFS support at all)"
+          rm -rf "manager/${MANAGER}"
+          git clone --branch "xx" --depth 1 "https://github.com/midori01/KernelSU.git" "manager/${MANAGER}"
+          echo "cloned midori01/KernelSU @ xx"
+        elif [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
+          echo "== KernelSU-Backslashxx (no SUSFS): switching to backslashxx/KernelSU tinyfs branch =="
+          echo "(backslashxx master causes bootloop; tinyfs is the known-good branch when SUSFS is off)"
           rm -rf "manager/${MANAGER}"
           git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
           echo "cloned backslashxx/KernelSU @ tinyfs"
@@ -280,7 +288,6 @@ runs:
           fi
         else
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
-        fi
-        
+        fi   
         git add . 2>/dev/null
         git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
