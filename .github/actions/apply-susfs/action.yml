@@ -231,28 +231,16 @@ runs:
         cd "$KSU_ROOT"
 
         echo
-        if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
+        if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ] || [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
-          echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== applying Backslashxx-specific SUSFS enablement patch =="
-          echo "Backslashxx's kernel/ layout (supercall/, hook/setuid_hook.c, no core_hook.c)"
-          echo "is not compatible with upstream's generic KernelSU/10_enable_susfs_for_ksu.patch,"
-          echo "so a maintained local patch is applied instead."
-
-          BACKSLASHXX_SUSFS_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/backslashxx/11_enable_susfs_for_ksu.patch"
-
-          if [ ! -f "$BACKSLASHXX_SUSFS_PATCH" ]; then
-            echo "::error::missing Backslashxx SUSFS enablement patch: $BACKSLASHXX_SUSFS_PATCH"
-            exit 1
-          fi
-
-          git apply --check "$BACKSLASHXX_SUSFS_PATCH"
-          git apply "$BACKSLASHXX_SUSFS_PATCH"
-
-          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
-            echo "::error::conflict markers found after Backslashxx SUSFS patch"
-            exit 1
+          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+            echo "manager=KernelSU-Backslashxx now sources from midori01/KernelSU@xx"
+            echo "(see init-manager action.yml), which already ships CONFIG_KSU_SUSFS wiring"
+            echo "natively (kernel/Kconfig, hook/setuid_hook.c, supercall/*, selinux/*)."
+            echo "The previously maintained local .github/patches/susfs4ksu/backslashxx patch"
+            echo "no longer applies against this source and is intentionally not used here."
+          else
+            echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
           fi
         elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
           # Safer apply for original KernelSU: dry-run with --fuzz=3 first
@@ -279,8 +267,9 @@ runs:
               sed -n '1,120p' /tmp/ksu-patch-dry-run.log
               echo "-------------------------"
               echo "tiann/KernelSU's directory layout has diverged from what this susfs4ksu"
-              echo "ref expects. This likely needs a manually maintained KSU patch (see how"
-              echo "manager=KernelSU-Backslashxx uses a local .github/patches/susfs4ksu patch)."
+              echo "ref expects. This likely needs a manually maintained local KSU patch"
+              echo "(see .github/patches/susfs4ksu/*/KernelSU/10_enable_susfs_for_ksu.patch"
+              echo "for the existing per-branch pattern)."
               exit 1
             fi
 
@@ -313,8 +302,9 @@ runs:
               echo "-------------------------"
               echo "This tiann/KernelSU tree uses a modular layout (kernel/feature/, kernel/hook/,"
               echo "kernel/policy/, kernel/runtime/, kernel/supercall/) that neither susfs4ksu source"
-              echo "expects. A manually maintained local KSU patch is likely needed, similar to"
-              echo "manager=KernelSU-Backslashxx's .github/patches/susfs4ksu approach."
+              echo "expects. A manually maintained local KSU patch is likely needed"
+              echo "(see .github/patches/susfs4ksu/*/KernelSU/10_enable_susfs_for_ksu.patch"
+              echo "for the existing per-branch pattern)."
               exit 1
             fi
           fi
