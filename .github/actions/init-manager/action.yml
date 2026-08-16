@@ -61,52 +61,6 @@ runs:
           rm -rf "manager/${MANAGER}"
           git clone --branch "xx" --depth 1 "https://github.com/midori01/KernelSU.git" "manager/${MANAGER}"
           echo "cloned midori01/KernelSU @ xx"
-        elif [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
-          echo "== KernelSU-Backslashxx (no SUSFS): switching to backslashxx/KernelSU tinyfs branch =="
-          echo "(backslashxx master causes bootloop; tinyfs is the known-good branch when SUSFS is off)"
-          rm -rf "manager/${MANAGER}"
-          git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
-          echo "cloned backslashxx/KernelSU @ tinyfs"
-
-          echo "== Backslashxx/tinyfs: guarding duplicate unconditional syscall_table_hook_arm64.c include =="
-          echo "kernel/ksu.c on the tinyfs branch re-includes hook/syscall_table_hook_arm64.c a"
-          echo "third time, unconditionally, right before including tinyfs.c - with no guard"
-          echo "against CONFIG_KSU_TAMPER_SYSCALL_TABLE *or* CONFIG_KSU_HACK_ARM64_BRANCH_LINK"
-          echo "already having included it a few lines above. Whichever of those two configs"
-          echo "is active, this causes 'redefinition of aarch64_reboot' etc build errors."
-          KSU_C="manager/${MANAGER}/kernel/ksu.c"
-          if [ ! -f "$KSU_C" ]; then
-            echo "::error::expected $KSU_C not found after cloning tinyfs branch"
-            exit 1
-          fi
-          python3 - "$KSU_C" <<'PYEOF'
-        import sys
-        path = sys.argv[1]
-        with open(path) as f:
-            content = f.read()
-        old = (
-            '#undef syscall_table_sucompat_enable\n'
-            '#undef syscall_table_sucompat_disable\n'
-            '#include "hook/syscall_table_hook_arm64.c"\n'
-            '#include "tinyfs.c"\n'
-        )
-        new = (
-            '#if !defined(CONFIG_KSU_TAMPER_SYSCALL_TABLE) && !defined(CONFIG_KSU_HACK_ARM64_BRANCH_LINK)\n'
-            '#undef syscall_table_sucompat_enable\n'
-            '#undef syscall_table_sucompat_disable\n'
-            '#include "hook/syscall_table_hook_arm64.c"\n'
-            '#endif\n'
-            '#include "tinyfs.c"\n'
-        )
-        if content.count(old) != 1:
-            print(f"::error::expected exactly one match for duplicate-include block in {path}, found {content.count(old)}; tinyfs branch source may have changed", file=sys.stderr)
-            sys.exit(1)
-        content = content.replace(old, new, 1)
-        with open(path, "w") as f:
-            f.write(content)
-        print(f"patched {path}: guarded duplicate syscall_table_hook_arm64.c include")
-        PYEOF
-        fi
 
         if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
           echo "== unshallow KernelSU-Next-family submodule =="
