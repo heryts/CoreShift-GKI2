@@ -318,6 +318,20 @@ runs:
           else
             add_config KALLSYMS y
           fi
+
+          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+            echo "== ${{ inputs.manager }} + KPM: forcing CONFIG_CFI_PERMISSIVE=y =="
+            echo "KPM/KernelPatch (kptools/kpimg) patches syscall table pointers directly"
+            echo "in the built Image post-compile, outside the compiler's CFI jump-table"
+            echo "generation. With CONFIG_CFI_CLANG=y and CFI_PERMISSIVE unset, that pointer"
+            echo "swap gets flagged as a CFI violation on first invocation of the patched"
+            echo "syscall (observed: 'CFI failure (target: __arm64_sys_setgroups...)' panic"
+            echo "from init during boot -> bootloop, including safe mode). Other managers"
+            echo "without KPM's post-build binary patch don't hit this. Making CFI"
+            echo "permissive (warn instead of panic) keeps CFI_CLANG enabled but avoids the"
+            echo "fatal panic caused specifically by KPM's post-build hook."
+            add_config CFI_PERMISSIVE y
+          fi
         fi
         
         if [ "${{ inputs.baseband_guard }}" = "on" ]; then
