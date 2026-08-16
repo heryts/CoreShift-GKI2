@@ -156,7 +156,7 @@ runs:
           echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE (covers execve/faccessat/newfstatat/"
           echo "newfstat/reboot) instead of source-patched call sites."
           add_config KSU y
-          add_config KSU_HACK_ARM64_BRANCH_LINK y
+          add_config KSU_TAMPER_SYSCALL_TABLE y
           add_config KALLSYMS_ALL y
 
           if [ "${{ inputs.susfs }}" = "on" ]; then
