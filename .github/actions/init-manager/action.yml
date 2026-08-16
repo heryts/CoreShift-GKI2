@@ -78,17 +78,6 @@ runs:
         if [ -n "${{ inputs.manager_ref }}" ]; then
           SELECTED_MANAGER_REF="${{ inputs.manager_ref }}"
           MANAGER_REF_SOURCE="explicit"
-        elif [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" != "on" ]; then
-          # backslashxx/KernelSU master is known to cause a CFI panic bootloop
-          # (kernel_panic, cfi_faihard on __arm64_sys_setgroups.cfi_jt), observed
-          # on kernel 5.10 as of the commit that landed describe=v3.2.5-60
-          # (2e4dcf03cf9cafcda52f4dcd70cceb3fc42eb4f1). This happens regardless of
-          # susfs on/off and regardless of KSU_HACK_ARM64_BRANCH_LINK vs
-          # KSU_TAMPER_SYSCALL_TABLE hook mode. Pin to the last known-good commit
-          # until upstream fixes it. Override with the manager_ref input to test
-          # a newer commit.
-          SELECTED_MANAGER_REF="fcf657a04afaed4eebbbec0d245c07d9db1b0359"
-          MANAGER_REF_SOURCE="known-good-default (master causes CFI panic bootloop, see comment)"
         elif [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== SUSFS manager compatibility table =="
           printf '%s\n' \
@@ -285,33 +274,14 @@ runs:
 
           if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; }; then
             if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
-              echo "::warning::Integrated KernelSU HEAD does not match selected manager ref; setup.sh's own"
-              echo "::warning::clone of KSU_ROOT is likely shallow and did not contain the pinned commit,"
-              echo "::warning::so it silently fell back to its default branch. Forcing the correct commit"
-              echo "::warning::into KSU_ROOT directly."
-              echo "expected=$SELECTED_MANAGER_REF"
-              echo "actual (pre-fix)=$INTEGRATED_KSU_HEAD"
-
-              git -C "$KSU_ROOT" fetch --depth=1 origin "$SELECTED_MANAGER_REF" ||
-                git -C "$KSU_ROOT" fetch origin "$SELECTED_MANAGER_REF"
-              git -C "$KSU_ROOT" checkout -f FETCH_HEAD
-
-              INTEGRATED_KSU_HEAD="$(git -C "$KSU_ROOT" rev-parse HEAD)"
-              echo "actual (post-fix)=$INTEGRATED_KSU_HEAD"
-
-              if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
-                echo "::error::Integrated KernelSU HEAD still does not match selected manager ref after forced fetch+checkout"
-                echo "::error::expected=$SELECTED_MANAGER_REF"
-                echo "::error::actual=$INTEGRATED_KSU_HEAD"
-                exit 1
-              fi
-
-              echo "integrated KSU HEAD corrected: $INTEGRATED_KSU_HEAD"
+              echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
+              echo "::error::expected=$SELECTED_MANAGER_REF"
+              echo "::error::actual=$INTEGRATED_KSU_HEAD"
+              exit 1
             fi
           fi
         else
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
-        
         git add . 2>/dev/null
         git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
