@@ -215,7 +215,17 @@ runs:
         if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "dev-susfs"
-        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; }; then
+        elif [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
+          echo "== calling setup.sh with tinyfs explicitly =="
+          echo "backslashxx/KernelSU's setup.sh clones its own fresh copy of the repo into"
+          echo "\$GKI_ROOT/KernelSU, independent of our manager/${MANAGER} submodule - it"
+          echo "never reads from the submodule at all. Passing our submodule's pinned commit"
+          echo "hash as the checkout ref is unreliable (silently falls back to setup.sh's"
+          echo "default branch on any checkout failure: 'git checkout \"\$1\" || echo"
+          echo "\"Checkout default branch\"' - no error, no exit). Passing the branch name"
+          echo "directly is what setup.sh's own fresh clone actually has, so it always resolves."
+          bash "$SETUP_SCRIPT" "tinyfs"
+        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; }; then
           bash "$SETUP_SCRIPT" "$SELECTED_MANAGER_REF"
         else
           bash "$SETUP_SCRIPT"
@@ -282,7 +292,12 @@ runs:
           echo "integrated KSU describe: $INTEGRATED_KSU_DESCRIBE"
           git -C "$KSU_ROOT" remote -v || true
 
-          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; }; then
+          if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
+            echo "note: skipping HEAD-match check for $MANAGER - the integrated source came"
+            echo "from setup.sh's own fresh clone checked out to the tinyfs branch (floating"
+            echo "HEAD), not from our pinned manager/${MANAGER} submodule commit, so an exact"
+            echo "hash match is not expected here."
+          elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; }; then
             if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
               echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
               echo "::error::expected=$SELECTED_MANAGER_REF"
