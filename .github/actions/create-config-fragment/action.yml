@@ -75,18 +75,6 @@ runs:
           elif [ "$val" = "m" ]; then
             printf 'CONFIG_%s=m\n' "$key" >> private.fragment
             printf 'CONFIG_%s=m\n' "$key" >> private.required
-          elif [ "$val" = "n" ]; then
-            # Kconfig's own tooling never writes "CONFIG_X=n" for bool/tristate
-            # symbols - the canonical off-representation is "# CONFIG_X is not
-            # set" (this is also what merge_config.sh and savedefconfig emit/
-            # expect). Writing the real format here means private.fragment
-            # disables the symbol correctly even if the base defconfig had it
-            # on, and private.required ends up byte-identical to what actually
-            # lands in the final .config, so downstream exact-match
-            # verification (verify-final-config) just works without needing
-            # special-casing there.
-            printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
-            printf '# CONFIG_%s is not set\n' "$key" >> private.required
           else
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.fragment
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.required
@@ -236,7 +224,6 @@ runs:
           echo "select and root access breaks even though the manager still reports connected."
           add_config KSU y
           add_config KSU_TINYFS_SUCOMPAT y
-          add_config KSU_FEATURE_ADBROOT n
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
