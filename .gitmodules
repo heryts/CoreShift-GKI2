@@ -30,3 +30,7 @@
 	path = manager/Rissu
 	url = https://github.com/rsuntk/KernelSU.git
 	branch = main
+[submodule "manager/KernelSU-Backslashxx-Tinyfs"]
+	path = manager/KernelSU-Backslashxx-Tinyfs
+	url = https://github.com/backslashxx/KernelSU.git
+	branch = master
