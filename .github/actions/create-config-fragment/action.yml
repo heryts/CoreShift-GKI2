@@ -76,17 +76,22 @@ runs:
             printf 'CONFIG_%s=m\n' "$key" >> private.fragment
             printf 'CONFIG_%s=m\n' "$key" >> private.required
           elif [ "$val" = "n" ]; then
-            # Kconfig's own tooling never writes "CONFIG_X=n" for bool/tristate
-            # symbols - the canonical off-representation is "# CONFIG_X is not
-            # set" (this is also what merge_config.sh and savedefconfig emit/
-            # expect). Writing the real format here means private.fragment
-            # disables the symbol correctly even if the base defconfig had it
-            # on, and private.required ends up byte-identical to what actually
-            # lands in the final .config, so downstream exact-match
-            # verification (verify-final-config) just works without needing
-            # special-casing there.
+            # private.fragment needs the real Kconfig off-representation so
+            # merge_config.sh actually disables the symbol (Kconfig tooling
+            # never writes "CONFIG_X=n" for bool/tristate - only
+            # "# CONFIG_X is not set" is recognized).
             printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
-            printf '# CONFIG_%s is not set\n' "$key" >> private.required
+            # private.required stays as KEY=VALUE, NOT the "# ... is not set"
+            # form: verify-final-config parses each line as
+            # key="${line%%=*}" to know which symbol to look up. A line with
+            # no "=" (like "# CONFIG_X is not set") makes that split a no-op,
+            # so $key becomes the entire line and every downstream lookup/
+            # warning breaks (shows up as the whole "# CONFIG_X is not set"
+            # string glued onto "missing from final config"). verify-final-
+            # config's own required_line_landed() is what translates this
+            # "=n" back into a check against "# CONFIG_X is not set" in the
+            # actual .config.
+            printf 'CONFIG_%s=n\n' "$key" >> private.required
           else
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.fragment
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.required
