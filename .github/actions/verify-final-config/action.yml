@@ -109,6 +109,29 @@ runs:
           grep -E "^${key}=|^# ${key} is not set" "$cfg" || true
         }
 
+        # private.required always uses "KEY=VALUE" (even for "n") so the
+        # key="${line%%=*}" split above works everywhere in this script. But
+        # the kernel's own Kconfig tooling never writes "CONFIG_X=n" in an
+        # actual .config for bool/tristate symbols - "n" is represented as
+        # "# CONFIG_X is not set". So a requested "KEY=n" line needs to be
+        # checked against that form, not matched byte-for-byte.
+        required_line_landed() {
+          cfg="$1"
+          line="$2"
+          key="${line%%=*}"
+          val="${line#*=}"
+
+          if grep -qxF "$line" "$cfg"; then
+            return 0
+          fi
+
+          if [ "$val" = "n" ] && grep -qxF "# ${key} is not set" "$cfg"; then
+            return 0
+          fi
+
+          return 1
+        }
+
         warn_dependency_blockers() {
           cfg="$1"
           key="${2#CONFIG_}"
@@ -176,7 +199,7 @@ runs:
             echo "::warning::$key missing from final config"
           fi
 
-          if ! grep -qxF "$line" "$BEST"; then
+          if ! required_line_landed "$BEST" "$line"; then
             echo "::warning::$line did not land in final .config"
             warn_dependency_blockers "$BEST" "$key"
             FAIL=1
@@ -232,6 +255,5 @@ runs:
             echo "::error::strict_config is on, failing because requested config did not land."
             exit 1
           fi
-
           echo "::warning::Some requested configs did not land, but strict_config=off, so continuing."
         fi
