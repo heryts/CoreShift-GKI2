@@ -63,6 +63,16 @@ runs:
           echo "cloned midori01/KernelSU @ xx"
         fi
 
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" != "on" ]; then
+          echo "== KernelSU-Backslashxx (no SUSFS): switching to backslashxx/KernelSU tinyfs branch =="
+          echo "(tinyfs uses fs-ops-hijacking based sucompat via KSU_TINYFS_SUCOMPAT, which is"
+          echo "mutually exclusive with KSU_TAMPER_SYSCALL_TABLE / KSU_HACK_ARM64_BRANCH_LINK;"
+          echo "not eligible for SUSFS builds — no SUSFS wiring on this branch)"
+          rm -rf "manager/${MANAGER}"
+          git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
+          echo "cloned backslashxx/KernelSU @ tinyfs"
+        fi
+
         if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
           echo "== unshallow KernelSU-Next-family submodule =="
           echo "needed for correct version code (commit count) and tag lookups"
