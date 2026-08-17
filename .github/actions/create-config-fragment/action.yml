@@ -150,21 +150,22 @@ runs:
           add_config IKCONFIG_PROC y
         fi
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-          echo "== ${{ inputs.manager }} (xx branch) config: ARM64 branch-link inline hook mode =="
+        if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+          echo "== ${{ inputs.manager }} config: ARM64 branch-link inline hook mode =="
           echo "No CONFIG_KSU_MANUAL_HOOK in this fork family. Using"
           echo "CONFIG_KSU_HACK_ARM64_BRANCH_LINK (inline call-site hijacking by patching"
           echo "the ARM64 'bl' branch instruction at each call site) instead of"
           echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE - the two are mutually exclusive in this"
           echo "fork's Kconfig (KSU_HACK_ARM64_BRANCH_LINK depends on !KSU_TAMPER_SYSCALL_TABLE)."
-          echo "xx branch is the SUSFS-wired branch (see init-manager routing); tinyfs is"
-          echo "handled separately below since it has no SUSFS wiring."
+          echo "susfs=on switches the source to the xx branch (SUSFS-wired) via"
+          echo "init-manager routing; susfs=off stays on master. Both use this same hook"
+          echo "config. manager=KernelSU-Backslashxx-Tinyfs is handled separately below."
           add_config KSU y
           add_config KSU_HACK_ARM64_BRANCH_LINK y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
-          if true; then
+          if [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== ${{ inputs.manager }}: SUSFS integration mode (custom enablement patch) =="
             case "${{ inputs.kernel_version }}" in
               5.10) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10" ;;
@@ -211,13 +212,13 @@ runs:
             add_config KSU_SUSFS_SUS_SU n
           fi
 
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== ${{ inputs.manager }} (tinyfs branch) config: fs-ops hijacking sucompat mode =="
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ]; then
+          echo "== ${{ inputs.manager }} config: fs-ops hijacking sucompat mode =="
           echo "tinyfs branch's CONFIG_KSU_TINYFS_SUCOMPAT depends on !KSU_TAMPER_SYSCALL_TABLE"
           echo "and !KSU_HACK_ARM64_BRANCH_LINK, so neither hook-hack config is set here -"
           echo "only the fs-ops-hijacking-based sucompat is enabled."
-          echo "No SUSFS block: tinyfs has no SUSFS wiring (init-manager only routes here"
-          echo "when susfs=off)."
+          echo "No SUSFS block: tinyfs has no SUSFS wiring (susfs=on for this manager is"
+          echo "rejected earlier at the workflow input validation step)."
           echo "Also forcing KSU_FEATURE_ADBROOT off - KSU_TINYFS_SUCOMPAT now depends on"
           echo "!KSU_FEATURE_ADBROOT too (per dev-confirmed Kconfig); if this stays y"
           echo "(e.g. from fork defconfig default) TINYFS_SUCOMPAT silently fails to"
