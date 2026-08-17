@@ -10,7 +10,7 @@ on:
       manager:
         type: choice
         required: true
-        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "Rissu", "Wild_KSU"]
+        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Backslashxx-Tinyfs", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "Rissu", "Wild_KSU"]
         default: "Vanilla"
       manager_ref:
         description: "Optional manager git ref/commit/tag"
@@ -152,6 +152,11 @@ jobs:
 
           if [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
             echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; set susfs=off or choose a different manager"
+            exit 1
+          fi
+
+          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+            echo "::error::SUSFS is not supported on the tinyfs branch; set susfs=off, or choose manager=KernelSU-Backslashxx for SUSFS support"
             exit 1
           fi
 
