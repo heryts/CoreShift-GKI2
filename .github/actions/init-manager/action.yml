@@ -57,17 +57,17 @@ runs:
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== KernelSU-Backslashxx + SUSFS: switching to midori01/KernelSU xx branch =="
           echo "(xx branch ships CONFIG_KSU_SUSFS wiring natively; backslashxx/KernelSU master"
-          echo "causes bootloop, and tinyfs has no SUSFS support at all)"
+          echo "causes bootloop)"
           rm -rf "manager/${MANAGER}"
           git clone --branch "xx" --depth 1 "https://github.com/midori01/KernelSU.git" "manager/${MANAGER}"
           echo "cloned midori01/KernelSU @ xx"
         fi
 
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" != "on" ]; then
-          echo "== KernelSU-Backslashxx (no SUSFS): switching to backslashxx/KernelSU tinyfs branch =="
-          echo "(tinyfs uses fs-ops-hijacking based sucompat via KSU_TINYFS_SUCOMPAT, which is"
-          echo "mutually exclusive with KSU_TAMPER_SYSCALL_TABLE / KSU_HACK_ARM64_BRANCH_LINK;"
-          echo "not eligible for SUSFS builds — no SUSFS wiring on this branch)"
+        if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
+          echo "== KernelSU-Backslashxx-Tinyfs: switching to backslashxx/KernelSU tinyfs branch =="
+          echo "(fs-ops-hijacking based sucompat via KSU_TINYFS_SUCOMPAT; no SUSFS wiring on"
+          echo "this branch - susfs=on for this manager is rejected earlier at the workflow"
+          echo "input validation step, so this always runs unconditionally here)"
           rm -rf "manager/${MANAGER}"
           git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
           echo "cloned backslashxx/KernelSU @ tinyfs"
@@ -178,7 +178,7 @@ runs:
         # Critical fix:
         # If no explicit/SUSFS ref was selected, pass the actual submodule HEAD
         # into KernelSU/KowSU setup.sh instead of letting setup.sh use its own default.
-        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
+        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
           MANAGER_REF_SOURCE="submodule-head"
           echo "using submodule HEAD as setup ref: $SELECTED_MANAGER_REF"
@@ -215,13 +215,13 @@ runs:
         if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "dev-susfs"
-        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; }; then
+        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; }; then
           bash "$SETUP_SCRIPT" "$SELECTED_MANAGER_REF"
         else
           bash "$SETUP_SCRIPT"
         fi
 
-        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
+        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
           echo "== restore pinned submodule commit after setup.sh =="
           echo "setup.sh may have run git stash/checkout/pull inside the submodule;"
           echo "forcing it back to the pinned commit: $PRE_SETUP_MANAGER_HEAD"
@@ -282,7 +282,7 @@ runs:
           echo "integrated KSU describe: $INTEGRATED_KSU_DESCRIBE"
           git -C "$KSU_ROOT" remote -v || true
 
-          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ]; }; then
+          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; }; then
             if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
               echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
               echo "::error::expected=$SELECTED_MANAGER_REF"
