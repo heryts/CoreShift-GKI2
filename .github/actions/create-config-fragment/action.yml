@@ -218,8 +218,13 @@ runs:
           echo "only the fs-ops-hijacking-based sucompat is enabled."
           echo "No SUSFS block: tinyfs has no SUSFS wiring (init-manager only routes here"
           echo "when susfs=off)."
+          echo "Also forcing KSU_FEATURE_ADBROOT off - KSU_TINYFS_SUCOMPAT now depends on"
+          echo "!KSU_FEATURE_ADBROOT too (per dev-confirmed Kconfig); if this stays y"
+          echo "(e.g. from fork defconfig default) TINYFS_SUCOMPAT silently fails to"
+          echo "select and root access breaks even though the manager still reports connected."
           add_config KSU y
           add_config KSU_TINYFS_SUCOMPAT y
+          add_config KSU_FEATURE_ADBROOT n
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
