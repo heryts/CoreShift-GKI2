@@ -1,5 +1,5 @@
 name: Apply NoMount support
-description: Apply maxsteeel/nomount VFS-level file injection framework via upstream setup.sh (manager-agnostic, independent from KernelSU-Next's built-in NoMount).
+description: Apply maxsteeel/nomount VFS-level file injection framework.
 inputs:
   kernel_version:
     required: true
@@ -13,13 +13,39 @@ runs:
         set -euo pipefail
 
         COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+        BASE_URL="https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/experimental/hookless"
+        PATCH_NAME="nomount_${{ inputs.kernel_version }}_kernel_integration.patch"
         
-        echo "== NoMount (maxsteeel/nomount, dev branch) =="
+        echo "== NoMount (maxsteeel/nomount, hookless branch) =="
         echo "kernel_version=${{ inputs.kernel_version }}"     
+        echo "expected patch: $PATCH_NAME"
+
+        TMP_DIR="$(mktemp -d)"
+
+        curl -LSsf "$BASE_URL/kernel/src/nomount.h" -o "$TMP_DIR/nomount.h"
+        curl -LSsf "$BASE_URL/kernel/src/nomount.c" -o "$TMP_DIR/nomount.c"
+
+        if ! curl -LSsf "$BASE_URL/kernel/patches/$PATCH_NAME" -o "$TMP_DIR/$PATCH_NAME"; then
+          echo "::error::NoMount integration patch not found for kernel_version=${{ inputs.kernel_version }} ($PATCH_NAME). maxsteeel/nomount may not support this kernel version yet."
+          rm -rf "$TMP_DIR"
+          exit 1
+        fi
         echo "COMMON_DIR=$COMMON_DIR"
+        
         cd "$COMMON_DIR"
 
-        curl -LSsf https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh | bash -s dev
+        cp "$TMP_DIR/nomount.h" ./fs/nomount.h
+        cp "$TMP_DIR/nomount.c" ./fs/nomount.c
+
+        echo "== apply $PATCH_NAME =="
+        if ! patch -p1 --forward --dry-run < "$TMP_DIR/$PATCH_NAME" >/dev/null 2>&1; then
+          echo "::error::NoMount integration patch does not apply cleanly to this source tree (context mismatch)."
+          rm -rf "$TMP_DIR"
+          exit 1
+        fi
+        patch -p1 --forward < "$TMP_DIR/$PATCH_NAME"
+
+        rm -rf "$TMP_DIR"
 
         echo "== NoMount diff stat =="
         git diff --stat -- fs || true
