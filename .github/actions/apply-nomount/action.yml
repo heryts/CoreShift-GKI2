@@ -7,17 +7,16 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Integrate NoMount in kernel
-      shell: bash
+    - shell: bash
       run: |
         set -euo pipefail
 
         COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
         BASE_URL="https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/experimental/hookless"
         PATCH_NAME="nomount_${{ inputs.kernel_version }}_kernel_integration.patch"
-        
-        echo "== NoMount (maxsteeel/nomount, hookless branch) =="
-        echo "kernel_version=${{ inputs.kernel_version }}"     
+
+        echo "== NoMount (maxsteeel/nomount) =="
+        echo "kernel_version=${{ inputs.kernel_version }}"
         echo "expected patch: $PATCH_NAME"
 
         TMP_DIR="$(mktemp -d)"
@@ -30,8 +29,7 @@ runs:
           rm -rf "$TMP_DIR"
           exit 1
         fi
-        echo "COMMON_DIR=$COMMON_DIR"
-        
+
         cd "$COMMON_DIR"
 
         cp "$TMP_DIR/nomount.h" ./fs/nomount.h
