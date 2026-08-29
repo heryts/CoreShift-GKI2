@@ -75,6 +75,9 @@ runs:
           elif [ "$val" = "m" ]; then
             printf 'CONFIG_%s=m\n' "$key" >> private.fragment
             printf 'CONFIG_%s=m\n' "$key" >> private.required
+          elif [ "$val" = "n" ]; then
+            printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
+            printf 'CONFIG_%s=n\n' "$key" >> private.required
           else
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.fragment
             printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.required
@@ -150,16 +153,33 @@ runs:
           add_config IKCONFIG_PROC y
         fi
 
+        echo "== ZRAM LZ4KDR: check source tree support =="
+        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
+           has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
+          echo "  CONFIG_CRYPTO_LZ4KDR and ZRAM_DEF_COMP_LZ4KDR choice found, enabling"
+          add_config ZRAM m
+          add_config ZSMALLOC m
+          add_config ZRAM_DEF_COMP_LZ4KDR y
+          add_config CRYPTO_LZ4KDR y
+        else
+          echo "  CRYPTO_LZ4KDR / ZRAM_DEF_COMP_LZ4KDR not found in this source tree, skipping"
+          echo "  (LZ4KDR requires a source with the vendor lz4k/lz4kdr patch already applied)"
+        fi
+
+        echo "== ZRAM recompression (multi-comp): check source tree support =="
+        if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
+          echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
+          add_config ZRAM m
+          add_config ZSMALLOC m
+          add_config ZRAM_MULTI_COMP y
+          if has_kconfig_symbol crypto/Kconfig CRYPTO_ZSTD; then
+            add_config CRYPTO_ZSTD y
+          fi
+        else
+          echo "  ZRAM_MULTI_COMP not found in this source tree, skipping recompression support"
+        fi
+
         if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== ${{ inputs.manager }} config: ARM64 branch-link inline hook mode =="
-          echo "No CONFIG_KSU_MANUAL_HOOK in this fork family. Using"
-          echo "CONFIG_KSU_HACK_ARM64_BRANCH_LINK (inline call-site hijacking by patching"
-          echo "the ARM64 'bl' branch instruction at each call site) instead of"
-          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE - the two are mutually exclusive in this"
-          echo "fork's Kconfig (KSU_HACK_ARM64_BRANCH_LINK depends on !KSU_TAMPER_SYSCALL_TABLE)."
-          echo "susfs=on switches the source to the xx branch (SUSFS-wired) via"
-          echo "init-manager routing; susfs=off stays on master. Both use this same hook"
-          echo "config. manager=KernelSU-Backslashxx-Tinyfs is handled separately below."
           add_config KSU y
           add_config KSU_HACK_ARM64_BRANCH_LINK y
           add_config KALLSYMS y
@@ -198,11 +218,6 @@ runs:
                 [ -z "$key" ] && continue
                 if [ "$key" = "KSU_SUSFS_SUS_SU" ]; then
                   echo "skipping KSU_SUSFS_SUS_SU for manager=${{ inputs.manager }}"
-                  echo "(this fork already has its own non-kprobe hooks via"
-                  echo "KSU_HACK_ARM64_BRANCH_LINK / KSU_TAMPER_SYSCALL_TABLE;"
-                  echo "SUS_SU's manual-hook call sites - ksu_handle_setresuid/faccessat/stat/execveat etc -"
-                  echo "are undefined in this fork's hook layer and fail to link if left enabled)"
-                  continue
                 fi
                 add_config "$key" y
               done
@@ -213,18 +228,9 @@ runs:
           fi
 
         elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ]; then
-          echo "== ${{ inputs.manager }} config: fs-ops hijacking sucompat mode =="
-          echo "tinyfs branch's CONFIG_KSU_TINYFS_SUCOMPAT depends on !KSU_TAMPER_SYSCALL_TABLE"
-          echo "and !KSU_HACK_ARM64_BRANCH_LINK, so neither hook-hack config is set here -"
-          echo "only the fs-ops-hijacking-based sucompat is enabled."
-          echo "No SUSFS block: tinyfs has no SUSFS wiring (susfs=on for this manager is"
-          echo "rejected earlier at the workflow input validation step)."
-          echo "Also forcing KSU_FEATURE_ADBROOT off - KSU_TINYFS_SUCOMPAT now depends on"
-          echo "!KSU_FEATURE_ADBROOT too (per dev-confirmed Kconfig); if this stays y"
-          echo "(e.g. from fork defconfig default) TINYFS_SUCOMPAT silently fails to"
-          echo "select and root access breaks even though the manager still reports connected."
           add_config KSU y
           add_config KSU_TINYFS_SUCOMPAT y
+          add_config KSU_FEATURE_ADBROOT n
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
@@ -235,17 +241,12 @@ runs:
         elif [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
           if [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== SUSFS config: KernelSU-Next (hookless/kprobes fork) =="
-            echo "Using fork-native symbols KSU_KPROBES_SUSFS + KSU_KPROBES_NOMOUNT."
-            echo "Also enabling their Kconfig dependency chain: KPROBES, KRETPROBES,"
-            echo "KALLSYMS (required by KSU_KPROBES_HOOK / KSU_KPROBES_NOMOUNT)."
             add_config KPROBES y
             add_config KRETPROBES y
             add_config KALLSYMS y
             add_config KSU_KPROBES_SUSFS y
             if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
               echo "nomount_maxsteeel=on: standalone NoMount (maxsteeel/nomount) takes"
-              echo "precedence; skipping fork's built-in KSU_KPROBES_NOMOUNT to avoid"
-              echo "two independent NoMount implementations hooking the VFS layer at once."
             else
               add_config KSU_KPROBES_NOMOUNT y
             fi
@@ -326,10 +327,6 @@ runs:
         fi
 
         if [ "${{ inputs.kpm_support }}" = "on" ]; then
-          echo "== KPM (KPatch-Next-EXP) support: base Kconfig requirement =="
-          echo "kptools/kpimg patch the built Image post-build (see apply-kpm-support);"
-          echo "the only thing needed at kernel-config time is CONFIG_KALLSYMS=y so kptools"
-          echo "can resolve kernel symbols from the image at patch time."
           if grep -qxF "CONFIG_KALLSYMS=y" private.fragment 2>/dev/null; then
             echo "  already requested: CONFIG_KALLSYMS=y"
           else
