@@ -1,0 +1,182 @@
+name: CloudFox zram (LZ4KD/LZ4KDR + ZRAM_MULTI_COMP)
+description: Apply CloudFox-Kernel's LZ4KD/LZ4KDR compressor files and full ZRAM_MULTI_COMP recompression subsystem.
+inputs:
+  kernel_version:
+    required: true
+    description: Kernel version to build.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${{ inputs.kernel_version }}" != "5.10" ]; then
+          echo "lz4kd: skipped, only wired for kernel_version=5.10 (legacy CRYPTO_ALG_TYPE_COMPRESS zcomp interface, struct zram layout tied to this branch)"
+          exit 0
+        fi
+
+        ROOT_DIR="$GITHUB_WORKSPACE"
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
+        LZ4KD_DIR="$ROOT_DIR/.github/patches/lz4kd"
+
+        if [ ! -d "$LZ4KD_DIR" ]; then
+          echo "::error::lz4kd patch directory missing: $LZ4KD_DIR"
+          exit 1
+        fi
+
+        apply_patch() {
+          local patch_file="$1"
+          local label
+          label="$(basename "$patch_file")"
+
+          if [ ! -f "$patch_file" ]; then
+            echo "::error::patch file missing: $patch_file"
+            exit 1
+          fi
+
+          if git -C "$COMMON_DIR" apply --check "$patch_file" 2>/dev/null; then
+            git -C "$COMMON_DIR" apply "$patch_file"
+            echo "  applied $label"
+          elif git -C "$COMMON_DIR" apply --reverse --check "$patch_file" 2>/dev/null; then
+            echo "  $label already applied, skipping"
+          else
+            echo "::error::$label does not apply cleanly to this source tree (and is not already applied)"
+            git -C "$COMMON_DIR" apply --check "$patch_file" || true
+            exit 1
+          fi
+        }
+
+        echo "== lz4kd: applying file patch (LZ4KD/LZ4KDR) =="
+        apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr.patch"
+
+        echo "== lz4kd: applying modify patch (ZRAM_MULTI_COMP) =="
+        apply_patch "$LZ4KD_DIR/0002-modify-zram-multicomp.patch"
+
+        echo "== lz4kd: patching crypto/Kconfig =="
+        if grep -q '^config CRYPTO_LZ4KDR$' "$COMMON_DIR/crypto/Kconfig"; then
+          echo "  already present, skipping"
+        else
+          python3 - "$COMMON_DIR/crypto/Kconfig" <<'PYEOF'
+        import sys
+
+        path = sys.argv[1]
+        snippet = """config CRYPTO_LZ4KDR
+        \ttristate "LZ4KDR compression algorithm"
+        \tselect CRYPTO_ALGAPI
+        \tselect LZ4KDR_COMPRESS
+        \tselect LZ4KDR_DECOMPRESS
+        \thelp
+        \t  LZ4KDR is a speed-tuned derivative of Huawei's LZ4KD, a
+        \t  zram-oriented LZ4 variant wire-compatible with the original
+        \t  LZ4KD encoding. This driver registers the legacy
+        \t  CRYPTO_ALG_TYPE_COMPRESS interface used by zram's zcomp.
+        \t  See include/linux/lz4kdr.h for the attribution note.
+
+        config CRYPTO_LZ4KD
+        \ttristate "LZ4KD compression algorithm"
+        \tselect CRYPTO_ALGAPI
+        \tselect LZ4KD_COMPRESS
+        \tselect LZ4KD_DECOMPRESS
+        \thelp
+        \t  LZ4KD is Huawei's zram-oriented LZ4 variant with delta
+        \t  compression support, imported verbatim from the Huawei P50
+        \t  (ABR-AL60) HarmonyOS 4.0.0 kernel open source release.
+        \t  This driver registers the legacy CRYPTO_ALG_TYPE_COMPRESS
+        \t  interface used by zram's zcomp.
+        \t  See include/linux/lz4kd.h for the algorithm documentation.
+
+        """
+        with open(path) as fh:
+            content = fh.read()
+        marker = "config CRYPTO_ZSTD\n"
+        idx = content.index(marker)
+        content = content[:idx] + snippet + content[idx:]
+        with open(path, "w") as fh:
+            fh.write(content)
+        PYEOF
+          echo "  inserted CRYPTO_LZ4KDR / CRYPTO_LZ4KD before config CRYPTO_ZSTD"
+        fi
+
+        echo "== lz4kd: patching lib/Kconfig =="
+        if grep -q '^config LZ4KDR_COMPRESS$' "$COMMON_DIR/lib/Kconfig"; then
+          echo "  already present, skipping"
+        else
+          python3 - "$COMMON_DIR/lib/Kconfig" <<'PYEOF'
+        import sys
+
+        path = sys.argv[1]
+        snippet = """config LZ4KDR_COMPRESS
+        \ttristate
+
+        config LZ4KDR_DECOMPRESS
+        \ttristate
+
+        config LZ4KD_COMPRESS
+        \ttristate
+
+        config LZ4KD_DECOMPRESS
+        \ttristate
+
+        """
+        with open(path) as fh:
+            content = fh.read()
+        marker = "config LZ4_DECOMPRESS\n"
+        idx = content.index(marker)
+        content = content[:idx] + snippet + content[idx:]
+        with open(path, "w") as fh:
+            fh.write(content)
+        PYEOF
+          echo "  inserted LZ4KDR_COMPRESS/DECOMPRESS, LZ4KD_COMPRESS/DECOMPRESS before config LZ4_DECOMPRESS"
+        fi
+
+        echo "== lz4kd: patching crypto/Makefile =="
+        if grep -qF 'CONFIG_CRYPTO_LZ4KDR' "$COMMON_DIR/crypto/Makefile"; then
+          echo "  already present, skipping"
+        else
+          sed -i '/^obj-\$(CONFIG_CRYPTO_LZ4HC) += lz4hc\.o$/a obj-$(CONFIG_CRYPTO_LZ4KDR) += lz4kdr.o\nobj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' \
+            "$COMMON_DIR/crypto/Makefile"
+          echo "  inserted obj-\$(CONFIG_CRYPTO_LZ4KDR)/LZ4KD lines after lz4hc.o"
+        fi
+
+        echo "== lz4kd: patching lib/Makefile =="
+        if grep -qF 'CONFIG_LZ4KDR_COMPRESS' "$COMMON_DIR/lib/Makefile"; then
+          echo "  already present, skipping"
+        else
+          sed -i '/^obj-\$(CONFIG_LZ4_DECOMPRESS) += lz4\/$/a obj-$(CONFIG_LZ4KDR_COMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KDR_DECOMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KD_COMPRESS) += lz4kd/\nobj-$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd/' \
+            "$COMMON_DIR/lib/Makefile"
+          echo "  inserted obj-\$(CONFIG_LZ4KDR_*)/LZ4KD_* lines after lz4/ (decompress)"
+        fi
+
+        echo "== lz4kd: patching lib/cmdline.c (EXPORT_SYMBOL next_arg) =="
+        CMDLINE_FILE="$COMMON_DIR/lib/cmdline.c"
+        if [ ! -f "$CMDLINE_FILE" ]; then
+          echo "::error::lib/cmdline.c missing: $CMDLINE_FILE"
+          exit 1
+        fi
+        if grep -q 'EXPORT_SYMBOL(next_arg)' "$CMDLINE_FILE"; then
+          echo "  already present, skipping"
+        elif ! grep -q '^char \*next_arg(char \*args, char \*\*param, char \*\*val)$' "$CMDLINE_FILE"; then
+          echo "::error::next_arg() definition not found in lib/cmdline.c - can't safely append its EXPORT_SYMBOL"
+          exit 1
+        else
+          printf '\nEXPORT_SYMBOL(next_arg);\n' >> "$CMDLINE_FILE"
+          echo "  appended EXPORT_SYMBOL(next_arg) to end of file"
+        fi
+
+        echo "== lz4kd: patching android/abi_gki_aarch64_generic (KMI symbol list) =="
+        SYMLIST="$COMMON_DIR/android/abi_gki_aarch64_generic"
+        if [ ! -f "$SYMLIST" ]; then
+          echo "::error::abi_gki_aarch64_generic missing: $SYMLIST"
+          exit 1
+        fi
+        for s in next_arg proc_dou8vec_minmax; do
+          if grep -qxF "  $s" "$SYMLIST"; then
+            echo "  $s already listed, skipping"
+          else
+            sed -i "/^\[abi_symbol_list\]$/a\\  $s" "$SYMLIST"
+            echo "  added $s"
+          fi
+        done
+
+        echo "== lz4kd: done =="
