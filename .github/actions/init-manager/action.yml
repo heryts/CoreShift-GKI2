@@ -51,13 +51,10 @@ runs:
 
         if [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
           echo "== KSUN-Susfs-Hookless: using MirahSyakilla/KSUN fork (pinned via .gitmodules) =="
-          echo "repo already pinned via .gitmodules (susfs+nomount-hookless branch)"
         fi
 
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== KernelSU-Backslashxx + SUSFS: switching to midori01/KernelSU xx branch =="
-          echo "(xx branch ships CONFIG_KSU_SUSFS wiring natively; backslashxx/KernelSU master"
-          echo "causes bootloop)"
           rm -rf "manager/${MANAGER}"
           git clone --branch "xx" --depth 1 "https://github.com/midori01/KernelSU.git" "manager/${MANAGER}"
           echo "cloned midori01/KernelSU @ xx"
@@ -65,9 +62,6 @@ runs:
 
         if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
           echo "== KernelSU-Backslashxx-Tinyfs: switching to backslashxx/KernelSU tinyfs branch =="
-          echo "(fs-ops-hijacking based sucompat via KSU_TINYFS_SUCOMPAT; no SUSFS wiring on"
-          echo "this branch - susfs=on for this manager is rejected earlier at the workflow"
-          echo "input validation step, so this always runs unconditionally here)"
           rm -rf "manager/${MANAGER}"
           git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
           echo "cloned backslashxx/KernelSU @ tinyfs"
@@ -75,7 +69,6 @@ runs:
 
         if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
           echo "== unshallow KernelSU-Next-family submodule =="
-          echo "needed for correct version code (commit count) and tag lookups"
           if [ "$(git -C "manager/${MANAGER}" rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
             git -C "manager/${MANAGER}" fetch --unshallow origin
             git -C "manager/${MANAGER}" fetch --tags origin || true
@@ -104,40 +97,18 @@ runs:
 
           case "${MANAGER}:${KERNEL_VERSION}" in
             KernelSU:5.10|KernelSU:6.1|KernelSU:6.6|KernelSU:6.12)
-              # Verified compatible with susfs4ksu commit e5b013b (gki-android12-5.10-dev,
-              # 2026-08-07), the same ref manager=KernelSU dynamically resolves to in
-              # apply-susfs. Update this alongside susfs4ksu dev-branch drift; if the KSU
-              # SUSFS patch starts failing again with a diverged directory layout, this
-              # pin is most likely stale again.
               SELECTED_MANAGER_REF="aab67974f1210cad94880ce1fdc14cf63f6e30e0"
               MANAGER_REF_SOURCE="susfs-default"
               ;;
             KowSU:5.10|KowSU:6.1|KowSU:6.6|KowSU:6.12)
-              # No reliable SUSFS-pinned commit for KowSU: KowSU's kernel/setup.sh
-              # does its own internal git clone of KernelSU which does not
-              # necessarily resolve arbitrary KowSU-fork-only commit hashes
-              # (observed: "fatal: unable to read tree" on cf087d7...,
-              # setup.sh then silently falls back to its own default branch,
-              # which later fails the HEAD verification below).
-              # Treat KowSU like KernelSU-Backslashxx instead: fall through to
-              # the no-pin case so the "Critical fix" block below feeds
-              # setup.sh the actual submodule HEAD (guaranteed reachable,
-              # since it's exactly what git submodule update already checked
-              # out from KowSU's own remote).
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="submodule-default (no reliable SUSFS-pinned commit for KowSU)"
               ;;
             KSUN-Susfs-Hookless:5.10|KSUN-Susfs-Hookless:6.1|KSUN-Susfs-Hookless:6.6|KSUN-Susfs-Hookless:6.12)
-              # susfs+nomount-hookless branch is already SUSFS-integrated at the source
-              # (see .gitmodules) — no separate ref override needed.
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
               ;;
             ResukiSU:*|Wild_KSU:*|Rissu:*|KernelSU-Backslashxx:*|KernelSU-Next:*)
-              # No known-good pinned commit for this manager yet. Fall back to
-              # whatever commit .gitmodules/submodule update already checked
-              # out, instead of hard-failing. This is picked up by the
-              # "Critical fix" block below (uses submodule HEAD as setup ref).
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="submodule-default (no known SUSFS-pinned commit)"
               ;;
@@ -168,16 +139,8 @@ runs:
         echo "manager HEAD: $MANAGER_HEAD"
         echo "manager describe: $MANAGER_DESCRIBE"
 
-         # Snapshot the exact submodule commit we intend to build with, so we
-        # can restore it after running the manager's setup.sh. Some setup.sh
-        # scripts (e.g. KernelSU-Next's) do their own git stash/checkout/pull
-        # inside the manager directory, which can silently move the checkout
-        # away from the .gitmodules-pinned branch/commit.
         PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
 
-        # Critical fix:
-        # If no explicit/SUSFS ref was selected, pass the actual submodule HEAD
-        # into KernelSU/KowSU setup.sh instead of letting setup.sh use its own default.
         if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
           MANAGER_REF_SOURCE="submodule-head"
@@ -223,8 +186,6 @@ runs:
 
         if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
           echo "== restore pinned submodule commit after setup.sh =="
-          echo "setup.sh may have run git stash/checkout/pull inside the submodule;"
-          echo "forcing it back to the pinned commit: $PRE_SETUP_MANAGER_HEAD"
           git -C "$MANAGER_DIR" checkout -f "$PRE_SETUP_MANAGER_HEAD"
           RESTORED_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
           if [ "$RESTORED_HEAD" != "$PRE_SETUP_MANAGER_HEAD" ]; then
