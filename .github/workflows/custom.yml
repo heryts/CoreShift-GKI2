@@ -19,7 +19,7 @@ on:
       source_mode:
         type: choice
         required: true
-        options: ["google-lts", "maintained", "pixel", "custom"]
+        options: ["google-lts", "maintained", "pixel", "cloudfox", "custom"]
         default: "google-lts"
       pixel_branch:
         type: choice
@@ -196,36 +196,57 @@ jobs:
           echo "BUILD_ENGINE=kleaf" >> "$GITHUB_ENV"
           echo "Pixel source mode selected: official Google Pixel manifest branch ${{ inputs.pixel_branch }}"
 
-      - name: Set custom output name
+      - name: Generate build name
         id: custom-name
         shell: bash
         run: |
           set -euo pipefail
 
           susfs_label=""
+          susfs_status="Disabled"
           if [ "${{ inputs.susfs }}" = "on" ]; then
             susfs_label="-susfs"
+            susfs_status="Enabled"
           fi
 
           kpm_label=""
+          kpm_status="Disabled"
           if [ "${{ inputs.kpm_support }}" = "on" ]; then
             kpm_label="-kpm"
+            kpm_status="Enabled"
           fi
-          
+
           bbg_label=""
+          bbg_status="Disabled"
           if [ "${{ inputs.baseband_guard }}" = "on" ]; then
             bbg_label="-bbg"
+            bbg_status="Enabled"
           fi
 
           variant_suffix="${susfs_label}${kpm_label}${bbg_label}"
           final_name="custom-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}-${DATE}-${{ github.run_number }}"
           config_base="config-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}"
 
+          # publish_mode is checked as two independent booleans throughout the
+          # job instead of repeating the raw '== release/artifact/both' OR chain.
+          publish_release="false"
+          publish_artifact="false"
+          case "${{ inputs.publish_mode }}" in
+            release) publish_release="true" ;;
+            artifact) publish_artifact="true" ;;
+            both) publish_release="true"; publish_artifact="true" ;;
+          esac
+
           {
             echo "date=${DATE}"
             echo "variant_suffix=${variant_suffix}"
             echo "final_name=${final_name}"
             echo "config_base=${config_base}"
+            echo "susfs_status=${susfs_status}"
+            echo "kpm_status=${kpm_status}"
+            echo "bbg_status=${bbg_status}"
+            echo "publish_release=${publish_release}"
+            echo "publish_artifact=${publish_artifact}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Install host tools
@@ -274,6 +295,12 @@ jobs:
                   ;;
               esac
               ;;
+            cloudfox)
+              effective_source_repo="https://github.com/CloudFox-INC/CloudFox-Kernel"
+              if [ -z "$effective_source_ref" ]; then
+                effective_source_ref="android12-5.10-cloudfox"
+              fi
+              ;;
             custom)
               effective_source_repo="${{ inputs.source_repo }}"
               ;;
@@ -283,33 +310,43 @@ jobs:
               ;;
           esac
 
+          # True whenever kernel/common is being swapped for a non-Google source,
+          # so downstream steps share one flag instead of repeating this OR chain.
+          is_alt_source="false"
+          case "${{ inputs.source_mode }}" in
+            maintained|cloudfox|custom)
+              is_alt_source="true"
+              ;;
+          esac
+
           {
             echo "source_repo=$effective_source_repo"
             echo "source_ref=$effective_source_ref"
+            echo "is_alt_source=$is_alt_source"
           } >> "$GITHUB_OUTPUT"
 
       - name: Replace kernel/common source
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/replace-common-source
         with:
           source_repo: ${{ steps.source-repo.outputs.source_repo }}
           source_ref: ${{ steps.source-repo.outputs.source_ref }}
 
       - name: Clean bundled KernelSU staging leftovers
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/fix-stale-kernelsu-kconfig
         with:
           remove_bundled_staging: "true"
 
       - name: Apply source fixes
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/apply-source-fixes
         with:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
 
       - name: Ensure expected Clang
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/ensure-expected-clang
         with:
           enabled: "true"
@@ -324,6 +361,12 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply LZ4KD/LZ4KDR Patches
+        if: inputs.source_mode != 'cloudfox'
+        uses: ./.github/actions/apply-lz4kd
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Apply Unicode Patches
         uses: ./.github/actions/apply-unicode-fix
         with:
@@ -333,7 +376,7 @@ jobs:
         uses: ./.github/actions/apply-network-patches
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          
+
       - name: Apply SUSFS4KSU patches
         if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
         uses: ./.github/actions/apply-susfs
@@ -346,7 +389,7 @@ jobs:
         uses: ./.github/actions/apply-resukisu-hooks
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          
+
       - name: Apply NoMount support (maxsteeel)
         if: inputs.nomount_maxsteeel == 'on'
         uses: ./.github/actions/apply-nomount
@@ -378,7 +421,7 @@ jobs:
         uses: ./.github/actions/apply-ipc-kabi-patches
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          
+
       - name: Apply Re-Kernel driver
         if: inputs.re_kernel == 'on'
         uses: ./.github/actions/apply-re-kernel
@@ -403,7 +446,7 @@ jobs:
           debug_features: ${{ inputs.debug_features }}
           heavy_debug_features: ${{ inputs.heavy_debug_features }}
           kernel_version: ${{ inputs.kernel_version }}
-          
+
       - name: Install legacy CoreShift build config
         if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/install-legacy-private-fragment
@@ -441,42 +484,13 @@ jobs:
           source_mode: ${{ inputs.source_mode }}
           kmi_bypass: ${{ inputs.kmi_bypass }}
 
-      - name: Locate built kernel Image
-        if: inputs.kpm_support == 'on'
-        id: locate-image
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
-
-          # Same lookup package-kernel uses, so KPM patches the exact file
-          # that will later be copied into out/Image-<final_name>.
-          IMAGE="$(
-            find kernel/out "$COMMON_DIR/out" \
-              -type f \
-              -name Image \
-              2>/dev/null |
-            head -n 1 || true
-          )"
-
-          if [ -z "$IMAGE" ]; then
-            echo "::error::No built kernel Image found under kernel/out or $COMMON_DIR/out; cannot apply KPM support"
-            find kernel -type f -name Image | sort || true
-            exit 1
-          fi
-
-          echo "Resolved built Image: $IMAGE"
-          echo "image_path=$IMAGE" >> "$GITHUB_OUTPUT"
-
       - name: Apply KPM support
         if: inputs.kpm_support == 'on'
         uses: ./.github/actions/apply-kpm-support
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          image_path: ${{ steps.locate-image.outputs.image_path }}
           kpm_superkey: ${{ inputs.kpm_superkey }}
-          
+
       - name: Write compiler metadata
         uses: ./.github/actions/write-compiler-metadata
         with:
@@ -513,17 +527,17 @@ jobs:
           cp "out/Image-${FINAL_NAME}" image-artifact/
           cp compiler-version.txt image-artifact/
 
-          if [ "${{ inputs.publish_mode }}" = "artifact" ] || [ "${{ inputs.publish_mode }}" = "both" ]; then
+          if [ "${{ steps.custom-name.outputs.publish_artifact }}" = "true" ]; then
             mkdir -p artifact-root
             cp -a ak3_work/. artifact-root/
             cp compiler-version.txt artifact-root/
           fi
 
       - name: Upload flashable artifact tree
-        if: inputs.publish_mode == 'artifact' || inputs.publish_mode == 'both'
+        if: steps.custom-name.outputs.publish_artifact == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: flashable-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
+          name: anykernel3-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
           path: artifact-root/**
           if-no-files-found: error
 
@@ -547,7 +561,7 @@ jobs:
           if-no-files-found: error
 
       - name: Stage release zip
-        if: inputs.publish_mode == 'release' || inputs.publish_mode == 'both'
+        if: steps.custom-name.outputs.publish_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -565,25 +579,10 @@ jobs:
           cp "$zip_path" "$release_dir/"
 
       - name: Write release body
-        if: inputs.publish_mode == 'release' || inputs.publish_mode == 'both'
+        if: steps.custom-name.outputs.publish_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
-
-          susfs_label="Disabled"
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            susfs_label="Enabled"
-          fi
-
-          kpm_label="Disabled"
-          if [ "${{ inputs.kpm_support }}" = "on" ]; then
-            kpm_label="Enabled"
-          fi
-
-          bbg_label="Disabled"
-          if [ "${{ inputs.baseband_guard }}" = "on" ]; then
-            bbg_label="Enabled"
-          fi
 
           cat > release-body.md <<EOF
           CoreShift GKI
@@ -591,16 +590,16 @@ jobs:
           - Kernel: ${{ inputs.kernel_version }}
           - Manager: ${{ inputs.manager }}
           - LTO: ${{ inputs.lto }}
-          - SUSFS: ${susfs_label}
-          - KPM: ${kpm_label}
-          - BBG: ${bbg_label}
+          - SUSFS: ${{ steps.custom-name.outputs.susfs_status }}
+          - KPM: ${{ steps.custom-name.outputs.kpm_status }}
+          - BBG: ${{ steps.custom-name.outputs.bbg_status }}
           - Date: ${DATE}
 
           Configs, raw images, and compiler metadata are available in workflow artifacts, not release assets.
           EOF
 
       - name: Create release
-        if: inputs.publish_mode == 'release' || inputs.publish_mode == 'both'
+        if: steps.custom-name.outputs.publish_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.custom-name.outputs.final_name }}
