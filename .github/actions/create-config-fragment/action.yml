@@ -157,8 +157,8 @@ runs:
         if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
            has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
           echo "  CONFIG_CRYPTO_LZ4KDR and ZRAM_DEF_COMP_LZ4KDR choice found, enabling"
-          add_config ZRAM m
-          add_config ZSMALLOC m
+          add_config ZRAM y
+          add_config ZSMALLOC y
           add_config ZRAM_DEF_COMP_LZ4KDR y
           add_config CRYPTO_LZ4KDR y
         else
@@ -169,8 +169,8 @@ runs:
         echo "== ZRAM recompression (multi-comp): check source tree support =="
         if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
           echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
-          add_config ZRAM m
-          add_config ZSMALLOC m
+          add_config ZRAM y
+          add_config ZSMALLOC y
           add_config ZRAM_MULTI_COMP y
           if has_kconfig_symbol crypto/Kconfig CRYPTO_ZSTD; then
             add_config CRYPTO_ZSTD y
