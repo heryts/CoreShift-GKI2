@@ -1,5 +1,5 @@
 name: CloudFox zram (LZ4KD/LZ4KDR + ZRAM_MULTI_COMP)
-description: Apply CloudFox-Kernel's LZ4KD/LZ4KDR compressor files and full ZRAM_MULTI_COMP recompression subsystem.
+description: CloudFox-Kernel's LZ4KD/LZ4KDR compressor files and full ZRAM_MULTI_COMP recompression subsystem.
 inputs:
   kernel_version:
     required: true
@@ -47,8 +47,8 @@ runs:
           fi
         }
 
-        echo "== lz4kd: applying file patch (LZ4KD/LZ4KDR) =="
-        apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr.patch"
+        echo "== lz4kd: applying new-file patch (LZ4KD/LZ4KDR) =="
+        apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr-new-files.patch"
 
         echo "== lz4kd: applying modify patch (ZRAM_MULTI_COMP) =="
         apply_patch "$LZ4KD_DIR/0002-modify-zram-multicomp.patch"
@@ -164,6 +164,26 @@ runs:
           echo "  appended EXPORT_SYMBOL(next_arg) to end of file"
         fi
 
+        echo "== lz4kd: patching common/android/gki_aarch64_modules =="
+        MODULES_LIST="$COMMON_DIR/android/gki_aarch64_modules"
+        if [ ! -f "$MODULES_LIST" ]; then
+          echo "::error::gki_aarch64_modules missing: $MODULES_LIST"
+          exit 1
+        fi
+        for m in \
+          mm/zsmalloc.ko \
+          crypto/lzo.ko \
+          crypto/lzo-rle.ko \
+          drivers/block/zram/zram.ko \
+        ; do
+          if grep -qxF "$m" "$MODULES_LIST"; then
+            echo "  $m already listed, skipping"
+          else
+            echo "$m" >> "$MODULES_LIST"
+            echo "  added $m"
+          fi
+        done
+
         echo "== lz4kd: patching android/abi_gki_aarch64_generic (KMI symbol list) =="
         SYMLIST="$COMMON_DIR/android/abi_gki_aarch64_generic"
         if [ ! -f "$SYMLIST" ]; then
@@ -176,27 +196,6 @@ runs:
           else
             sed -i "/^\[abi_symbol_list\]$/a\\  $s" "$SYMLIST"
             echo "  added $s"
-          fi
-        done
-
-        echo "== lz4kd: patching android/gki_aarch64_modules (GKI module allowlist) =="
-        # config.yml sets ZRAM=m and ZSMALLOC=m once CRYPTO_LZ4KDR /
-        # ZRAM_DEF_COMP_LZ4KDR / ZRAM_MULTI_COMP are detected (i.e. once this
-        # patch is applied), which also pulls in their default compressor
-        # backends (lzo, lzo-rle) as modules via Kconfig select. The GKI build
-        # enforces that MODULES_ORDER (this file) matches modules.order
-        # exactly, so keep it in sync here rather than failing the build.
-        MODLIST="$COMMON_DIR/android/gki_aarch64_modules"
-        if [ ! -f "$MODLIST" ]; then
-          echo "::error::gki_aarch64_modules missing: $MODLIST"
-          exit 1
-        fi
-        for m in mm/zsmalloc.ko crypto/lzo.ko crypto/lzo-rle.ko drivers/block/zram/zram.ko; do
-          if grep -qxF "$m" "$MODLIST"; then
-            echo "  $m already listed, skipping"
-          else
-            echo "$m" >> "$MODLIST"
-            echo "  added $m"
           fi
         done
 
