@@ -1,27 +1,14 @@
 name: Apply KPM support
 description: >
-  Download prebuilt kptools + kpimg from a KPatch-Next-EXP GitHub Release (kptools-linux,
-  kpimg-linux) and patch the already-built kernel Image so it gains KPM (Kernel Patch
-  Module) support. This is a post-build image patch (like a boot.img-level patch),
-  NOT a kernel source patch - it must run AFTER the kernel Image is built and BEFORE
-  packaging.
+  Download prebuilt kptools + kpimg and patch the kernel Image.
 inputs:
   kernel_version:
     required: true
     description: Kernel version being built (used for logging only; kptools/kpimg are architecture-generic, not per-kernel_version).
-  image_path:
-    required: true
-    description: Path (relative to GITHUB_WORKSPACE, or absolute) to the built kernel Image to patch, e.g. out/Image-<final_name>.
   kpm_superkey:
     required: false
     default: ""
     description: Optional superkey (-s) to embed into the patched image. Leave empty to build without a superkey.
-  kpm_release_tag:
-    required: false
-    default: ""
-    description: >
-      KPatch-Next-EXP release tag to pull kptools-linux/kpimg-linux from, e.g. "0.13.10".
-      Leave empty to always use the latest published release.
 runs:
   using: composite
   steps:
@@ -32,30 +19,27 @@ runs:
         echo "== KPM support: fetch prebuilt release (741afb7/KPatch-Next-EXP) =="
         echo "kernel_version=${{ inputs.kernel_version }} (informational only - kptools/kpimg are not per-kernel_version)"
 
-        IMAGE_PATH="${{ inputs.image_path }}"
-        if [ ! -f "$IMAGE_PATH" ]; then
-          echo "::error::built kernel Image not found at IMAGE_PATH=$IMAGE_PATH; apply-kpm-support must run AFTER the 'Build kernel' step (and after any rename/packaging step that produces this exact filename)"
-          echo
-          echo "== debug: does the parent directory of IMAGE_PATH exist? =="
-          IMAGE_DIR="$(dirname -- "$IMAGE_PATH")"
-          if [ -d "$IMAGE_DIR" ]; then
-            echo "yes: $IMAGE_DIR"
-            echo "== debug: contents of $IMAGE_DIR =="
-            ls -la "$IMAGE_DIR" 2>/dev/null || true
-          else
-            echo "no: $IMAGE_DIR does not exist"
-          fi
+        echo "== locating built kernel Image =="
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+        IMAGE_PATH="$(
+          find kernel/out "$COMMON_DIR/out" \
+            -type f \
+            -name Image \
+            2>/dev/null |
+          head -n 1 || true
+        )"
+
+        if [ -z "$IMAGE_PATH" ]; then
+          echo "::error::No built kernel Image found under kernel/out or $COMMON_DIR/out; apply-kpm-support must run AFTER the 'Build kernel' step"
           echo
           echo "== debug: any file literally named 'Image*' under GITHUB_WORKSPACE (depth 6) =="
           find "${GITHUB_WORKSPACE:-.}" -maxdepth 6 -type f -iname 'Image*' -print 2>/dev/null | sort || true
-          echo
-          echo "== debug: any file whose basename matches IMAGE_PATH's basename, anywhere under GITHUB_WORKSPACE (depth 8) =="
-          find "${GITHUB_WORKSPACE:-.}" -maxdepth 8 -type f -iname "$(basename -- "$IMAGE_PATH")" -print 2>/dev/null | sort || true
-          echo
-          echo "Hint: image_path is supplied by the caller workflow, not computed in this action."
-          echo "If a rename/packaging step is meant to create this exact filename before this step runs,"
-          echo "confirm that step (a) ran, (b) ran before 'Apply KPM support' in the job, and (c) used the"
-          echo "same name template as image_path=$IMAGE_PATH."
+          exit 1
+        fi
+        echo "Resolved built Image: $IMAGE_PATH"
+
+        if [ ! -f "$IMAGE_PATH" ]; then
+          echo "::error::resolved IMAGE_PATH=$IMAGE_PATH does not exist as a regular file"
           exit 1
         fi
 
@@ -63,34 +47,23 @@ runs:
         rm -rf "$KPM_DL_DIR"
         mkdir -p "$KPM_DL_DIR"
 
-        KPM_RELEASE_TAG="${{ inputs.kpm_release_tag }}"
+        echo "== resolving latest KPatch-Next-EXP release =="
+        KPM_LATEST_JSON="$(
+          curl -fsSL \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/741afb7/KPatch-Next-EXP/releases/latest
+        )"
+        KPM_RELEASE_TAG="$(
+          printf '%s' "$KPM_LATEST_JSON" |
+            grep -m1 '"tag_name"' |
+            sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
+        )"
         if [ -z "$KPM_RELEASE_TAG" ]; then
-          echo "== no kpm_release_tag pinned, resolving latest KPatch-Next-EXP release =="
-          # NOTE: capture full response into a variable first, then grep it -
-          # piping curl directly into `grep -m1`/`head` closes the pipe as soon as
-          # the first match is found, curl gets SIGPIPE trying to write the rest of
-          # the body, and fails with exit 23 ("Failure writing output to destination").
-          # Also authenticate with the run's own GITHUB_TOKEN: unauthenticated
-          # api.github.com calls are capped at 60/hr per source IP, and Actions
-          # runner IPs are shared across many concurrent jobs/orgs, so unauthenticated
-          # calls here get rate-limited (403) fairly often in practice.
-          KPM_LATEST_JSON="$(
-            curl -fsSL \
-              -H "Authorization: Bearer ${{ github.token }}" \
-              -H "Accept: application/vnd.github+json" \
-              https://api.github.com/repos/741afb7/KPatch-Next-EXP/releases/latest
-          )"
-          KPM_RELEASE_TAG="$(
-            printf '%s' "$KPM_LATEST_JSON" |
-              grep -m1 '"tag_name"' |
-              sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
-          )"
-          if [ -z "$KPM_RELEASE_TAG" ]; then
-            echo "::error::could not resolve latest KPatch-Next-EXP release tag from GitHub API"
-            echo "== raw API response for troubleshooting =="
-            printf '%s\n' "$KPM_LATEST_JSON"
-            exit 1
-          fi
+          echo "::error::could not resolve latest KPatch-Next-EXP release tag from GitHub API"
+          echo "== raw API response for troubleshooting =="
+          printf '%s\n' "$KPM_LATEST_JSON"
+          exit 1
         fi
         echo "KPM_RELEASE_TAG=$KPM_RELEASE_TAG"
 
