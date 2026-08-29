@@ -10,7 +10,7 @@ inputs:
   susfs_ref:
     required: false
     default: "d4c3914"
-    description: "susfs4ksu commit to pin (default: v2.2.0 release, before the OPEN_REDIRECT refactor that broke set_nameidata compat). Ignored for manager=KernelSU-Next, which auto-resolves HEAD instead. For manager=KernelSU, ignored in favor of a fixed per-kernel_version pin verified against init-manager's KernelSU pin (see apply-susfs's KernelSU branch) - set this explicitly only to override that pin."
+    description: "susfs4ksu commit to pin (default: v2.2.0 release, before the OPEN_REDIRECT refactor that broke set_nameidata compat). Ignored for manager=KernelSU-Next, which auto-resolves HEAD instead. For manager=KernelSU, ignored in favor of a fixed per-kernel_version pin verified against init-manager's KernelSU pin (see apply-susfs's KernelSU branch) - set this explicitly only to override that pin. For manager=ResukiSU, also ignored in favor of branch HEAD by default (ResukiSU's hooks track current susfs4ksu upstream, so the old default pin lacks symbols it expects) - set this explicitly only to pin ResukiSU to a specific commit."
   susfs_repo:
     required: false
     default: "https://gitlab.com/simonpunk/susfs4ksu.git"
@@ -111,6 +111,25 @@ runs:
             else
               echo "== no -dev branch found, using $SUSFS_BRANCH HEAD =="
             fi
+          fi
+        elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
+          # ResukiSU actively syncs its kernel-side hooks to current susfs4ksu
+          # upstream (observed: "kernel: sync with latest susfs" commits landing
+          # regularly). Pinning to a fixed old ref like the default d4c3914
+          # (v2.2.0) risks the hooks calling susfs_* symbols that don't exist yet
+          # in that snapshot - e.g. susfs_set_current_proc_no_su /
+          # susfs_is_current_proc_no_su / susfs_clear_current_proc_no_su /
+          # susfs_set_current_proc_umounted_for_zygote_next, which were added
+          # after d4c3914 - causing "undefined symbol" link errors. Track branch
+          # HEAD by default instead, same as manager=KernelSU-Next below, unless
+          # the caller explicitly overrides susfs_ref.
+          if [ -n "${{ inputs.susfs_ref }}" ] && [ "${{ inputs.susfs_ref }}" != "d4c3914" ]; then
+            echo "== pinning to explicitly-provided ref: ${{ inputs.susfs_ref }} =="
+            git -C "$SUSFS_CLONE_DIR" checkout "${{ inputs.susfs_ref }}"
+          else
+            echo "== skipping susfs_ref pin for ResukiSU; using branch HEAD =="
+            echo "(ResukiSU tracks latest susfs4ksu upstream in its own hooks - an old pin"
+            echo "can leave hook code calling susfs_* symbols not yet in that snapshot)"
           fi
         else
           echo "== pinning to ref: ${{ inputs.susfs_ref }} =="
