@@ -179,4 +179,25 @@ runs:
           fi
         done
 
+        echo "== lz4kd: patching android/gki_aarch64_modules (GKI module allowlist) =="
+        # config.yml sets ZRAM=m and ZSMALLOC=m once CRYPTO_LZ4KDR /
+        # ZRAM_DEF_COMP_LZ4KDR / ZRAM_MULTI_COMP are detected (i.e. once this
+        # patch is applied), which also pulls in their default compressor
+        # backends (lzo, lzo-rle) as modules via Kconfig select. The GKI build
+        # enforces that MODULES_ORDER (this file) matches modules.order
+        # exactly, so keep it in sync here rather than failing the build.
+        MODLIST="$COMMON_DIR/android/gki_aarch64_modules"
+        if [ ! -f "$MODLIST" ]; then
+          echo "::error::gki_aarch64_modules missing: $MODLIST"
+          exit 1
+        fi
+        for m in mm/zsmalloc.ko crypto/lzo.ko crypto/lzo-rle.ko drivers/block/zram/zram.ko; do
+          if grep -qxF "$m" "$MODLIST"; then
+            echo "  $m already listed, skipping"
+          else
+            echo "$m" >> "$MODLIST"
+            echo "  added $m"
+          fi
+        done
+
         echo "== lz4kd: done =="
