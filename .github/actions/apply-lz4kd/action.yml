@@ -47,7 +47,7 @@ runs:
           fi
         }
 
-        echo "== lz4kd: applying new-file patch (LZ4KD/LZ4KDR) =="
+        echo "== lz4kd: applying patch (LZ4KD/LZ4KDR) =="
         apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr.patch"
 
         echo "== lz4kd: applying modify patch (ZRAM_MULTI_COMP) =="
@@ -170,6 +170,27 @@ runs:
           echo "::error::gki_aarch64_modules missing: $MODULES_LIST"
           exit 1
         fi
+        # NOTE: zsmalloc.ko / zram.ko / lzo.ko / lzo-rle.ko are intentionally
+        # NOT added here anymore. The config.yml step always forces
+        # CONFIG_ZRAM=y and CONFIG_ZSMALLOC=y whenever LZ4KDR or
+        # ZRAM_MULTI_COMP is enabled, so these drivers are built into
+        # vmlinux, not modules. Listing them here puts them in
+        # modules.load on vendor_boot/recovery, which then tries to
+        # insmod a driver that's already built in -> init_module()
+        # returns -EBUSY -> insmod fails -> init cannot load kernel
+        # modules -> "Kernel panic - not syncing: Attempted to kill
+        # init!" during early boot/recovery.
+        #
+        # If you ever change config.yml to build ZRAM/ZSMALLOC as `m`
+        # instead of `y`, re-add the relevant entries below - conditionally,
+        # matching what's actually built as a module, e.g.:
+        #
+        # if grep -qxF 'CONFIG_ZSMALLOC=m' "$COMMON_DIR/private.fragment" 2>/dev/null; then
+        #   grep -qxF 'mm/zsmalloc.ko' "$MODULES_LIST" || echo 'mm/zsmalloc.ko' >> "$MODULES_LIST"
+        # fi
+        echo "  skipped: zsmalloc/zram/lzo/lzo-rle are built-in (CONFIG_*=y), not external modules"
+
+        echo "== lz4kd: removing any stale built-in-driver entries from a previous run =="
         for m in \
           mm/zsmalloc.ko \
           crypto/lzo.ko \
@@ -177,10 +198,8 @@ runs:
           drivers/block/zram/zram.ko \
         ; do
           if grep -qxF "$m" "$MODULES_LIST"; then
-            echo "  $m already listed, skipping"
-          else
-            echo "$m" >> "$MODULES_LIST"
-            echo "  added $m"
+            sed -i "\|^${m//\//\\/}\$|d" "$MODULES_LIST"
+            echo "  removed stale entry $m"
           fi
         done
 
