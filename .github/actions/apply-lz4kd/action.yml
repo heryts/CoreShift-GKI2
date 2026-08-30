@@ -224,10 +224,10 @@ runs:
         done
 
         echo "== module-skip-builtin: applying CONFIG_MODULE_SKIP_BUILTIN patch =="
-        MSB_PATCH="$ROOT_DIR/.github/patches/module-skip-builtin/0001-module-skip-loading-drivers-already-built-into-vmlinux.patch"
+        MSB_PATCH="$ROOT_DIR/.github/patches/module-skip-builtin/0003-module-skip-loading-drivers-into-vmlinux.patch"
         if [ ! -f "$MSB_PATCH" ]; then
           echo "::error::patch file missing: $MSB_PATCH"
-          echo "::error::copy 0001-module-skip-loading-drivers-already-built-into-vmlinux.patch into $(dirname "$MSB_PATCH")"
+          echo "::error::copy 0003-module-skip-loading-drivers-into-vmlinux.patch into $(dirname "$MSB_PATCH")"
           exit 1
         fi
         apply_patch "$MSB_PATCH"
