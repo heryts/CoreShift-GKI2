@@ -6,7 +6,7 @@ inputs:
     description: Kernel version being patched.
   droidspaces:
     required: true
-    description: Droidspaces slot selection (off, 678, 123, 345).
+    description: "Droidspaces selection: off, 678/123/345 slot for 5.10~6.6, or on for 6.12."
 runs:
   using: composite
   steps:
