@@ -10,7 +10,7 @@ inputs:
   susfs_ref:
     required: false
     default: "d4c3914"
-    description: "susfs4ksu commit to pin (default: v2.2.0 release, before the OPEN_REDIRECT refactor that broke set_nameidata compat). Ignored for manager=KernelSU-Next, which auto-resolves HEAD instead. For manager=KernelSU, ignored in favor of a fixed per-kernel_version pin verified against init-manager's KernelSU pin (see apply-susfs's KernelSU branch) - set this explicitly only to override that pin. For manager=ResukiSU, also ignored in favor of branch HEAD by default (ResukiSU's hooks track current susfs4ksu upstream, so the old default pin lacks symbols it expects) - set this explicitly only to pin ResukiSU to a specific commit."
+    description: "susfs4ksu commit to pin. Since susfs4ksu keeps a separate commit history per branch, the action resolves a default automatically per kernel_version (currently the v2.3.0 pin on each branch: 5.10=fb16b41, 6.1=5727f79, 6.6=eba2a88, 6.12=c7db8cb) rather than using this value literally across all versions. Set this explicitly to override that resolved default for a run. Ignored for manager=KernelSU-Next, which auto-resolves HEAD instead. For manager=KernelSU, ignored in favor of a fixed per-kernel_version pin verified against init-manager's KernelSU pin (see apply-susfs's KernelSU branch) - set this explicitly only to override that pin. For manager=ResukiSU, also ignored in favor of branch HEAD by default (ResukiSU's hooks track current susfs4ksu upstream, so the old default pin lacks symbols it expects) - set this explicitly only to pin ResukiSU to a specific commit."
   susfs_repo:
     required: false
     default: "https://gitlab.com/simonpunk/susfs4ksu.git"
@@ -33,15 +33,21 @@ runs:
         fi
 
         case "${{ inputs.kernel_version }}" in
-          5.10) SUSFS_BRANCH="gki-android12-5.10" ;;
-          6.1)  SUSFS_BRANCH="gki-android14-6.1" ;;
-          6.6)  SUSFS_BRANCH="gki-android15-6.6" ;;
-          6.12) SUSFS_BRANCH="gki-android16-6.12" ;;
+          5.10) SUSFS_BRANCH="gki-android12-5.10"; SUSFS_DEFAULT_REF="fb16b41" ;;
+          6.1)  SUSFS_BRANCH="gki-android14-6.1";  SUSFS_DEFAULT_REF="5727f79" ;;
+          6.6)  SUSFS_BRANCH="gki-android15-6.6";  SUSFS_DEFAULT_REF="eba2a88" ;;
+          6.12) SUSFS_BRANCH="gki-android16-6.12"; SUSFS_DEFAULT_REF="c7db8cb" ;;
           *)
             echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
             exit 1
             ;;
         esac
+
+        SUSFS_REF="${{ inputs.susfs_ref }}"
+        if [ "$SUSFS_REF" = "d4c3914" ]; then
+          echo "== kernel_version=${{ inputs.kernel_version }}: using resolved default pin $SUSFS_DEFAULT_REF (v2.3.0) =="
+          SUSFS_REF="$SUSFS_DEFAULT_REF"
+        fi
 
         SUSFS_REPO="${{ inputs.susfs_repo }}"
         SUSFS_CLONE_DIR="${RUNNER_TEMP:-/tmp}/susfs4ksu"
@@ -65,9 +71,9 @@ runs:
           esac
 
           echo "== resolving susfs_ref for manager=KernelSU =="
-          if [ -n "${{ inputs.susfs_ref }}" ] && [ "${{ inputs.susfs_ref }}" != "d4c3914" ]; then
-            echo "== pinning to explicitly-provided ref: ${{ inputs.susfs_ref }} =="
-            git -C "$SUSFS_CLONE_DIR" checkout "${{ inputs.susfs_ref }}"
+          if [ -n "$SUSFS_REF" ] && [ "$SUSFS_REF" != "$SUSFS_DEFAULT_REF" ]; then
+            echo "== pinning to explicitly-provided ref: $SUSFS_REF =="
+            git -C "$SUSFS_CLONE_DIR" checkout "$SUSFS_REF"
           elif [ -n "$KERNELSU_SUSFS_PIN" ]; then
             echo "== pinning to known-good commit for manager=KernelSU: $KERNELSU_SUSFS_PIN =="
             git -C "$SUSFS_CLONE_DIR" fetch origin "${SUSFS_BRANCH}-dev"
@@ -83,15 +89,15 @@ runs:
             fi
           fi
         elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
-          if [ -n "${{ inputs.susfs_ref }}" ] && [ "${{ inputs.susfs_ref }}" != "d4c3914" ]; then
-            echo "== pinning to explicitly-provided ref: ${{ inputs.susfs_ref }} =="
-            git -C "$SUSFS_CLONE_DIR" checkout "${{ inputs.susfs_ref }}"
+          if [ -n "$SUSFS_REF" ] && [ "$SUSFS_REF" != "$SUSFS_DEFAULT_REF" ]; then
+            echo "== pinning to explicitly-provided ref: $SUSFS_REF =="
+            git -C "$SUSFS_CLONE_DIR" checkout "$SUSFS_REF"
           else
             echo "== skipping susfs_ref pin for ResukiSU; using branch HEAD =="
           fi
         else
-          echo "== pinning to ref: ${{ inputs.susfs_ref }} =="
-          git -C "$SUSFS_CLONE_DIR" checkout "${{ inputs.susfs_ref }}"
+          echo "== pinning to ref: $SUSFS_REF =="
+          git -C "$SUSFS_CLONE_DIR" checkout "$SUSFS_REF"
         fi
 
         SUSFS_COMMIT="$(git -C "$SUSFS_CLONE_DIR" rev-parse --short HEAD)"
