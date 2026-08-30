@@ -6,7 +6,7 @@ on:
       kernel_version:
         type: choice
         required: true
-        options: ["5.10", "6.1", "6.6"]
+        options: ["5.10", "6.1", "6.6", "6.12"]
       manager:
         type: choice
         required: true
@@ -85,7 +85,7 @@ on:
         description: "Droidspaces support (5.10~6.6: slot patch, 6.12: on/off)"
         type: choice
         required: true
-        options: ["off", "678", "123", "345"]
+        options: ["off", "678", "123", "345", "on"]
         default: "off"
       droidspaces_ntsync:
         description: "NTSync support for Droidspaces containers"
@@ -175,6 +175,28 @@ jobs:
             exit 1
           fi
 
+          if [ "${{ inputs.kernel_version }}" = "6.12" ] && [ "${{ inputs.droidspaces }}" != "off" ] && [ "${{ inputs.droidspaces }}" != "on" ]; then
+            echo "::error::kernel_version=6.12 uses droidspaces=on/off only; slot values (678/123/345) are for 5.10~6.6"
+            exit 1
+          fi
+
+          if [ "${{ inputs.kernel_version }}" != "6.12" ] && [ "${{ inputs.droidspaces }}" = "on" ]; then
+            echo "::error::droidspaces=on is only valid for kernel_version=6.12; choose a slot value (678/123/345) or 'off' for 5.10~6.6"
+            exit 1
+          fi
+
+          # CloudFox-Kernel already vendors the KowSU (KOWX712/KernelSU) driver
+          # in-tree (drivers/kernelsu/, default-disabled via CONFIG_KSU=n), so
+          # only Vanilla (leave it off) and KowSU (matching driver, safe
+          # overwrite) are known-safe here. Other managers' setup.sh may
+          # install KSU markers to a different path, which can confuse the
+          # "verify integrated KernelSU" marker lookup in init-manager and
+          # fail with a HEAD mismatch against the vendored copy.
+          if [ "${{ inputs.source_mode }}" = "cloudfox" ] && [ "${{ inputs.manager }}" != "Vanilla" ] && [ "${{ inputs.manager }}" != "KowSU" ]; then
+            echo "::error::source_mode=cloudfox already vendors the KowSU driver; choose manager=Vanilla or manager=KowSU instead of ${{ inputs.manager }}"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -197,7 +219,7 @@ jobs:
           echo "Pixel source mode selected: official Google Pixel manifest branch ${{ inputs.pixel_branch }}"
 
       - name: Generate build name
-        id: custom-name
+        id: build-name
         shell: bash
         run: |
           set -euo pipefail
@@ -288,6 +310,12 @@ jobs:
                   ;;
                 6.6)
                   effective_source_repo="https://github.com/ramabondanp/android_kernel_common-6.6"
+                  ;;
+                6.12)
+                  effective_source_repo="https://android.googlesource.com/kernel/common"
+                  if [ -z "$effective_source_ref" ]; then
+                    effective_source_ref="android16-6.12"
+                  fi
                   ;;
                 *)
                   echo "::error::No maintained source repo for kernel_version=${{ inputs.kernel_version }}"
@@ -504,7 +532,7 @@ jobs:
       - name: Export final config
         uses: ./.github/actions/export-final-config
         env:
-          CONFIG_NAME_SUFFIX: ${{ steps.custom-name.outputs.variant_suffix }}
+          CONFIG_NAME_SUFFIX: ${{ steps.build-name.outputs.variant_suffix }}
         with:
           kernel_version: ${{ inputs.kernel_version }}
           manager: ${{ inputs.manager }}
@@ -516,7 +544,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           manager: ${{ inputs.manager }}
           susfs: ${{ inputs.susfs }}
-          final_name: ${{ steps.custom-name.outputs.final_name }}
+          final_name: ${{ steps.build-name.outputs.final_name }}
 
       - name: Stage artifact outputs
         shell: bash
@@ -527,24 +555,24 @@ jobs:
           cp "out/Image-${FINAL_NAME}" image-artifact/
           cp compiler-version.txt image-artifact/
 
-          if [ "${{ steps.custom-name.outputs.publish_artifact }}" = "true" ]; then
+          if [ "${{ steps.build-name.outputs.publish_artifact }}" = "true" ]; then
             mkdir -p artifact-root
             cp -a ak3_work/. artifact-root/
             cp compiler-version.txt artifact-root/
           fi
 
       - name: Upload flashable artifact tree
-        if: steps.custom-name.outputs.publish_artifact == 'true'
+        if: steps.build-name.outputs.publish_artifact == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: anykernel3-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
+          name: anykernel3-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
           path: artifact-root/**
           if-no-files-found: error
 
       - name: Upload raw Image artifact
         uses: actions/upload-artifact@v6
         with:
-          name: image-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
+          name: image-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
           path: |
             image-artifact/Image-*
             image-artifact/compiler-version.txt
@@ -553,21 +581,21 @@ jobs:
       - name: Upload config artifact
         uses: actions/upload-artifact@v6
         with:
-          name: config-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.custom-name.outputs.variant_suffix }}-${{ steps.custom-name.outputs.date }}
+          name: config-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
           path: |
             compiler-version.txt
-            out/${{ steps.custom-name.outputs.config_base }}.txt
-            out/${{ steps.custom-name.outputs.config_base }}.gz
+            out/${{ steps.build-name.outputs.config_base }}.txt
+            out/${{ steps.build-name.outputs.config_base }}.gz
           if-no-files-found: error
 
       - name: Stage release zip
-        if: steps.custom-name.outputs.publish_release == 'true'
+        if: steps.build-name.outputs.publish_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
 
           release_dir="$PWD/release-staging"
-          zip_path="${{ steps.custom-name.outputs.final_name }}.zip"
+          zip_path="${{ steps.build-name.outputs.final_name }}.zip"
 
           mkdir -p "$release_dir"
 
@@ -579,7 +607,7 @@ jobs:
           cp "$zip_path" "$release_dir/"
 
       - name: Write release body
-        if: steps.custom-name.outputs.publish_release == 'true'
+        if: steps.build-name.outputs.publish_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -590,19 +618,19 @@ jobs:
           - Kernel: ${{ inputs.kernel_version }}
           - Manager: ${{ inputs.manager }}
           - LTO: ${{ inputs.lto }}
-          - SUSFS: ${{ steps.custom-name.outputs.susfs_status }}
-          - KPM: ${{ steps.custom-name.outputs.kpm_status }}
-          - BBG: ${{ steps.custom-name.outputs.bbg_status }}
+          - SUSFS: ${{ steps.build-name.outputs.susfs_status }}
+          - KPM: ${{ steps.build-name.outputs.kpm_status }}
+          - BBG: ${{ steps.build-name.outputs.bbg_status }}
           - Date: ${DATE}
 
           Configs, raw images, and compiler metadata are available in workflow artifacts, not release assets.
           EOF
 
       - name: Create release
-        if: steps.custom-name.outputs.publish_release == 'true'
+        if: steps.build-name.outputs.publish_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.custom-name.outputs.final_name }}
-          name: ${{ steps.custom-name.outputs.final_name }}
+          tag_name: ${{ steps.build-name.outputs.final_name }}
+          name: ${{ steps.build-name.outputs.final_name }}
           files: release-staging/*.zip
           body_path: release-body.md
