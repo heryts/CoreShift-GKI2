@@ -52,8 +52,8 @@ runs:
           fi
         }
 
-        echo "== lz4kd: applying new-file patch (LZ4KD/LZ4KDR) =="
-        apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr-new-files.patch"
+        echo "== lz4kd: applying patch (LZ4KD/LZ4KDR) =="
+        apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr.patch"
 
         echo "== lz4kd: applying modify patch (ZRAM_MULTI_COMP) =="
         apply_patch "$LZ4KD_DIR/0002-modify-zram-multicomp.patch"
