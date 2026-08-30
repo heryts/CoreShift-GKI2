@@ -262,31 +262,6 @@ jobs:
         with:
           source_mode: ${{ inputs.source_mode }}
 
-      - name: Dump GKI aarch64 module allowlist
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
-          DUMP_DIR="${RUNNER_TEMP:-/tmp}/gki-aarch64-modules-dump"
-          mkdir -p "$DUMP_DIR"
-
-          SRC="$COMMON_DIR/android/gki_aarch64_modules"
-          if [ -f "$SRC" ]; then
-            cp "$SRC" "$DUMP_DIR/gki_aarch64_modules"
-            echo "dumped $SRC"
-            wc -l "$SRC"
-          else
-            echo "gki_aarch64_modules not found at $SRC" | tee "$DUMP_DIR/NOT_FOUND.txt"
-          fi
-
-      - name: Upload GKI aarch64 module allowlist dump
-        uses: actions/upload-artifact@v6
-        with:
-          name: gki-aarch64-modules-dump-${{ inputs.kernel_version }}
-          path: ${{ runner.temp }}/gki-aarch64-modules-dump/
-          retention-days: 7
-
       - name: Resolve source repo
         id: source-repo
         shell: bash
