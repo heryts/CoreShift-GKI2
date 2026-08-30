@@ -179,6 +179,17 @@ runs:
           echo "  ZRAM_MULTI_COMP not found in this source tree, skipping recompression support"
         fi
 
+        echo "== MODULE_SKIP_BUILTIN: check source tree support =="
+        if has_kconfig_symbol init/Kconfig MODULE_SKIP_BUILTIN; then
+          echo "  CONFIG_MODULE_SKIP_BUILTIN found, enabling as a safety net"
+          echo "  (ramdisk/recovery insmod of a .ko already built into vmlinux will now"
+          echo "   report success instead of failing with -EBUSY and panicking init)"
+          add_config MODULE_SKIP_BUILTIN y
+        else
+          echo "  MODULE_SKIP_BUILTIN not found in this source tree, skipping"
+          echo "  (requires the module-skip-builtin action to run first and patch init/Kconfig)"
+        fi
+
         if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
           add_config KSU y
           add_config KSU_HACK_ARM64_BRANCH_LINK y
