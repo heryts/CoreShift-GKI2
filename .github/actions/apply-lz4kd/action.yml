@@ -1,10 +1,8 @@
-name: CloudFox zram (LZ4KD/LZ4KDR + ZRAM_MULTI_COMP + MODULE_SKIP_BUILTIN)
+name: CloudFox zram (LZ4KD/LZ4KDR + LZ4/ZSTD version bump)
 description: >
-  CloudFox-Kernel's LZ4KD/LZ4KDR compressor files, full ZRAM_MULTI_COMP
-  recompression subsystem, and the CONFIG_MODULE_SKIP_BUILTIN patch
-  (commit 334540aecd6e82fa1e24264d363933d10fdd07cc) that stops
-  recovery/vendor_boot init from panicking when it tries to insmod a
-  .ko (e.g. zsmalloc.ko, zram.ko) that's already built into vmlinux.
+  kernel_version=5.10  -> CloudFox-Kernel's LZ4KD/LZ4KDR.
+  kernel_version=6.12 -> lz4 1.10.0 / zstd 1.5.7.
+  Any other kernel_version -> skipped, no-op.
 inputs:
   kernel_version:
     required: true
@@ -16,21 +14,13 @@ runs:
       run: |
         set -euo pipefail
 
-        if [ "${{ inputs.kernel_version }}" != "5.10" ]; then
-          echo "lz4kd: skipped, only wired for kernel_version=5.10 (legacy CRYPTO_ALG_TYPE_COMPRESS zcomp interface, struct zram layout tied to this branch)"
-          exit 0
-        fi
-
         ROOT_DIR="$GITHUB_WORKSPACE"
         COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
-        LZ4KD_DIR="$ROOT_DIR/.github/patches/lz4kd"
 
-        if [ ! -d "$LZ4KD_DIR" ]; then
-          echo "::error::lz4kd patch directory missing: $LZ4KD_DIR"
-          exit 1
-        fi
+        VER="${{ inputs.kernel_version }}"
+        PATCH_DIR="$ROOT_DIR/.github/patches/zram/$VER"
 
-        apply_patch() {
+        apply_git_patch() {
           local patch_file="$1"
           local label
           label="$(basename "$patch_file")"
@@ -52,11 +42,36 @@ runs:
           fi
         }
 
+        apply_gnu_patch() {
+          local patch_file="$1"
+          local label
+          label="$(basename "$patch_file")"
+
+          if [ ! -f "$patch_file" ]; then
+            echo "::error::patch file missing: $patch_file"
+            exit 1
+          fi
+
+          if patch --batch --forward -p1 -d "$COMMON_DIR" < "$patch_file"; then
+            echo "  applied (or already applied) $label"
+          else
+            echo "::error::$label failed to apply cleanly to $COMMON_DIR"
+            exit 1
+          fi
+        }
+
+        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+
+        if [ ! -d "$PATCH_DIR" ]; then
+          echo "::error::patch directory missing: $PATCH_DIR"
+          exit 1
+        fi
+
         echo "== lz4kd: applying patch (LZ4KD/LZ4KDR) =="
-        apply_patch "$LZ4KD_DIR/0001-add-lz4kd-lz4kdr.patch"
+        apply_git_patch "$PATCH_DIR/0001-add-lz4kd-lz4kdr.patch"
 
         echo "== lz4kd: applying modify patch (ZRAM_MULTI_COMP) =="
-        apply_patch "$LZ4KD_DIR/0002-modify-zram-multicomp.patch"
+        apply_git_patch "$PATCH_DIR/0002-modify-zram-multicomp.patch"
 
         echo "== lz4kd: patching crypto/Kconfig =="
         if grep -q '^config CRYPTO_LZ4KDR$' "$COMMON_DIR/crypto/Kconfig"; then
@@ -175,25 +190,6 @@ runs:
           echo "::error::gki_aarch64_modules missing: $MODULES_LIST"
           exit 1
         fi
-        # NOTE: zsmalloc.ko / zram.ko / lzo.ko / lzo-rle.ko are intentionally
-        # NOT added here anymore. The config.yml step always forces
-        # CONFIG_ZRAM=y and CONFIG_ZSMALLOC=y whenever LZ4KDR or
-        # ZRAM_MULTI_COMP is enabled, so these drivers are built into
-        # vmlinux, not modules. Listing them here puts them in
-        # modules.load on vendor_boot/recovery, which then tries to
-        # insmod a driver that's already built in -> init_module()
-        # returns -EBUSY -> insmod fails -> init cannot load kernel
-        # modules -> "Kernel panic - not syncing: Attempted to kill
-        # init!" during early boot/recovery.
-        #
-        # If you ever change config.yml to build ZRAM/ZSMALLOC as `m`
-        # instead of `y`, re-add the relevant entries below - conditionally,
-        # matching what's actually built as a module, e.g.:
-        #
-        # if grep -qxF 'CONFIG_ZSMALLOC=m' "$COMMON_DIR/private.fragment" 2>/dev/null; then
-        #   grep -qxF 'mm/zsmalloc.ko' "$MODULES_LIST" || echo 'mm/zsmalloc.ko' >> "$MODULES_LIST"
-        # fi
-        echo "  skipped: zsmalloc/zram/lzo/lzo-rle are built-in (CONFIG_*=y), not external modules"
 
         echo "== lz4kd: removing any stale built-in-driver entries from a previous run =="
         for m in \
@@ -224,13 +220,13 @@ runs:
         done
 
         echo "== module-skip-builtin: applying CONFIG_MODULE_SKIP_BUILTIN patch =="
-        MSB_PATCH="$ROOT_DIR/.github/patches/lz4kd/0003-module-skip-loading-drivers-into-vmlinux.patch"
+        MSB_PATCH="$PATCH_DIR/0003-module-skip-loading-drivers-into-vmlinux.patch"
         if [ ! -f "$MSB_PATCH" ]; then
           echo "::error::patch file missing: $MSB_PATCH"
           echo "::error::copy 0003-module-skip-loading-drivers-into-vmlinux.patch into $(dirname "$MSB_PATCH")"
           exit 1
         fi
-        apply_patch "$MSB_PATCH"
+        apply_git_patch "$MSB_PATCH"
 
         echo "== module-skip-builtin: sanity-checking touched files =="
         for f in init/Kconfig kernel/module-internal.h kernel/module.c scripts/link-vmlinux.sh; do
@@ -244,4 +240,47 @@ runs:
           exit 1
         fi
 
-        echo "== lz4kd: done =="
+        echo "== lz4kd (5.10): done =="
+
+        elif [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+
+        if [ ! -d "$PATCH_DIR" ]; then
+          echo "::error::patch directory missing: $PATCH_DIR"
+          exit 1
+        fi
+
+        echo "== zram: applying LZ4 1.10.0 =="
+        apply_gnu_patch "$PATCH_DIR/lz4-1.10.0.patch"
+
+        echo "== zram: applying ZSTD 1.5.7 =="
+        apply_gnu_patch "$PATCH_DIR/zstd-1.5.7.patch"
+
+        echo "== zram: sanity-checking touched files =="
+        for f in \
+          lib/lz4/lz4armv8/lz4armv8.S \
+          lib/lz4/lz4armv8/lz4accel.c \
+          lib/zstd/compress/zstd_compress.c \
+        ; do
+          if [ ! -f "$COMMON_DIR/$f" ]; then
+            echo "::error::expected file missing after patch: $COMMON_DIR/$f"
+            exit 1
+          fi
+        done
+
+        if ! grep -q 'LZ4_arm64_decompress_safe' "$COMMON_DIR/crypto/lz4.c"; then
+          echo "::error::crypto/lz4.c missing LZ4_arm64_decompress_safe after patch apply"
+          exit 1
+        fi
+
+        if ! grep -q 'module_param(compression_level' "$COMMON_DIR/crypto/zstd.c"; then
+          echo "::error::crypto/zstd.c missing compression_level module_param after patch apply"
+          exit 1
+        fi
+
+        echo "== zram (6.12): lz4 1.10.0 / zstd 1.5.7 done =="
+
+        else
+          echo "zram patches: skipped, only wired for kernel_version=5.10 (LZ4KD/LZ4KDR) or 6.12 (lz4/zstd version bump)"
+          echo "zram patches: (resolved patch dir was $PATCH_DIR)"
+          exit 0
+        fi
