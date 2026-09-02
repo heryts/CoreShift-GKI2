@@ -61,12 +61,6 @@ runs:
           echo "LLD_PARALLEL_LINK_JOBS=$LLD_PARALLEL_LINK_JOBS"
         fi
 
-        # ==================== Custom build name / build date ====================
-        # Produces a version string like:
-        #   5.10.237-android12-9-00014-gf82f7360927e-ab14119954 #1 SMP PREEMPT Wed Sep 17 09:13:52 UTC 2025
-        # custom_build_name is appended as an extra localversion suffix (kept on
-        # top of whatever the source/config already sets), custom_build_date
-        # overrides the "#1 SMP PREEMPT <date>" part in UTS_VERSION.
         CUSTOM_BUILD_NAME="${{ inputs.custom_build_name }}"
         CUSTOM_BUILD_DATE="${{ inputs.custom_build_date }}"
 
@@ -82,34 +76,37 @@ runs:
           MKCOMPILE_H="$COMMON_DIR/scripts/mkcompile_h"
           TOP_MAKEFILE="$COMMON_DIR/Makefile"
 
-          # custom_build_name can be given either as just the localversion
-          # suffix (e.g. "00014-gf82f7360927e-ab14119954", old behavior: kept
-          # on top of the auto-computed "<kernelversion>-android12-9" prefix),
-          # or as the FULL desired string including that prefix (e.g.
-          # "5.10.237-android12-9-00014-gf82f7360927e-ab14119954"). In the
-          # latter case we detect the real "<VERSION>.<PATCHLEVEL>.<SUBLEVEL>"
-          # from the kernel Makefile, strip it off, and use the remainder as
-          # a FULL override -- replacing the auto config_localversion too,
-          # not just appending after it.
           FULL_OVERRIDE="false"
           BUILD_SUFFIX="$CUSTOM_BUILD_NAME"
-          if [ -n "$CUSTOM_BUILD_NAME" ] && [ -f "$TOP_MAKEFILE" ]; then
-            MK_VERSION="$(sed -n 's/^VERSION *= *//p' "$TOP_MAKEFILE" | head -n1)"
-            MK_PATCHLEVEL="$(sed -n 's/^PATCHLEVEL *= *//p' "$TOP_MAKEFILE" | head -n1)"
-            MK_SUBLEVEL="$(sed -n 's/^SUBLEVEL *= *//p' "$TOP_MAKEFILE" | head -n1)"
-            MK_EXTRAVERSION="$(sed -n 's/^EXTRAVERSION *= *//p' "$TOP_MAKEFILE" | head -n1)"
-            if [ -n "$MK_VERSION" ] && [ -n "$MK_PATCHLEVEL" ] && [ -n "$MK_SUBLEVEL" ]; then
-              KERNELVERSION="${MK_VERSION}.${MK_PATCHLEVEL}.${MK_SUBLEVEL}${MK_EXTRAVERSION}"
-              case "$CUSTOM_BUILD_NAME" in
-                "$KERNELVERSION"-*|"$KERNELVERSION")
-                  FULL_OVERRIDE="true"
-                  BUILD_SUFFIX="${CUSTOM_BUILD_NAME#"$KERNELVERSION"}"
-                  echo "custom_build_name embeds kernel version '$KERNELVERSION' -> treating as a full localversion override"
-                  ;;
-              esac
+          DESIRED_VERSION=""
+
+          if [ -n "$CUSTOM_BUILD_NAME" ] && [[ "$CUSTOM_BUILD_NAME" =~ ^([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*)(-.*)?$ ]]; then
+            FULL_OVERRIDE="true"
+            DESIRED_VERSION="${BASH_REMATCH[1]}"
+            BUILD_SUFFIX="${BASH_REMATCH[2]}"
+            echo "custom_build_name looks like a full version string ('$DESIRED_VERSION') -> forcing full localversion + Makefile version override, ignoring the actual synced source version"
+
+            if [ -f "$TOP_MAKEFILE" ] && [[ "$DESIRED_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
+              D_VERSION="${BASH_REMATCH[1]}"
+              D_PATCHLEVEL="${BASH_REMATCH[2]}"
+              D_SUBLEVEL="${BASH_REMATCH[3]}"
+              D_EXTRAVERSION="${BASH_REMATCH[4]}"
+
+              REAL_VERSION="$(sed -n 's/^VERSION *= *//p' "$TOP_MAKEFILE" | head -n1)"
+              REAL_PATCHLEVEL="$(sed -n 's/^PATCHLEVEL *= *//p' "$TOP_MAKEFILE" | head -n1)"
+              REAL_SUBLEVEL="$(sed -n 's/^SUBLEVEL *= *//p' "$TOP_MAKEFILE" | head -n1)"
+              echo "actual source version (before override): ${REAL_VERSION}.${REAL_PATCHLEVEL}.${REAL_SUBLEVEL}"
+
+              sed -i \
+                -e "s/^VERSION *=.*/VERSION = ${D_VERSION}/" \
+                -e "s/^PATCHLEVEL *=.*/PATCHLEVEL = ${D_PATCHLEVEL}/" \
+                -e "s/^SUBLEVEL *=.*/SUBLEVEL = ${D_SUBLEVEL}/" \
+                -e "s/^EXTRAVERSION *=.*/EXTRAVERSION = ${D_EXTRAVERSION}/" \
+                "$TOP_MAKEFILE"
+
+              echo "forced $TOP_MAKEFILE -> VERSION=${D_VERSION} PATCHLEVEL=${D_PATCHLEVEL} SUBLEVEL=${D_SUBLEVEL} EXTRAVERSION=${D_EXTRAVERSION}"
             fi
           fi
-          # Normalize so BUILD_SUFFIX always has a leading "-".
           if [ -n "$BUILD_SUFFIX" ] && [ "${BUILD_SUFFIX#-}" = "$BUILD_SUFFIX" ]; then
             BUILD_SUFFIX="-${BUILD_SUFFIX}"
           fi
@@ -117,22 +114,15 @@ runs:
 
           if [ -n "$CUSTOM_BUILD_NAME" ] && [ -f "$SETLOCALVERSION" ]; then
             if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-              # Legacy setlocalversion only ever echoes the suffix (no
-              # KERNELVERSION baked into $res), so this always fully
-              # replaces it -- via Perl (not sed) so arbitrary characters in
-              # BUILD_SUFFIX (e.g. "|", "/", "\") can't break the command.
               perl -i -0777 -pe \
                 's/echo "\$res"\s*\z/"echo \"" . $ENV{BUILD_SUFFIX} . "\"\n"/se' \
                 "$SETLOCALVERSION"
             else
               if [ "$FULL_OVERRIDE" = "true" ]; then
-                # Drop the computed KERNELVERSION/file_localversion/config_localversion
-                # entirely; BUILD_SUFFIX becomes the whole thing.
                 perl -i -0777 -pe \
                   's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1 . "echo \"" . $ENV{BUILD_SUFFIX} . "\"\n"/se' \
                   "$SETLOCALVERSION"
               else
-                # Keep the computed prefix, append our suffix after it (old behavior).
                 perl -i -0777 -pe \
                   's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1 . "echo \"\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}" . $ENV{BUILD_SUFFIX} . "\"\n"/se' \
                   "$SETLOCALVERSION"
