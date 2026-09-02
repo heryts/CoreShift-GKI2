@@ -80,23 +80,71 @@ runs:
 
           SETLOCALVERSION="$COMMON_DIR/scripts/setlocalversion"
           MKCOMPILE_H="$COMMON_DIR/scripts/mkcompile_h"
+          TOP_MAKEFILE="$COMMON_DIR/Makefile"
+
+          # custom_build_name can be given either as just the localversion
+          # suffix (e.g. "00014-gf82f7360927e-ab14119954", old behavior: kept
+          # on top of the auto-computed "<kernelversion>-android12-9" prefix),
+          # or as the FULL desired string including that prefix (e.g.
+          # "5.10.237-android12-9-00014-gf82f7360927e-ab14119954"). In the
+          # latter case we detect the real "<VERSION>.<PATCHLEVEL>.<SUBLEVEL>"
+          # from the kernel Makefile, strip it off, and use the remainder as
+          # a FULL override -- replacing the auto config_localversion too,
+          # not just appending after it.
+          FULL_OVERRIDE="false"
+          BUILD_SUFFIX="$CUSTOM_BUILD_NAME"
+          if [ -n "$CUSTOM_BUILD_NAME" ] && [ -f "$TOP_MAKEFILE" ]; then
+            MK_VERSION="$(sed -n 's/^VERSION *= *//p' "$TOP_MAKEFILE" | head -n1)"
+            MK_PATCHLEVEL="$(sed -n 's/^PATCHLEVEL *= *//p' "$TOP_MAKEFILE" | head -n1)"
+            MK_SUBLEVEL="$(sed -n 's/^SUBLEVEL *= *//p' "$TOP_MAKEFILE" | head -n1)"
+            MK_EXTRAVERSION="$(sed -n 's/^EXTRAVERSION *= *//p' "$TOP_MAKEFILE" | head -n1)"
+            if [ -n "$MK_VERSION" ] && [ -n "$MK_PATCHLEVEL" ] && [ -n "$MK_SUBLEVEL" ]; then
+              KERNELVERSION="${MK_VERSION}.${MK_PATCHLEVEL}.${MK_SUBLEVEL}${MK_EXTRAVERSION}"
+              case "$CUSTOM_BUILD_NAME" in
+                "$KERNELVERSION"-*|"$KERNELVERSION")
+                  FULL_OVERRIDE="true"
+                  BUILD_SUFFIX="${CUSTOM_BUILD_NAME#"$KERNELVERSION"}"
+                  echo "custom_build_name embeds kernel version '$KERNELVERSION' -> treating as a full localversion override"
+                  ;;
+              esac
+            fi
+          fi
+          # Normalize so BUILD_SUFFIX always has a leading "-".
+          if [ -n "$BUILD_SUFFIX" ] && [ "${BUILD_SUFFIX#-}" = "$BUILD_SUFFIX" ]; then
+            BUILD_SUFFIX="-${BUILD_SUFFIX}"
+          fi
+          export BUILD_SUFFIX
 
           if [ -n "$CUSTOM_BUILD_NAME" ] && [ -f "$SETLOCALVERSION" ]; then
             if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-              # Legacy setlocalversion: replace the final `echo "$res"` with our suffix.
-              sed -i "\$s|echo \"\$res\"|echo \"-${CUSTOM_BUILD_NAME}\"|" "$SETLOCALVERSION"
-            else
-              # 6.x setlocalversion: keep the computed KERNELVERSION/config prefix
-              # and append our suffix to it.
+              # Legacy setlocalversion only ever echoes the suffix (no
+              # KERNELVERSION baked into $res), so this always fully
+              # replaces it -- via Perl (not sed) so arbitrary characters in
+              # BUILD_SUFFIX (e.g. "|", "/", "\") can't break the command.
               perl -i -0777 -pe \
-                "s/(.*)echo \"\\\$\\{KERNELVERSION\\}\\\$\\{file_localversion\\}\\\$\\{config_localversion\\}\\\$\\{LOCALVERSION\\}\\\$\\{scm_version\\}\"/\$1echo \"\\\$\\{KERNELVERSION\\}\\\$\\{file_localversion\\}\\\$\\{config_localversion\\}-${CUSTOM_BUILD_NAME}\"/s" \
+                's/echo "\$res"\s*\z/"echo \"" . $ENV{BUILD_SUFFIX} . "\"\n"/se' \
                 "$SETLOCALVERSION"
+            else
+              if [ "$FULL_OVERRIDE" = "true" ]; then
+                # Drop the computed KERNELVERSION/file_localversion/config_localversion
+                # entirely; BUILD_SUFFIX becomes the whole thing.
+                perl -i -0777 -pe \
+                  's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1 . "echo \"" . $ENV{BUILD_SUFFIX} . "\"\n"/se' \
+                  "$SETLOCALVERSION"
+              else
+                # Keep the computed prefix, append our suffix after it (old behavior).
+                perl -i -0777 -pe \
+                  's/(.*)echo "\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}\$\{LOCALVERSION\}\$\{scm_version\}"/$1 . "echo \"\$\{KERNELVERSION\}\$\{file_localversion\}\$\{config_localversion\}" . $ENV{BUILD_SUFFIX} . "\"\n"/se' \
+                  "$SETLOCALVERSION"
+              fi
             fi
-            echo "applied custom_build_name -> $SETLOCALVERSION"
+            echo "applied custom_build_name -> $SETLOCALVERSION (full_override=$FULL_OVERRIDE, suffix=$BUILD_SUFFIX)"
           fi
 
           if [ -f "$MKCOMPILE_H" ] && grep -q 'UTS_VERSION=' "$MKCOMPILE_H"; then
-            perl -pi -e "s{UTS_VERSION=\"\\\$\\(.*?\\)\"}{UTS_VERSION=\"#1 SMP PREEMPT ${CUSTOM_BUILD_DATE}\"}" "$MKCOMPILE_H"
+            CUSTOM_BUILD_DATE="$CUSTOM_BUILD_DATE" perl -i -pe \
+              's{UTS_VERSION="\$\(.*?\)"}{"UTS_VERSION=\"#1 SMP PREEMPT " . $ENV{CUSTOM_BUILD_DATE} . "\""}e' \
+              "$MKCOMPILE_H"
             echo "applied custom_build_date -> $MKCOMPILE_H"
           fi
         fi
