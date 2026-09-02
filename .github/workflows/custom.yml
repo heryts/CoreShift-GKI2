@@ -131,7 +131,7 @@ on:
         options: ["release", "artifact", "both"]
         default: "artifact"
       build_stamp:
-        description: "Custom kernel version string. Format: 'NAME|DATE'. Leave empty to keep the stock version string."
+        description: "Custom kernel version. Format: 'NAME|DATE'. Leave empty to keep default."
         required: false
         default: ""
 
@@ -189,13 +189,6 @@ jobs:
             exit 1
           fi
 
-          # CloudFox-Kernel already vendors the KowSU (KOWX712/KernelSU) driver
-          # in-tree (drivers/kernelsu/, default-disabled via CONFIG_KSU=n), so
-          # only Vanilla (leave it off) and KowSU (matching driver, safe
-          # overwrite) are known-safe here. Other managers' setup.sh may
-          # install KSU markers to a different path, which can confuse the
-          # "verify integrated KernelSU" marker lookup in init-manager and
-          # fail with a HEAD mismatch against the vendored copy.
           if [ "${{ inputs.source_mode }}" = "cloudfox" ] && [ "${{ inputs.manager }}" != "Vanilla" ] && [ "${{ inputs.manager }}" != "KowSU" ]; then
             echo "::error::source_mode=cloudfox already vendors the KowSU driver; choose manager=Vanilla or manager=KowSU instead of ${{ inputs.manager }}"
             exit 1
@@ -253,8 +246,6 @@ jobs:
           final_name="custom-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}-${DATE}-${{ github.run_number }}"
           config_base="config-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}"
 
-          # publish_mode is checked as two independent booleans throughout the
-          # job instead of repeating the raw '== release/artifact/both' OR chain.
           publish_release="false"
           publish_artifact="false"
           case "${{ inputs.publish_mode }}" in
@@ -366,8 +357,6 @@ jobs:
               ;;
           esac
 
-          # True whenever kernel/common is being swapped for a non-Google source,
-          # so downstream steps share one flag instead of repeating this OR chain.
           is_alt_source="false"
           case "${{ inputs.source_mode }}" in
             maintained|cloudfox|custom)
