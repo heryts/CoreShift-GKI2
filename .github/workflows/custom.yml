@@ -130,6 +130,10 @@ on:
         required: true
         options: ["release", "artifact", "both"]
         default: "artifact"
+      build_stamp:
+        description: "Custom kernel version string. Format: 'NAME|DATE' (both optional). NAME becomes the localversion suffix (e.g. 00014-gf82f7360927e-ab14119954), DATE becomes the '#1 SMP PREEMPT ...' build date (e.g. Wed Sep 17 09:13:52 UTC 2025). Leave empty to keep the stock version string."
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -270,6 +274,30 @@ jobs:
             echo "publish_release=${publish_release}"
             echo "publish_artifact=${publish_artifact}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Parse custom build stamp
+        id: build-stamp
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RAW="${{ inputs.build_stamp }}"
+          BUILD_NAME=""
+          BUILD_DATE=""
+
+          if [ -n "$RAW" ]; then
+            BUILD_NAME="${RAW%%|*}"
+            if [ "$RAW" != "${RAW#*|}" ]; then
+              BUILD_DATE="${RAW#*|}"
+            fi
+          fi
+
+          echo "custom_build_name=${BUILD_NAME}" >> "$GITHUB_OUTPUT"
+          echo "custom_build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$BUILD_NAME" ] || [ -n "$BUILD_DATE" ]; then
+            echo "Custom build stamp requested -> name='${BUILD_NAME}' date='${BUILD_DATE}'"
+          fi
 
       - name: Install host tools
         uses: ./.github/actions/install-host-tools
@@ -511,6 +539,8 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
           kmi_bypass: ${{ inputs.kmi_bypass }}
+          custom_build_name: ${{ steps.build-stamp.outputs.custom_build_name }}
+          custom_build_date: ${{ steps.build-stamp.outputs.custom_build_date }}
 
       - name: Apply KPM support
         if: inputs.kpm_support == 'on'
