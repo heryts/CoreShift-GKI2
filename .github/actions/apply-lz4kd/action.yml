@@ -1,148 +1,286 @@
-- name: CloudFox LZ4KDR + Addon ZRAM(5.10)
-  if: inputs.use_zram && inputs.kernel_version == '5.10'
-  working-directory: ${{ env.KERNEL_ROOT }}/common
-  run: |
-    set -euo pipefail
+name: CloudFox zram (LZ4KD/LZ4KDR + LZ4/ZSTD version bump)
+description: >
+  kernel_version=5.10  -> CloudFox-Kernel's LZ4KD/LZ4KDR.
+  kernel_version=6.12 -> lz4 1.10.0 / zstd 1.5.7.
+  Any other kernel_version -> skipped, no-op.
+inputs:
+  kernel_version:
+    required: true
+    description: Kernel version to build.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
 
-    COREFOX_PATCHES="${COREFOX_PATCHES:-$GITHUB_WORKSPACE/coreshift_zram_patches}"
-    MERGE_ASSETS="${MERGE_ASSETS:-$GITHUB_WORKSPACE/.github/zram-merge-assets}"
+        ROOT_DIR="$GITHUB_WORKSPACE"
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
 
-    echo "== [1/7] timpa crypto/lz4kd.c + lib/lz4kd/* dengan versi CoreShift =="
-    cp -f "$MERGE_ASSETS/lz4kd-coreshift/crypto/lz4kd.c" crypto/lz4kd.c
-    cp -f "$MERGE_ASSETS/lz4kd-coreshift/include/linux/lz4kd.h" include/linux/lz4kd.h
-    mkdir -p lib/lz4kd
-    cp -f "$MERGE_ASSETS/lz4kd-coreshift/lib/lz4kd/"* lib/lz4kd/
+        VER="${{ inputs.kernel_version }}"
+        PATCH_DIR="$ROOT_DIR/.github/patches/zram/$VER"
 
-    echo "== [2/7] copy-in lz4kdr (baru) =="
-    cp -f "$MERGE_ASSETS/lz4kdr-coreshift/crypto/lz4kdr.c" crypto/lz4kdr.c
-    cp -f "$MERGE_ASSETS/lz4kdr-coreshift/include/linux/lz4kdr.h" include/linux/lz4kdr.h
-    mkdir -p lib/lz4kdr
-    cp -f "$MERGE_ASSETS/lz4kdr-coreshift/lib/lz4kdr/"* lib/lz4kdr/
+        apply_git_patch() {
+          local patch_file="$1"
+          local label
+          label="$(basename "$patch_file")"
 
-    echo "== [3/7] tambah entry Kconfig/Makefile KHUSUS lz4kdr (lz4kd sudah ada dari SukiSU) =="
-    if ! grep -q '^config CRYPTO_LZ4KDR$' crypto/Kconfig; then
-      python3 - crypto/Kconfig <<'PYEOF'
-    import sys
-    path = sys.argv[1]
-    snippet = """config CRYPTO_LZ4KDR
-    \ttristate "LZ4KDR compression algorithm"
-    \tselect CRYPTO_ALGAPI
-    \tselect LZ4KDR_COMPRESS
-    \tselect LZ4KDR_DECOMPRESS
-    \thelp
-    \t  LZ4KDR is a speed-tuned derivative of Huawei's LZ4KD, a
-    \t  zram-oriented LZ4 variant wire-compatible with the original
-    \t  LZ4KD encoding. This driver registers the legacy
-    \t  CRYPTO_ALG_TYPE_COMPRESS interface used by zram's zcomp.
-    \t  See include/linux/lz4kdr.h for the attribution note.
+          if [ ! -f "$patch_file" ]; then
+            echo "::error::patch file missing: $patch_file"
+            exit 1
+          fi
 
-    """
-    with open(path) as fh:
-        content = fh.read()
-    marker = "config CRYPTO_ZSTD\n"
-    idx = content.index(marker)
-    content = content[:idx] + snippet + content[idx:]
-    with open(path, "w") as fh:
-        fh.write(content)
-    PYEOF
-      echo "  inserted CRYPTO_LZ4KDR before config CRYPTO_ZSTD"
-    else
-      echo "  CRYPTO_LZ4KDR already present, skipping"
-    fi
+          if git -C "$COMMON_DIR" apply --check "$patch_file" 2>/dev/null; then
+            git -C "$COMMON_DIR" apply "$patch_file"
+            echo "  applied $label"
+          elif git -C "$COMMON_DIR" apply --reverse --check "$patch_file" 2>/dev/null; then
+            echo "  $label already applied, skipping"
+          else
+            echo "::error::$label does not apply cleanly to this source tree (and is not already applied)"
+            git -C "$COMMON_DIR" apply --check "$patch_file" || true
+            exit 1
+          fi
+        }
 
-    if ! grep -q '^config LZ4KDR_COMPRESS$' lib/Kconfig; then
-      python3 - lib/Kconfig <<'PYEOF'
-    import sys
-    path = sys.argv[1]
-    snippet = """config LZ4KDR_COMPRESS
-    \ttristate
+        apply_gnu_patch() {
+          local patch_file="$1"
+          local label
+          label="$(basename "$patch_file")"
 
-    config LZ4KDR_DECOMPRESS
-    \ttristate
+          if [ ! -f "$patch_file" ]; then
+            echo "::error::patch file missing: $patch_file"
+            exit 1
+          fi
 
-    """
-    with open(path) as fh:
-        content = fh.read()
-    marker = "config ZSTD_COMPRESS\n"
-    idx = content.index(marker)
-    content = content[:idx] + snippet + content[idx:]
-    with open(path, "w") as fh:
-        fh.write(content)
-    PYEOF
-      echo "  inserted LZ4KDR_COMPRESS/DECOMPRESS before config ZSTD_COMPRESS"
-    else
-      echo "  LZ4KDR_COMPRESS already present, skipping"
-    fi
+          if patch --batch --forward -p1 -d "$COMMON_DIR" < "$patch_file"; then
+            echo "  applied (or already applied) $label"
+          else
+            echo "::error::$label failed to apply cleanly to $COMMON_DIR"
+            exit 1
+          fi
+        }
 
-    if ! grep -qF 'CONFIG_CRYPTO_LZ4KDR' crypto/Makefile; then
-      sed -i '/^obj-\$(CONFIG_CRYPTO_LZ4KD) += lz4kd\.o$/a obj-$(CONFIG_CRYPTO_LZ4KDR) += lz4kdr.o' crypto/Makefile
-      echo "  inserted obj-\$(CONFIG_CRYPTO_LZ4KDR) after lz4kd.o"
-    fi
+        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
 
-    if ! grep -qF 'CONFIG_LZ4KDR_COMPRESS' lib/Makefile; then
-      sed -i '/^obj-\$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd\/$/a obj-$(CONFIG_LZ4KDR_COMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KDR_DECOMPRESS) += lz4kdr/' lib/Makefile
-      echo "  inserted obj-\$(CONFIG_LZ4KDR_COMPRESS)/DECOMPRESS after lz4kd/"
-    fi
+        if [ ! -d "$PATCH_DIR" ]; then
+          echo "::error::patch directory missing: $PATCH_DIR"
+          exit 1
+        fi
 
-    echo "== [4/7] timpa choice block + backends[] dengan versi gabungan =="
-    python3 - drivers/block/zram/Kconfig "$MERGE_ASSETS/zram-kconfig-choice-merged.txt" <<'PYEOF'
-    import re, sys
-    kconfig_path, snippet_path = sys.argv[1], sys.argv[2]
-    with open(kconfig_path) as f:
-        content = f.read()
-    with open(snippet_path) as f:
-        merged = f.read()
-    content = content.replace(
-        "depends on CRYPTO_LZO || CRYPTO_ZSTD || CRYPTO_LZ4 || CRYPTO_LZ4HC || CRYPTO_842 || CRYPTO_LZ4K || CRYPTO_LZ4K_OPLUS || CRYPTO_LZ4KD || CRYPTO_DEFLATE",
-        "depends on CRYPTO_LZO || CRYPTO_ZSTD || CRYPTO_LZ4 || CRYPTO_LZ4HC || CRYPTO_842 || CRYPTO_LZ4K || CRYPTO_LZ4K_OPLUS || CRYPTO_LZ4KD || CRYPTO_LZ4KDR || CRYPTO_DEFLATE",
-    )
-    pattern = re.compile(r"choice\n\tprompt \"Default zram compressor\".*?default \"deflate\" if ZRAM_DEF_COMP_DEFLATE\n", re.DOTALL)
-    if not pattern.search(content):
-        print("::error::pola choice block SukiSU tidak ketemu - cek manual, jangan lanjut build")
-        sys.exit(1)
-    content = pattern.sub(merged, content)
-    with open(kconfig_path, "w") as f:
-        f.write(content)
-    PYEOF
-    echo "  drivers/block/zram/Kconfig choice block diganti"
+        echo "== lz4kd: applying patch (LZ4KD/LZ4KDR) =="
+        apply_git_patch "$PATCH_DIR/0001-add-lz4kd-lz4kdr.patch"
 
-    python3 - drivers/block/zram/zcomp.c "$MERGE_ASSETS/zcomp-backends-merged.txt" <<'PYEOF'
-    import re, sys
-    zcomp_path, snippet_path = sys.argv[1], sys.argv[2]
-    with open(zcomp_path) as f:
-        content = f.read()
-    with open(snippet_path) as f:
-        merged = f.read()
-    pattern = re.compile(r"static const char \* const backends\[\] = \{.*?\n\};\n", re.DOTALL)
-    if not pattern.search(content):
-        print("::error::pola backends[] tidak ketemu di zcomp.c - cek manual, jangan lanjut build")
-        sys.exit(1)
-    content = pattern.sub(merged, content)
-    with open(zcomp_path, "w") as f:
-        f.write(content)
-    PYEOF
-    echo "  drivers/block/zram/zcomp.c backends[] diganti"
+        echo "== lz4kd: applying modify patch (ZRAM_MULTI_COMP) =="
+        apply_git_patch "$PATCH_DIR/0002-modify-zram-multicomp.patch"
 
-    echo "== [5/7] apply sisa 0002 (arsitektur multi-comp, sudah dikupas 3 hunk konflik) =="
-    if ! patch -p1 -F 10 < "$MERGE_ASSETS/0002-modify-zram-multicomp.stripped.patch"; then
-      echo "::error::0002-modify-zram-multicomp.stripped.patch gagal apply - kemungkinan source tree sudah drift dari versi yang saya cek. JANGAN lanjut, lapor balik hunk mana yang gagal."
-      exit 1
-    fi
+        echo "== lz4kd: patching crypto/Kconfig =="
+        if grep -q '^config CRYPTO_LZ4KDR$' "$COMMON_DIR/crypto/Kconfig"; then
+          echo "  already present, skipping"
+        else
+          python3 - "$COMMON_DIR/crypto/Kconfig" <<'PYEOF'
+        import sys
 
-    echo "== [6/7] apply 0003 (MODULE_SKIP_BUILTIN) =="
-    if ! patch -p1 -F 10 < "$MERGE_ASSETS/0003-module-skip-loading-drivers-into-vmlinux.patch"; then
-      echo "::error::0003 gagal apply"
-      exit 1
-    fi
+        path = sys.argv[1]
+        snippet = """config CRYPTO_LZ4KDR
+        \ttristate "LZ4KDR compression algorithm"
+        \tselect CRYPTO_ALGAPI
+        \tselect LZ4KDR_COMPRESS
+        \tselect LZ4KDR_DECOMPRESS
+        \thelp
+        \t  LZ4KDR is a speed-tuned derivative of Huawei's LZ4KD, a
+        \t  zram-oriented LZ4 variant wire-compatible with the original
+        \t  LZ4KD encoding. This driver registers the legacy
+        \t  CRYPTO_ALG_TYPE_COMPRESS interface used by zram's zcomp.
+        \t  See include/linux/lz4kdr.h for the attribution note.
 
-    echo "== [7/7] sanity check =="
-    for sym in CRYPTO_LZ4KDR CRYPTO_LZ4KD CRYPTO_LZ4K CRYPTO_LZ4K_OPLUS ZRAM_MULTI_COMP MODULE_SKIP_BUILTIN; do
-      if ! grep -q "config $sym\$" crypto/Kconfig drivers/block/zram/Kconfig init/Kconfig 2>/dev/null; then
-        echo "::warning::config $sym tidak ketemu di manapun setelah merge - cek manual"
-      fi
-    done
-    if grep -c '"lz4kd",' drivers/block/zram/zcomp.c | grep -qv '^1$'; then
-      echo "::error::\"lz4kd\" muncul bukan 1x di backends[] zcomp.c - ada duplikat, merge gagal"
-      exit 1
-    fi
-    echo "merge selesai, silakan lanjut ke step '配置 ZRAM 选项' (defconfig) seperti biasa"
+        config CRYPTO_LZ4KD
+        \ttristate "LZ4KD compression algorithm"
+        \tselect CRYPTO_ALGAPI
+        \tselect LZ4KD_COMPRESS
+        \tselect LZ4KD_DECOMPRESS
+        \thelp
+        \t  LZ4KD is Huawei's zram-oriented LZ4 variant with delta
+        \t  compression support, imported verbatim from the Huawei P50
+        \t  (ABR-AL60) HarmonyOS 4.0.0 kernel open source release.
+        \t  This driver registers the legacy CRYPTO_ALG_TYPE_COMPRESS
+        \t  interface used by zram's zcomp.
+        \t  See include/linux/lz4kd.h for the algorithm documentation.
+
+        """
+        with open(path) as fh:
+            content = fh.read()
+        marker = "config CRYPTO_ZSTD\n"
+        idx = content.index(marker)
+        content = content[:idx] + snippet + content[idx:]
+        with open(path, "w") as fh:
+            fh.write(content)
+        PYEOF
+          echo "  inserted CRYPTO_LZ4KDR / CRYPTO_LZ4KD before config CRYPTO_ZSTD"
+        fi
+
+        echo "== lz4kd: patching lib/Kconfig =="
+        if grep -q '^config LZ4KDR_COMPRESS$' "$COMMON_DIR/lib/Kconfig"; then
+          echo "  already present, skipping"
+        else
+          python3 - "$COMMON_DIR/lib/Kconfig" <<'PYEOF'
+        import sys
+
+        path = sys.argv[1]
+        snippet = """config LZ4KDR_COMPRESS
+        \ttristate
+
+        config LZ4KDR_DECOMPRESS
+        \ttristate
+
+        config LZ4KD_COMPRESS
+        \ttristate
+
+        config LZ4KD_DECOMPRESS
+        \ttristate
+
+        """
+        with open(path) as fh:
+            content = fh.read()
+        marker = "config LZ4_DECOMPRESS\n"
+        idx = content.index(marker)
+        content = content[:idx] + snippet + content[idx:]
+        with open(path, "w") as fh:
+            fh.write(content)
+        PYEOF
+          echo "  inserted LZ4KDR_COMPRESS/DECOMPRESS, LZ4KD_COMPRESS/DECOMPRESS before config LZ4_DECOMPRESS"
+        fi
+
+        echo "== lz4kd: patching crypto/Makefile =="
+        if grep -qF 'CONFIG_CRYPTO_LZ4KDR' "$COMMON_DIR/crypto/Makefile"; then
+          echo "  already present, skipping"
+        else
+          sed -i '/^obj-\$(CONFIG_CRYPTO_LZ4HC) += lz4hc\.o$/a obj-$(CONFIG_CRYPTO_LZ4KDR) += lz4kdr.o\nobj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' \
+            "$COMMON_DIR/crypto/Makefile"
+          echo "  inserted obj-\$(CONFIG_CRYPTO_LZ4KDR)/LZ4KD lines after lz4hc.o"
+        fi
+
+        echo "== lz4kd: patching lib/Makefile =="
+        if grep -qF 'CONFIG_LZ4KDR_COMPRESS' "$COMMON_DIR/lib/Makefile"; then
+          echo "  already present, skipping"
+        else
+          sed -i '/^obj-\$(CONFIG_LZ4_DECOMPRESS) += lz4\/$/a obj-$(CONFIG_LZ4KDR_COMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KDR_DECOMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KD_COMPRESS) += lz4kd/\nobj-$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd/' \
+            "$COMMON_DIR/lib/Makefile"
+          echo "  inserted obj-\$(CONFIG_LZ4KDR_*)/LZ4KD_* lines after lz4/ (decompress)"
+        fi
+
+        echo "== lz4kd: patching lib/cmdline.c (EXPORT_SYMBOL next_arg) =="
+        CMDLINE_FILE="$COMMON_DIR/lib/cmdline.c"
+        if [ ! -f "$CMDLINE_FILE" ]; then
+          echo "::error::lib/cmdline.c missing: $CMDLINE_FILE"
+          exit 1
+        fi
+        if grep -q 'EXPORT_SYMBOL(next_arg)' "$CMDLINE_FILE"; then
+          echo "  already present, skipping"
+        elif ! grep -q '^char \*next_arg(char \*args, char \*\*param, char \*\*val)$' "$CMDLINE_FILE"; then
+          echo "::error::next_arg() definition not found in lib/cmdline.c - can't safely append its EXPORT_SYMBOL"
+          exit 1
+        else
+          printf '\nEXPORT_SYMBOL(next_arg);\n' >> "$CMDLINE_FILE"
+          echo "  appended EXPORT_SYMBOL(next_arg) to end of file"
+        fi
+
+        echo "== lz4kd: patching common/android/gki_aarch64_modules =="
+        MODULES_LIST="$COMMON_DIR/android/gki_aarch64_modules"
+        if [ ! -f "$MODULES_LIST" ]; then
+          echo "::error::gki_aarch64_modules missing: $MODULES_LIST"
+          exit 1
+        fi
+
+        echo "== lz4kd: removing any stale built-in-driver entries from a previous run =="
+        for m in \
+          mm/zsmalloc.ko \
+          crypto/lzo.ko \
+          crypto/lzo-rle.ko \
+          drivers/block/zram/zram.ko \
+        ; do
+          if grep -qxF "$m" "$MODULES_LIST"; then
+            sed -i "\|^${m//\//\\/}\$|d" "$MODULES_LIST"
+            echo "  removed stale entry $m"
+          fi
+        done
+
+        echo "== lz4kd: patching android/abi_gki_aarch64_generic (KMI symbol list) =="
+        SYMLIST="$COMMON_DIR/android/abi_gki_aarch64_generic"
+        if [ ! -f "$SYMLIST" ]; then
+          echo "::error::abi_gki_aarch64_generic missing: $SYMLIST"
+          exit 1
+        fi
+        for s in next_arg proc_dou8vec_minmax; do
+          if grep -qxF "  $s" "$SYMLIST"; then
+            echo "  $s already listed, skipping"
+          else
+            sed -i "/^\[abi_symbol_list\]$/a\\  $s" "$SYMLIST"
+            echo "  added $s"
+          fi
+        done
+
+        echo "== module-skip-builtin: applying CONFIG_MODULE_SKIP_BUILTIN patch =="
+        MSB_PATCH="$PATCH_DIR/0003-module-skip-loading-drivers-into-vmlinux.patch"
+        if [ ! -f "$MSB_PATCH" ]; then
+          echo "::error::patch file missing: $MSB_PATCH"
+          echo "::error::copy 0003-module-skip-loading-drivers-into-vmlinux.patch into $(dirname "$MSB_PATCH")"
+          exit 1
+        fi
+        apply_git_patch "$MSB_PATCH"
+
+        echo "== module-skip-builtin: sanity-checking touched files =="
+        for f in init/Kconfig kernel/module-internal.h kernel/module.c scripts/link-vmlinux.sh; do
+          if [ ! -f "$COMMON_DIR/$f" ]; then
+            echo "::error::expected file missing after patch: $COMMON_DIR/$f"
+            exit 1
+          fi
+        done
+        if ! grep -q '^config MODULE_SKIP_BUILTIN$' "$COMMON_DIR/init/Kconfig"; then
+          echo "::error::CONFIG_MODULE_SKIP_BUILTIN symbol not found in init/Kconfig after patch apply"
+          exit 1
+        fi
+
+        echo "== lz4kd (5.10): done =="
+
+        elif [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+
+        if [ ! -d "$PATCH_DIR" ]; then
+          echo "::error::patch directory missing: $PATCH_DIR"
+          exit 1
+        fi
+
+        echo "== zram: applying LZ4 1.10.0 =="
+        apply_gnu_patch "$PATCH_DIR/lz4-1.10.0.patch"
+
+        echo "== zram: applying ZSTD 1.5.7 =="
+        apply_gnu_patch "$PATCH_DIR/zstd-1.5.7.patch"
+
+        echo "== zram: sanity-checking touched files =="
+        for f in \
+          lib/lz4/lz4armv8/lz4armv8.S \
+          lib/lz4/lz4armv8/lz4accel.c \
+          lib/zstd/compress/zstd_compress.c \
+        ; do
+          if [ ! -f "$COMMON_DIR/$f" ]; then
+            echo "::error::expected file missing after patch: $COMMON_DIR/$f"
+            exit 1
+          fi
+        done
+
+        if ! grep -q 'LZ4_arm64_decompress_safe' "$COMMON_DIR/crypto/lz4.c"; then
+          echo "::error::crypto/lz4.c missing LZ4_arm64_decompress_safe after patch apply"
+          exit 1
+        fi
+
+        if ! grep -q 'module_param(compression_level' "$COMMON_DIR/crypto/zstd.c"; then
+          echo "::error::crypto/zstd.c missing compression_level module_param after patch apply"
+          exit 1
+        fi
+
+        echo "== zram (6.12): lz4 1.10.0 / zstd 1.5.7 done =="
+
+        else
+          echo "zram patches: skipped, only wired for kernel_version=5.10 (LZ4KD/LZ4KDR) or 6.12 (lz4/zstd version bump)"
+          echo "zram patches: (resolved patch dir was $PATCH_DIR)"
+          exit 0
+        fi
