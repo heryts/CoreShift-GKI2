@@ -131,7 +131,7 @@ on:
         options: ["release", "artifact", "both"]
         default: "artifact"
       build_stamp:
-        description: "Custom kernel version string. Format: 'NAME|DATE' (both optional). NAME becomes the localversion suffix (e.g. 00014-gf82f7360927e-ab14119954), DATE becomes the '#1 SMP PREEMPT ...' build date (e.g. Wed Sep 17 09:13:52 UTC 2025). Leave empty to keep the stock version string."
+        description: "Custom kernel version string. Format: 'NAME|DATE'. Leave empty to keep the stock version string."
         required: false
         default: ""
 
