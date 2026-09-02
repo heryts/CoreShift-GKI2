@@ -15,6 +15,14 @@ inputs:
     required: false
     default: "off"
     description: Experimental opt-in bypass for Kleaf KMI symbol-list strict mode.
+  custom_build_name:
+    required: false
+    default: ""
+    description: Optional localversion suffix (e.g. "00014-gf82f7360927e-ab14119954"). Leave empty to keep the stock localversion.
+  custom_build_date:
+    required: false
+    default: ""
+    description: Optional UTS_VERSION build date (e.g. "Wed Sep 17 09:13:52 UTC 2025"). If custom_build_name is set and this is empty, the current UTC time is used.
 runs:
   using: composite
   steps:
@@ -51,6 +59,46 @@ runs:
         if [ "${{ inputs.lto }}" = "full" ]; then
           echo "LLVM_PARALLEL_LINK_JOBS=$LLVM_PARALLEL_LINK_JOBS"
           echo "LLD_PARALLEL_LINK_JOBS=$LLD_PARALLEL_LINK_JOBS"
+        fi
+
+        # ==================== Custom build name / build date ====================
+        # Produces a version string like:
+        #   5.10.237-android12-9-00014-gf82f7360927e-ab14119954 #1 SMP PREEMPT Wed Sep 17 09:13:52 UTC 2025
+        # custom_build_name is appended as an extra localversion suffix (kept on
+        # top of whatever the source/config already sets), custom_build_date
+        # overrides the "#1 SMP PREEMPT <date>" part in UTS_VERSION.
+        CUSTOM_BUILD_NAME="${{ inputs.custom_build_name }}"
+        CUSTOM_BUILD_DATE="${{ inputs.custom_build_date }}"
+
+        if [ -n "$CUSTOM_BUILD_NAME" ] || [ -n "$CUSTOM_BUILD_DATE" ]; then
+          if [ -z "$CUSTOM_BUILD_DATE" ]; then
+            CUSTOM_BUILD_DATE="$(TZ=UTC date +'%a %b %d %H:%M:%S UTC %Y')"
+          fi
+
+          echo "custom_build_name=$CUSTOM_BUILD_NAME"
+          echo "custom_build_date=$CUSTOM_BUILD_DATE"
+
+          SETLOCALVERSION="$COMMON_DIR/scripts/setlocalversion"
+          MKCOMPILE_H="$COMMON_DIR/scripts/mkcompile_h"
+
+          if [ -n "$CUSTOM_BUILD_NAME" ] && [ -f "$SETLOCALVERSION" ]; then
+            if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+              # Legacy setlocalversion: replace the final `echo "$res"` with our suffix.
+              sed -i "\$s|echo \"\$res\"|echo \"-${CUSTOM_BUILD_NAME}\"|" "$SETLOCALVERSION"
+            else
+              # 6.x setlocalversion: keep the computed KERNELVERSION/config prefix
+              # and append our suffix to it.
+              perl -i -0777 -pe \
+                "s/(.*)echo \"\\\$\\{KERNELVERSION\\}\\\$\\{file_localversion\\}\\\$\\{config_localversion\\}\\\$\\{LOCALVERSION\\}\\\$\\{scm_version\\}\"/\$1echo \"\\\$\\{KERNELVERSION\\}\\\$\\{file_localversion\\}\\\$\\{config_localversion\\}-${CUSTOM_BUILD_NAME}\"/s" \
+                "$SETLOCALVERSION"
+            fi
+            echo "applied custom_build_name -> $SETLOCALVERSION"
+          fi
+
+          if [ -f "$MKCOMPILE_H" ] && grep -q 'UTS_VERSION=' "$MKCOMPILE_H"; then
+            perl -pi -e "s{UTS_VERSION=\"\\\$\\(.*?\\)\"}{UTS_VERSION=\"#1 SMP PREEMPT ${CUSTOM_BUILD_DATE}\"}" "$MKCOMPILE_H"
+            echo "applied custom_build_date -> $MKCOMPILE_H"
+          fi
         fi
 
         print_ashmem_kmi_diagnostics() {
