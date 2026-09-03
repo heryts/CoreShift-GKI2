@@ -166,40 +166,6 @@ runs:
           echo "  (LZ4KDR requires a source with the vendor lz4k/lz4kdr patch already applied)"
         fi
 
-        echo "== ZRAM extra compressors (SukiSU lz4k/lz4k_oplus/lz4kd/842): check source tree support =="
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4HC; then
-          echo "  CONFIG_CRYPTO_LZ4HC found, enabling"
-          add_config ZRAM y
-          add_config ZSMALLOC y
-          add_config CRYPTO_LZ4HC y
-        else
-          echo "  CRYPTO_LZ4HC not found in this source tree, skipping"
-        fi
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4K; then
-          echo "  CONFIG_CRYPTO_LZ4K found, enabling"
-          add_config CRYPTO_LZ4K y
-        else
-          echo "  CRYPTO_LZ4K not found in this source tree, skipping"
-        fi
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4K_OPLUS; then
-          echo "  CONFIG_CRYPTO_LZ4K_OPLUS found, enabling"
-          add_config CRYPTO_LZ4K_OPLUS y
-        else
-          echo "  CRYPTO_LZ4K_OPLUS not found in this source tree, skipping"
-        fi
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KD; then
-          echo "  CONFIG_CRYPTO_LZ4KD found, enabling"
-          add_config CRYPTO_LZ4KD y
-        else
-          echo "  CRYPTO_LZ4KD not found in this source tree, skipping"
-        fi
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_842; then
-          echo "  CONFIG_CRYPTO_842 found, enabling"
-          add_config CRYPTO_842 y
-        else
-          echo "  CRYPTO_842 not found in this source tree, skipping"
-        fi
-
         echo "== ZRAM recompression (multi-comp): check source tree support =="
         if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
           echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
