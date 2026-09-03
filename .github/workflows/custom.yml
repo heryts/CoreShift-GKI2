@@ -408,7 +408,7 @@ jobs:
 
       - name: Apply LZ4KD/LZ4KDR Patches
         if: inputs.source_mode != 'cloudfox'
-        uses: ./.github/actions/apply-zram
+        uses: ./.github/actions/apply-lz4kd
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
