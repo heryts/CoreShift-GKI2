@@ -429,6 +429,10 @@ jobs:
             fs/f2fs/compress.c \
             fs/f2fs/Makefile \
             fs/incfs/data_mgmt.c \
+            crypto/zstd.c \
+            include/linux/zstd.h \
+            include/linux/zstd_errors.h \
+            include/linux/zstd_lib.h \
           ; do
             if [ ! -f "$COMMON_DIR/$f" ]; then
               echo "::warning::stock file missing, skipping: $f"
@@ -444,6 +448,13 @@ jobs:
             echo "  dumped lib/lz4/ (whole dir)"
           else
             echo "::warning::stock dir missing, skipping: lib/lz4/"
+          fi
+          if [ -d "$COMMON_DIR/lib/zstd" ]; then
+            mkdir -p "$DUMP_DIR/lib/zstd"
+            cp -rp "$COMMON_DIR/lib/zstd/." "$DUMP_DIR/lib/zstd/"
+            echo "  dumped lib/zstd/ (whole dir)"
+          else
+            echo "::warning::stock dir missing, skipping: lib/zstd/"
           fi
 
       - name: Upload stock zram/LZ4 source dump
@@ -464,12 +475,6 @@ jobs:
 
       - name: Apply Unicode Patches
         uses: ./.github/actions/apply-unicode-fix
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
-      - name: Apply FUSE-BPF backport
-        if: inputs.kernel_version == '5.10'
-        uses: ./.github/actions/apply-fuse-bpf
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
