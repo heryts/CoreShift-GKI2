@@ -2,8 +2,9 @@ name: Apply FUSE-BPF backport
 description: >
   Backport "ANDROID: fuse-bpf v1.1" dari common-android13-5.10 ke
   kernel/common target (kernel_version=5.10, biasanya common-android12-5.10).
-  No-op untuk kernel_version lain karena fitur ini spesifik untuk backport
-  5.10 -> 5.10, bukan porting lintas major version.
+  Hanya memodifikasi working tree (tidak commit sendiri -- commit dilakukan
+  belakangan oleh step "Commit kernel changes", sama seperti action apply-*
+  lainnya di workflow ini). No-op untuk kernel_version selain "5.10".
 inputs:
   kernel_version:
     required: true
@@ -51,11 +52,10 @@ runs:
         else
           echo "::warning::fs/fuse/passthrough.c tidak ditemukan di source tree ini."
           echo "::warning::fuse-bpf dibangun di atas FUSE passthrough; backport kemungkinan konflik berat."
-          echo "::warning::Melanjutkan tetap (source_mode=custom/maintained kadang tidak GKI resmi), tapi cek log di bawah baik-baik."
         fi
 
         WORKDIR="$(mktemp -d)"
-        PATCH_FILE="$WORKDIR/0001-ANDROID-fuse-bpf-v1.1.patch"
+        PATCH_FILE="$WORKDIR/fuse-bpf.patch"
 
         echo "== Mengambil commit fuse-bpf ($SQUASH_SHA) dari $SOURCE_REPO@$SOURCE_BRANCH =="
         git clone --filter=blob:none --no-checkout --branch "$SOURCE_BRANCH" \
@@ -67,10 +67,21 @@ runs:
           exit 1
         fi
 
-        git -C "$WORKDIR/src" format-patch -1 "$SQUASH_SHA" --stdout > "$PATCH_FILE"
-        echo "  patch tersimpan: $PATCH_FILE ($(wc -l < "$PATCH_FILE") baris)"
+        # PENTING: gki_defconfig SENGAJA dikeluarkan dari patch.
+        # CONFIG_FUSE_BPF / CONFIG_BPF / CONFIG_BPF_SYSCALL sudah disuntikkan
+        # lewat private.fragment di step create-config-fragment (fuse_bpf=on),
+        # jadi kita tidak perlu (dan sebaiknya tidak) menyentuh defconfig di
+        # sini -- file itu isinya baris CONFIG_X=y yang mirip-mirip, sehingga
+        # 3-way merge git gampang gagal "could not build fake ancestor" walau
+        # sebenarnya tidak ada konflik substansi.
+        git -C "$WORKDIR/src" diff "${SQUASH_SHA}^" "${SQUASH_SHA}" -- . \
+          ':(exclude)arch/arm64/configs/gki_defconfig' \
+          ':(exclude)arch/x86/configs/gki_defconfig' \
+          > "$PATCH_FILE"
 
-        echo "== Cek enum bpf_prog_type: target vs source (potensi konflik BTF/UAPI) =="
+        echo "  patch tersimpan: $PATCH_FILE ($(wc -l < "$PATCH_FILE") baris, defconfig dikecualikan)"
+
+        echo "== Cek enum bpf_prog_type: target vs source (info saja, bukan blocker) =="
         SRC_ENUM="$WORKDIR/src_enum.txt"
         TGT_ENUM="$WORKDIR/tgt_enum.txt"
         git -C "$WORKDIR/src" show "$SQUASH_SHA:include/uapi/linux/bpf.h" 2>/dev/null \
@@ -79,48 +90,34 @@ runs:
           > "$TGT_ENUM" || true
 
         if [ -s "$SRC_ENUM" ] && [ -s "$TGT_ENUM" ] && ! diff -q "$SRC_ENUM" "$TGT_ENUM" >/dev/null 2>&1; then
-          echo "::warning::enum bpf_prog_type target berbeda dari source android13-5.10."
-          echo "::warning::Setelah apply, PASTIKAN BPF_PROG_TYPE_FUSE tidak menimpa slot prog-type lain yang sudah dipakai fitur ini."
+          echo "::warning::enum bpf_prog_type target berbeda dari source android13-5.10 (biasanya wajar, cuma info)."
           diff -u "$TGT_ENUM" "$SRC_ENUM" || true
         fi
 
-        echo "== Menerapkan patch (git am -3) ke $COMMON_DIR =="
+        echo "== Dry-run: git apply --check (tidak mengubah apa pun kalau gagal) =="
         pushd "$COMMON_DIR" >/dev/null
 
-        # Runner CI biasanya tidak punya git identity default; git am butuh ini
-        # untuk membuat commit hasil apply. Set lokal (scoped ke repo ini saja),
-        # tidak menimpa identity kalau memang sudah dikonfigurasi sebelumnya.
-        git config user.email >/dev/null 2>&1 || git config user.email "fuse-bpf-backport@ci.local"
-        git config user.name  >/dev/null 2>&1 || git config user.name  "fuse-bpf-backport"
-
-        set +e
-        git am -3 --keep-cr "$PATCH_FILE"
-        AM_STATUS=$?
-        set -e
-
-        if [ "$AM_STATUS" -ne 0 ]; then
-          echo "::error::git am gagal apply fuse-bpf dengan konflik. File yang konflik:"
-          git diff --name-only --diff-filter=U | sed 's/^/::error::  - /'
-          git am --abort
+        if ! git apply --check "$PATCH_FILE" 2>"$WORKDIR/apply-check.log"; then
+          echo "::error::Patch fuse-bpf TIDAK bisa diterapkan bersih ke source tree ini (context mismatch)."
+          echo "::error::Detail:"
+          sed 's/^/::error::  /' "$WORKDIR/apply-check.log"
+          echo "::error::Tidak ada file yang diubah (git apply --check bersifat dry-run/atomik)."
+          echo "::error::Ini butuh resolusi manual: jalankan backport-fusebpf.sh lokal dengan source_mode"
+          echo "::error::yang sama, selesaikan konflik per-file, lalu commit hasilnya sebagai patch statis"
+          echo "::error::di .github/patches/fuse-bpf/, dan ganti step ini jadi 'git apply' patch statis itu."
           popd >/dev/null
-          echo "::error::Backport fuse-bpf dibatalkan (aborted, tree dikembalikan bersih)."
-          echo "::error::Ini butuh resolusi manual: jalankan backport-fusebpf.sh lokal di source_mode yang sama,"
-          echo "::error::selesaikan konflik, lalu commit hasilnya sebagai patch statis di .github/patches/fuse-bpf/"
-          echo "::error::dan ganti step ini jadi 'git apply' patch statis tsb alih-alih clone+am on the fly."
+          rm -rf "$WORKDIR"
           exit 1
         fi
 
-        echo "  fuse-bpf ter-apply bersih."
+        echo "  OK: patch cocok bersih dengan source tree, menerapkan..."
+        git apply "$PATCH_FILE"
+        echo "  fuse-bpf ter-apply (belum di-commit -- akan ikut ter-commit di step 'Commit kernel changes')."
+
         popd >/dev/null
 
-        echo "== Sanity check config setelah apply =="
-        DEFCONFIG="$COMMON_DIR/arch/arm64/configs/gki_defconfig"
-        for sym in FUSE_FS FUSE_BPF BPF BPF_SYSCALL; do
-          if [ -f "$DEFCONFIG" ] && grep -q "^CONFIG_${sym}=y" "$DEFCONFIG"; then
-            echo "  OK: CONFIG_${sym}=y ada di gki_defconfig upstream."
-          else
-            echo "  info: CONFIG_${sym} tidak/ belum di gki_defconfig -- akan dipaksa lewat private.fragment di step create-config-fragment (pastikan fuse_bpf=on diteruskan ke step itu)."
-          fi
-        done
+        echo "== Info: CONFIG_FUSE_BPF/CONFIG_BPF/CONFIG_BPF_SYSCALL TIDAK diset di sini =="
+        echo "   Pastikan input fuse_bpf=on diteruskan ke step create-config-fragment"
+        echo "   supaya CONFIG_FUSE_BPF, CONFIG_BPF, CONFIG_BPF_SYSCALL masuk private.fragment."
 
         rm -rf "$WORKDIR"
