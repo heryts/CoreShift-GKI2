@@ -131,8 +131,12 @@ runs:
         echo "== enabling CIFS =="
         add_config CIFS y
         add_config NETWORK_FILESYSTEMS y
-        if [ "${{ inputs.kernel_version }}" != "5.10" ]; then
+        if grep -qE '^\s*select\s+NETFS_SUPPORT\s*$' fs/cifs/Kconfig 2>/dev/null || \
+           grep -qE '^\s*select\s+NETFS_SUPPORT\s*$' fs/smb/client/Kconfig 2>/dev/null; then
+          echo "  CIFS selects NETFS_SUPPORT on this tree, enabling"
           add_config NETFS_SUPPORT y
+        else
+          echo "  CIFS does not select NETFS_SUPPORT on this tree (no Kconfig prompt exists), skipping"
         fi
         add_config KEYS y
         add_config CIFS_XATTR y
