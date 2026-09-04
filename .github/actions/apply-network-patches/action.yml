@@ -75,8 +75,7 @@ runs:
         elif [[ "$VERSION" == "android12-5.10" ]]; then
           patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android12-5.10.patch"
         elif [[ "$VERSION" == "android16-6.12" ]]; then
-          echo "::notice::no BBRv3 patch available yet for version=$VERSION - skipping (CONFIG_TCP_CONG_BBR3 will stay enabled in the config fragment but the actual BBRv3 algorithm won't be present in vmlinux for this version)"
-          echo "bbrv3_patch_applied=false" >> "$GITHUB_ENV"
+          patch -p1 < "$PATCH_DIR/0001-net-tcp-backport-BBRv3-to-android16-6.12.patch"
         else
           echo "::error::no BBRv3 patch available for version=$VERSION"
           exit 1
@@ -89,9 +88,7 @@ runs:
           fi
         fi
 
-        if [[ "$VERSION" != "android16-6.12" ]]; then
-          echo "bbrv3_patch_applied=true" >> "$GITHUB_ENV"
-        fi
+        echo "bbrv3_patch_applied=true" >> "$GITHUB_ENV"
 
         echo "BBRv3 patches applied for version=$VERSION"
 
