@@ -279,6 +279,13 @@ runs:
           exit 1
         fi
 
+        echo "== zram (5.10): applying deflate backend patch =="
+        apply_git_patch "$PATCH_DIR/0007-add-deflate-backend.patch"
+        if ! grep -q 'CONFIG_CRYPTO_DEFLATE' "$COMMON_DIR/drivers/block/zram/zcomp.c"; then
+          echo "::error::deflate backend not found in zcomp.c after patch apply"
+          exit 1
+        fi
+
         echo "== lz4kd (5.10): done =="
 
         elif [ "${{ inputs.kernel_version }}" = "6.12" ]; then
