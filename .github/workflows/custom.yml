@@ -473,6 +473,42 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Dump stock BPF core source (pre fuse-bpf)
+        if: inputs.kernel_version == '5.10'
+        run: |
+          set -euo pipefail
+          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+          DUMP_DIR="$GITHUB_WORKSPACE/stock-bpf-dump"
+          for f in \
+            include/linux/bpf.h \
+            include/linux/bpf_types.h \
+            include/linux/filter.h \
+            include/uapi/linux/bpf.h \
+            kernel/bpf/verifier.c \
+            kernel/bpf/core.c \
+            kernel/bpf/syscall.c \
+            kernel/bpf/btf.c \
+          ; do
+            if [ ! -f "$COMMON_DIR/$f" ]; then
+              echo "::warning::stock file missing, skipping: $f"
+              continue
+            fi
+            mkdir -p "$DUMP_DIR/$(dirname "$f")"
+            cp "$COMMON_DIR/$f" "$DUMP_DIR/$f"
+            echo "  dumped $f"
+          done
+
+      - name: Upload stock BPF core source dump
+        if: inputs.kernel_version == '5.10'
+        uses: actions/upload-artifact@v6
+        with:
+          name: stock-bpf-dump-${{ inputs.kernel_version }}
+          path: stock-bpf-dump/**
+          if-no-files-found: error
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
+
       - name: Apply FUSE-BPF backport
         if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/apply-fuse-bpf
