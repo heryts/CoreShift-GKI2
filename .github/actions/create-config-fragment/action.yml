@@ -166,17 +166,43 @@ runs:
           add_config IKCONFIG_PROC y
         fi
 
-        echo "== ZRAM LZ4KDR: check source tree support =="
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
-           has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
-          echo "  CONFIG_CRYPTO_LZ4KDR and ZRAM_DEF_COMP_LZ4KDR choice found, enabling"
-          add_config ZRAM y
-          add_config ZSMALLOC y
-          add_config ZRAM_DEF_COMP_LZ4KDR y
-          add_config CRYPTO_LZ4KDR y
-        else
-          echo "  CRYPTO_LZ4KDR / ZRAM_DEF_COMP_LZ4KDR not found in this source tree, skipping"
-          echo "  (LZ4KDR requires a source with the vendor lz4k/lz4kdr patch already applied)"
+        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+          echo "== ZRAM LZ4KDR: check source tree support (5.10 only) =="
+          if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
+             has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
+            echo "  CONFIG_CRYPTO_LZ4KDR and ZRAM_DEF_COMP_LZ4KDR choice found, enabling"
+            add_config ZRAM y
+            add_config ZSMALLOC y
+            add_config ZRAM_DEF_COMP_LZ4KDR y
+            add_config CRYPTO_LZ4KDR y
+          else
+            echo "  CRYPTO_LZ4KDR / ZRAM_DEF_COMP_LZ4KDR not found in this source tree, skipping"
+            echo "  (LZ4KDR requires a source with the vendor lz4k/lz4kdr patch already applied)"
+          fi
+
+          echo "== ZRAM recompression (multi-comp): check source tree support (5.10 only) =="
+          if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
+            echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
+            add_config ZRAM y
+            add_config ZSMALLOC y
+            add_config ZRAM_MULTI_COMP y
+            if has_kconfig_symbol crypto/Kconfig CRYPTO_ZSTD; then
+              add_config CRYPTO_ZSTD y
+            fi
+          else
+            echo "  ZRAM_MULTI_COMP not found in this source tree, skipping recompression support"
+          fi
+
+          echo "== MODULE_SKIP_BUILTIN: check source tree support (5.10 only) =="
+          if has_kconfig_symbol init/Kconfig MODULE_SKIP_BUILTIN; then
+            echo "  CONFIG_MODULE_SKIP_BUILTIN found, enabling as a safety net"
+            echo "  (ramdisk/recovery insmod of a .ko already built into vmlinux will now"
+            echo "   report success instead of failing with -EBUSY and panicking init)"
+            add_config MODULE_SKIP_BUILTIN y
+          else
+            echo "  MODULE_SKIP_BUILTIN not found in this source tree, skipping"
+            echo "  (requires the module-skip-builtin action to run first and patch init/Kconfig)"
+          fi
         fi
 
         echo "== ZRAM LZ4K/LZ4KD/LZ4K_OPLUS: check source tree support =="
@@ -212,30 +238,6 @@ runs:
         else
           echo "  CRYPTO_LZ4KD not found in this source tree, skipping LZ4K/LZ4KD/LZ4K_OPLUS block"
           echo "  (requires the zram source-add + integration patches to run first)"
-        fi
-
-        echo "== ZRAM recompression (multi-comp): check source tree support =="
-        if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
-          echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
-          add_config ZRAM y
-          add_config ZSMALLOC y
-          add_config ZRAM_MULTI_COMP y
-          if has_kconfig_symbol crypto/Kconfig CRYPTO_ZSTD; then
-            add_config CRYPTO_ZSTD y
-          fi
-        else
-          echo "  ZRAM_MULTI_COMP not found in this source tree, skipping recompression support"
-        fi
-
-        echo "== MODULE_SKIP_BUILTIN: check source tree support =="
-        if has_kconfig_symbol init/Kconfig MODULE_SKIP_BUILTIN; then
-          echo "  CONFIG_MODULE_SKIP_BUILTIN found, enabling as a safety net"
-          echo "  (ramdisk/recovery insmod of a .ko already built into vmlinux will now"
-          echo "   report success instead of failing with -EBUSY and panicking init)"
-          add_config MODULE_SKIP_BUILTIN y
-        else
-          echo "  MODULE_SKIP_BUILTIN not found in this source tree, skipping"
-          echo "  (requires the module-skip-builtin action to run first and patch init/Kconfig)"
         fi
 
         if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
