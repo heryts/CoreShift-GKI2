@@ -1,16 +1,11 @@
 name: Apply FUSE-BPF backport
 description: >
-  Backport "ANDROID: fuse-bpf v1.1" dari common-android13-5.10 ke
-  kernel/common target (kernel_version=5.10). Hanya memodifikasi working
-  tree (tidak commit sendiri -- commit dilakukan belakangan oleh step
-  "Commit kernel changes"). No-op untuk kernel_version selain "5.10".
-  Kalau ada hunk yang tidak cocok konteksnya, sisanya tetap diterapkan
-  (via git apply --reject) dan file .rej + artifact debug di-upload supaya
-  bisa diresolusi manual sekali, lalu dibekukan jadi patch statis permanen.
+  Backports "ANDROID: fuse-bpf v1.1" from common-android13-5.10 into the
+  kernel/common target (kernel_version=5.10).
 inputs:
   kernel_version:
     required: true
-    description: Kernel version target. Backport hanya dijalankan jika "5.10".
+    description: Target kernel version. The backport only runs if this is "5.10".
   source_repo:
     required: false
     default: "https://android.googlesource.com/kernel/common"
@@ -20,20 +15,12 @@ inputs:
   squash_sha:
     required: false
     default: "f5f4199c102aa676998b42abff60d071385c1c0c"
-    description: 'SHA commit squash "ANDROID: fuse-bpf v1.1" di source_branch.'
+    description: 'Commit SHA of the "ANDROID: fuse-bpf v1.1" squash on source_branch.'
   static_patch_path:
     required: false
     default: ".github/patches/fuse-bpf/android12-5.10.patch"
     description: >
-      Path ke patch statis hasil resolusi manual, relatif ke
-      GITHUB_WORKSPACE. Kalau file-nya ada, action akan pakai patch
-      statis ini (git apply biasa) alih-alih clone+diff on the fly.
-      Lebih cepat dan deterministik. Default sudah mengarah ke patch
-      hasil resolusi konflik android12-5.10-lts -- commit file itu di
-      path ini (lihat android12-5.10.patch) supaya run berikutnya
-      otomatis dipakai tanpa perlu ubah workflow pemanggil. Kosongkan
-      ("") untuk kembali ke mode clone+diff on the fly (mis. kalau
-      squash_sha di-update dan patch statis perlu diregenerasi ulang).
+      Path to the statically resolved patch, relative to GITHUB_WORKSPACE.
 runs:
   using: composite
   steps:
@@ -44,7 +31,7 @@ runs:
 
         KERNEL_VERSION="${{ inputs.kernel_version }}"
         if [ "$KERNEL_VERSION" != "5.10" ]; then
-          echo "kernel_version=${KERNEL_VERSION} != 5.10, fuse-bpf backport tidak relevan, skip."
+          echo "kernel_version=${KERNEL_VERSION} != 5.10, fuse-bpf backport not applicable, skipping."
           echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
@@ -53,7 +40,7 @@ runs:
         STATIC_PATCH="${{ inputs.static_patch_path }}"
 
         if [ ! -d "$COMMON_DIR/.git" ]; then
-          echo "::error::KERNEL_COMMON_DIR ($COMMON_DIR) bukan git repo."
+          echo "::error::KERNEL_COMMON_DIR ($COMMON_DIR) is not a git repo."
           echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
           exit 1
         fi
@@ -61,68 +48,55 @@ runs:
         WORKDIR="$(mktemp -d)"
         PATCH_FILE="$WORKDIR/fuse-bpf.patch"
 
-        # ---------------------------------------------------------------
-        # Mode 1: pakai patch statis hasil resolusi manual, kalau tersedia
-        # ---------------------------------------------------------------
         if [ -n "$STATIC_PATCH" ] && [ -f "$GITHUB_WORKSPACE/$STATIC_PATCH" ]; then
-          echo "== Memakai patch statis: $STATIC_PATCH =="
+          echo "== Using static patch: $STATIC_PATCH =="
           cp "$GITHUB_WORKSPACE/$STATIC_PATCH" "$PATCH_FILE"
         else
-          echo "== Cek prasyarat FUSE passthrough di $COMMON_DIR =="
+          echo "== Checking FUSE passthrough prerequisite in $COMMON_DIR =="
           if [ -f "$COMMON_DIR/fs/fuse/passthrough.c" ]; then
-            echo "  OK: fs/fuse/passthrough.c ada."
+            echo "  OK: fs/fuse/passthrough.c is present."
           else
-            echo "::warning::fs/fuse/passthrough.c tidak ditemukan -- kemungkinan besar backport akan konflik berat."
+            echo "::warning::fs/fuse/passthrough.c not found -- the backport will likely hit heavy conflicts."
           fi
 
           SOURCE_REPO="${{ inputs.source_repo }}"
           SOURCE_BRANCH="${{ inputs.source_branch }}"
           SQUASH_SHA="${{ inputs.squash_sha }}"
 
-          echo "== Mengambil commit fuse-bpf ($SQUASH_SHA) dari $SOURCE_REPO@$SOURCE_BRANCH =="
+          echo "== Fetching fuse-bpf commit ($SQUASH_SHA) from $SOURCE_REPO@$SOURCE_BRANCH =="
           git clone --filter=blob:none --no-checkout --branch "$SOURCE_BRANCH" \
             "$SOURCE_REPO" "$WORKDIR/src"
 
           if ! git -C "$WORKDIR/src" cat-file -e "${SQUASH_SHA}^{commit}" 2>/dev/null; then
-            echo "::error::Commit $SQUASH_SHA tidak ditemukan di $SOURCE_BRANCH."
+            echo "::error::Commit $SQUASH_SHA not found on $SOURCE_BRANCH."
             echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
-          # gki_defconfig sengaja dikecualikan -- lihat catatan di README/PR.
-          # CONFIG_FUSE_BPF/CONFIG_BPF/CONFIG_BPF_SYSCALL disuntik lewat
-          # private.fragment di step create-config-fragment (fuse_bpf=on).
           git -C "$WORKDIR/src" diff "${SQUASH_SHA}^" "${SQUASH_SHA}" -- . \
             ':(exclude)arch/arm64/configs/gki_defconfig' \
             ':(exclude)arch/x86/configs/gki_defconfig' \
             > "$PATCH_FILE"
 
-          echo "  patch tersimpan: $PATCH_FILE ($(wc -l < "$PATCH_FILE") baris)"
+          echo "  patch saved: $PATCH_FILE ($(wc -l < "$PATCH_FILE") lines)"
         fi
 
-        # ---------------------------------------------------------------
-        # Coba apply bersih dulu (jalur cepat, atomik)
-        # ---------------------------------------------------------------
         pushd "$COMMON_DIR" >/dev/null
 
         if git apply --check "$PATCH_FILE" 2>"$WORKDIR/apply-check.log"; then
-          echo "== Patch cocok 100%, menerapkan bersih =="
+          echo "== Patch matches 100%, applying cleanly =="
           git apply "$PATCH_FILE"
-          echo "  fuse-bpf ter-apply penuh (belum di-commit)."
+          echo "  fuse-bpf fully applied (not committed yet)."
           popd >/dev/null
           echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
           rm -rf "$WORKDIR"
           exit 0
         fi
 
-        # ---------------------------------------------------------------
-        # Tidak 100% cocok -> terapkan sebisanya, sisakan .rej untuk yang
-        # benar-benar bentrok. Ini mempersempit area resolusi manual.
-        # ---------------------------------------------------------------
-        echo "::warning::Patch tidak 100% cocok konteksnya. Detail hunk yang gagal:"
+        echo "::warning::Patch context doesn't match 100%. Details of the failing hunks:"
         sed 's/^/::warning::  /' "$WORKDIR/apply-check.log" || true
 
-        echo "== Menerapkan sebagian dengan git apply --reject =="
+        echo "== Applying partially with git apply --reject =="
         set +e
         git apply --reject --whitespace=nowarn "$PATCH_FILE"
         set -e
@@ -130,14 +104,14 @@ runs:
         REJECT_FILES="$(find . -name '*.rej' -not -path './.git/*' | sed 's#^\./##')"
 
         if [ -z "$REJECT_FILES" ]; then
-          echo "  Tidak ada .rej yang tersisa -- ternyata semua hunk akhirnya ter-apply."
+          echo "  No .rej files left -- turns out every hunk applied in the end."
           popd >/dev/null
           echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
           rm -rf "$WORKDIR"
           exit 0
         fi
 
-        echo "::error::Hunk berikut GAGAL diterapkan otomatis dan butuh resolusi manual:"
+        echo "::error::The following hunks FAILED to apply automatically and need manual resolution:"
         echo "$REJECT_FILES" | sed 's/^/::error::  /'
 
         ARTIFACT_DIR="$GITHUB_WORKSPACE/fusebpf-conflict-artifact"
@@ -148,7 +122,6 @@ runs:
           [ -z "$rej" ] && continue
           src="${rej%.rej}"
           mkdir -p "$ARTIFACT_DIR/$(dirname "$src")"
-          # file target (sudah terisi hunk yang cocok, sisanya perlu tempel manual dari .rej)
           cp "$src" "$ARTIFACT_DIR/$src" 2>/dev/null || true
           cp "$rej" "$ARTIFACT_DIR/$rej"
         done <<< "$REJECT_FILES"
@@ -156,45 +129,39 @@ runs:
         cp "$PATCH_FILE" "$ARTIFACT_DIR/fuse-bpf-original.patch"
 
         cat > "$ARTIFACT_DIR/README.md" <<EOF
-        # Resolusi konflik fuse-bpf backport
 
-        File di sini adalah hasil \`git apply --reject\` dari patch
-        \`fuse-bpf-original.patch\` terhadap kernel/common Anda (kernel_version=5.10).
+        The files here are the result of running \`git apply --reject\` with the
+        \`fuse-bpf-original.patch\` patch against your kernel/common (kernel_version=5.10).
 
-        Hunk yang cocok SUDAH ter-apply ke file target di sini. Hunk yang
-        TIDAK cocok ada di file \`*.rej\` di sebelah file target masing-masing.
+        Hunks that matched have ALREADY been applied to the target files here. Hunks
+        that did NOT match are in the \`*.rej\` file next to each target file.
 
-        ## File yang perlu diresolusi manual
         $(echo "$REJECT_FILES" | sed 's/^/- /')
 
-        ## Cara resolusi
-        1. Download & extract artifact ini di mesin lokal Anda.
-        2. Untuk tiap pasangan \`<file>\` + \`<file>.rej\`:
-           - Buka \`<file>.rej\`, lihat hunk yang gagal (format unified diff).
-           - Buka \`<file>\` (sudah berisi hasil hunk yang berhasil), lalu
-             tempelkan perubahan dari \`.rej\` secara manual sesuai konteks
-             kode yang sebenarnya di file itu.
-           - Hapus \`.rej\` setelah selesai.
-        3. Setelah semua file bersih, generate patch final:
+        1. Download & extract this artifact on your local machine.
+        2. For each \`<file>\` + \`<file>.rej\` pair:
+           - Open \`<file>.rej\` and look at the failed hunk (unified diff format).
+           - Open \`<file>\` (which already contains the hunks that succeeded), then
+             manually paste in the changes from \`.rej\`, adapting them to the
+             actual code context in that file.
+           - Delete \`.rej\` once you're done.
+        3. Once every file is clean, generate the final patch:
            \`\`\`bash
            git diff > android12-5.10.patch
            \`\`\`
-           (jalankan dari root kernel/common yang sudah Anda resolusi manual)
-        4. Simpan sebagai \`.github/patches/fuse-bpf/android12-5.10.patch\` di
-           repo workflow Anda.
-        5. Panggil action ini dengan:
+           (run this from the root of the kernel/common tree you just resolved manually)
+        4. Save it as \`.github/patches/fuse-bpf/android12-5.10.patch\` in your
+           workflow repo.
+        5. Call this action with:
            \`\`\`yaml
            - uses: ./.github/actions/apply-fuse-bpf
              with:
                kernel_version: \${{ inputs.kernel_version }}
                static_patch_path: .github/patches/fuse-bpf/android12-5.10.patch
            \`\`\`
-           Setelah ada patch statis, run berikutnya tidak perlu clone+diff
-           on the fly lagi dan hasilnya deterministik.
+           Once the static patch exists, future runs won't need to clone+diff
+           on the fly again, and the result will be deterministic.
         EOF
-        # Heredoc di atas ikut ter-indent 8 spasi supaya valid sebagai YAML
-        # block scalar (block scalar berakhir kalau ada baris yang indentasinya
-        # lebih kecil dari baris pertama). Strip prefix itu sekarang:
         sed -i 's/^        //' "$ARTIFACT_DIR/README.md"
 
         popd >/dev/null
@@ -215,9 +182,9 @@ runs:
         if-no-files-found: error
         retention-days: 14
 
-    - name: Fail build (konflik fuse-bpf belum diresolusi)
+    - name: Fail build (fuse-bpf conflict not yet resolved)
       if: steps.apply.outputs.has_conflicts == 'true'
       shell: bash
       run: |
-        echo "::error::Backport fuse-bpf sebagian gagal. Artifact 'fusebpf-conflict-${{ github.run_number }}' berisi file+.rej+instruksi resolusi -- lihat tab Artifacts di run ini."
+        echo "::error::fuse-bpf backport partially failed. Artifact 'fusebpf-conflict-${{ github.run_number }}' contains the files+.rej+resolution instructions -- check the Artifacts tab on this run."
         exit 1
