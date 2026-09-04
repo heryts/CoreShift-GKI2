@@ -65,9 +65,18 @@ runs:
         : > private.fragment
         : > private.required
 
+        ADDED_CONFIG_KEYS=""
+
         add_config() {
           key="$1"
           val="$2"
+
+          case " $ADDED_CONFIG_KEYS " in
+            *" $key "*)
+              return 0
+              ;;
+          esac
+          ADDED_CONFIG_KEYS="${ADDED_CONFIG_KEYS} $key"
 
           if [ "$val" = "y" ]; then
             printf 'CONFIG_%s=y\n' "$key" >> private.fragment
