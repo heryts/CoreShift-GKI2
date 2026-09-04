@@ -1,0 +1,14 @@
+diff --git a/drivers/block/zram/zcomp.c b/drivers/block/zram/zcomp.c
+index 58a403f..e30e6d2 100644
+--- a/drivers/block/zram/zcomp.c
++++ b/drivers/block/zram/zcomp.c
+@@ -38,6 +38,9 @@ static const char * const backends[] = {
+ #if IS_ENABLED(CONFIG_CRYPTO_842)
+ 	"842",
+ #endif
++#if IS_ENABLED(CONFIG_CRYPTO_DEFLATE)
++	"deflate",
++#endif
+ #if IS_ENABLED(CONFIG_CRYPTO_ZSTD)
+ 	"zstd",
+ #endif
