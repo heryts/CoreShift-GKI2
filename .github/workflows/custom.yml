@@ -406,7 +406,7 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply LZ4KD/LZ4KDR Patches
+      - name: Apply ZRAM Patches
         if: inputs.source_mode != 'cloudfox'
         uses: ./.github/actions/apply-zram
         with:
