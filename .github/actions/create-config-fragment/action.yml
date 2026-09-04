@@ -208,8 +208,17 @@ runs:
         echo "== ZRAM LZ4K/LZ4KD/LZ4K_OPLUS: check source tree support =="
         if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KD; then
           echo "  CONFIG_CRYPTO_LZ4KD found, enabling"
-          add_config ZRAM y
-          add_config ZSMALLOC y
+
+          if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+            add_config ZRAM y
+            add_config ZSMALLOC y
+          else
+            echo "  kernel_version=${{ inputs.kernel_version }}: keeping ZRAM/ZSMALLOC as modules"
+            echo "  (android/gki_aarch64_modules still expects zram.ko/zsmalloc.ko for this version)"
+            add_config ZRAM m
+            add_config ZSMALLOC m
+          fi
+
           add_config CRYPTO_LZ4HC y
           add_config CRYPTO_LZ4KD y
           add_config CRYPTO_842 y
