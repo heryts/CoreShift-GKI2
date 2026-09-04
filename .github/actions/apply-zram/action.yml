@@ -169,11 +169,8 @@ runs:
           echo "  inserted obj-\$(CONFIG_LZ4KDR_*)/LZ4KD_* lines after lz4/ (decompress)"
         fi
 
-        echo "== zram (5.10): applying LZ4K/LZ4K_OPLUS source patch (SukiSU) =="
-        apply_git_patch "$PATCH_DIR/0004-add-lz4k-lz4k_oplus-sources.patch"
-
-        echo "== zram (5.10): applying LZ4K/LZ4K_OPLUS integration patch (regenerated against stock 5.10 + CoreShift's own LZ4KD/LZ4KDR, deduped) =="
-        apply_git_patch "$PATCH_DIR/0005-lz4k-lz4k_oplus-integration.patch"
+        echo "== zram (5.10): applying LZ4K/LZ4KD/LZ4K_OPLUS + LZ4 1.10.0/NEON + deflate backend (merged) =="
+        apply_git_patch "$PATCH_DIR/0004-lz4k-lz4kd-lz4k_oplus-neon-deflate.patch"
 
         echo "== zram (5.10): sanity-checking LZ4K/LZ4K_OPLUS patches =="
         for f in \
@@ -266,9 +263,6 @@ runs:
           exit 1
         fi
 
-        echo "== zram (5.10): applying LZ4 1.10.0 + ARM64 NEON (zzh) =="
-        apply_git_patch "$PATCH_DIR/0006-lz4-1.10.0-neon.patch"
-
         echo "== zram (5.10): sanity-checking NEON patch =="
         if ! grep -q 'LZ4_arm64_decompress_safe' "$COMMON_DIR/crypto/lz4.c"; then
           echo "::error::crypto/lz4.c missing LZ4_arm64_decompress_safe after patch apply"
@@ -279,8 +273,7 @@ runs:
           exit 1
         fi
 
-        echo "== zram (5.10): applying deflate backend patch =="
-        apply_git_patch "$PATCH_DIR/0007-add-deflate-backend.patch"
+        echo "== zram (5.10): sanity-checking deflate backend =="
         if ! grep -q 'CONFIG_CRYPTO_DEFLATE' "$COMMON_DIR/drivers/block/zram/zcomp.c"; then
           echo "::error::deflate backend not found in zcomp.c after patch apply"
           exit 1
@@ -332,14 +325,8 @@ runs:
           exit 1
         fi
 
-        echo "== zram ($VER): applying LZ4K/LZ4KD source patch (SukiSU) =="
-        apply_git_patch "$PATCH_DIR/0001-add-lz4k-lz4kd-sources.patch"
-
-        echo "== zram ($VER): applying LZ4K_OPLUS source patch (SukiSU) =="
-        apply_git_patch "$PATCH_DIR/0002-add-lz4k_oplus-sources.patch"
-
-        echo "== zram ($VER): applying LZ4KD/LZ4K_OPLUS integration patch (SukiSU, regenerated against stock $VER source) =="
-        apply_git_patch "$PATCH_DIR/0003-lz4kd-lz4k_oplus-integration.patch"
+        echo "== zram ($VER): applying LZ4K/LZ4KD/LZ4K_OPLUS + LZ4 1.10.0/NEON (merged) =="
+        apply_git_patch "$PATCH_DIR/0001-lz4k-lz4kd-lz4k_oplus-neon.patch"
 
         echo "== zram ($VER): sanity-checking touched files =="
         for f in \
@@ -356,9 +343,6 @@ runs:
           echo "::error::CONFIG_CRYPTO_LZ4KD symbol not found in crypto/Kconfig after patch apply"
           exit 1
         fi
-
-        echo "== zram ($VER): applying LZ4 1.10.0 + ARM64 NEON (zzh) =="
-        apply_git_patch "$PATCH_DIR/0004-lz4-1.10.0-neon.patch"
 
         echo "== zram ($VER): sanity-checking NEON patch =="
         if ! grep -q 'LZ4_arm64_decompress_safe' "$COMMON_DIR/crypto/lz4.c"; then
