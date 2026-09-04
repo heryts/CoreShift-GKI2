@@ -473,6 +473,12 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply FUSE-BPF backport
+        if: inputs.kernel_version == '5.10'
+        uses: ./.github/actions/apply-fuse-bpf
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Apply Unicode Patches
         uses: ./.github/actions/apply-unicode-fix
         with:
