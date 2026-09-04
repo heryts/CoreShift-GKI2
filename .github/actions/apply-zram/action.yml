@@ -82,7 +82,19 @@ runs:
         import sys
 
         path = sys.argv[1]
-        snippet = """config CRYPTO_LZ4KDR
+        snippet = """config CRYPTO_LZ4K
+        \ttristate "LZ4K compression algorithm"
+        \tselect CRYPTO_ALGAPI
+        \tselect LZ4K_COMPRESS
+        \tselect LZ4K_DECOMPRESS
+        \thelp
+        \t  LZ4K is Huawei's zram-oriented LZ4 variant, imported verbatim
+        \t  from the Huawei P50 (ABR-AL60) HarmonyOS 4.0.0 kernel open
+        \t  source release. This driver registers the legacy
+        \t  CRYPTO_ALG_TYPE_COMPRESS interface used by zram's zcomp.
+        \t  See include/linux/lz4k.h for the algorithm documentation.
+
+        config CRYPTO_LZ4KDR
         \ttristate "LZ4KDR compression algorithm"
         \tselect CRYPTO_ALGAPI
         \tselect LZ4KDR_COMPRESS
@@ -127,7 +139,13 @@ runs:
         import sys
 
         path = sys.argv[1]
-        snippet = """config LZ4KDR_COMPRESS
+        snippet = """config LZ4K_COMPRESS
+        \ttristate
+
+        config LZ4K_DECOMPRESS
+        \ttristate
+
+        config LZ4KDR_COMPRESS
         \ttristate
 
         config LZ4KDR_DECOMPRESS
@@ -155,18 +173,18 @@ runs:
         if grep -qF 'CONFIG_CRYPTO_LZ4KDR' "$COMMON_DIR/crypto/Makefile"; then
           echo "  already present, skipping"
         else
-          sed -i '/^obj-\$(CONFIG_CRYPTO_LZ4HC) += lz4hc\.o$/a obj-$(CONFIG_CRYPTO_LZ4KDR) += lz4kdr.o\nobj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' \
+          sed -i '/^obj-\$(CONFIG_CRYPTO_LZ4HC) += lz4hc\.o$/a obj-$(CONFIG_CRYPTO_LZ4K) += lz4k.o\nobj-$(CONFIG_CRYPTO_LZ4KDR) += lz4kdr.o\nobj-$(CONFIG_CRYPTO_LZ4KD) += lz4kd.o' \
             "$COMMON_DIR/crypto/Makefile"
-          echo "  inserted obj-\$(CONFIG_CRYPTO_LZ4KDR)/LZ4KD lines after lz4hc.o"
+          echo "  inserted obj-\$(CONFIG_CRYPTO_LZ4K)/LZ4KDR/LZ4KD lines after lz4hc.o"
         fi
 
         echo "== lz4kd: patching lib/Makefile =="
         if grep -qF 'CONFIG_LZ4KDR_COMPRESS' "$COMMON_DIR/lib/Makefile"; then
           echo "  already present, skipping"
         else
-          sed -i '/^obj-\$(CONFIG_LZ4_DECOMPRESS) += lz4\/$/a obj-$(CONFIG_LZ4KDR_COMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KDR_DECOMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KD_COMPRESS) += lz4kd/\nobj-$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd/' \
+          sed -i '/^obj-\$(CONFIG_LZ4_DECOMPRESS) += lz4\/$/a obj-$(CONFIG_LZ4K_COMPRESS) += lz4k/\nobj-$(CONFIG_LZ4K_DECOMPRESS) += lz4k/\nobj-$(CONFIG_LZ4KDR_COMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KDR_DECOMPRESS) += lz4kdr/\nobj-$(CONFIG_LZ4KD_COMPRESS) += lz4kd/\nobj-$(CONFIG_LZ4KD_DECOMPRESS) += lz4kd/' \
             "$COMMON_DIR/lib/Makefile"
-          echo "  inserted obj-\$(CONFIG_LZ4KDR_*)/LZ4KD_* lines after lz4/ (decompress)"
+          echo "  inserted obj-\$(CONFIG_LZ4K_*)/LZ4KDR_*/LZ4KD_* lines after lz4/ (decompress)"
         fi
 
         echo "== lz4kd: patching lib/cmdline.c (EXPORT_SYMBOL next_arg) =="
@@ -251,6 +269,25 @@ runs:
         fi
         if [ ! -f "$COMMON_DIR/lib/lz4/lz4.c" ] || [ ! -f "$COMMON_DIR/lib/lz4/lz4hc.c" ]; then
           echo "::error::lib/lz4/lz4.c or lz4hc.c missing after LZ4 1.10.0 patch apply"
+          exit 1
+        fi
+
+        echo "== lz4k (5.10): applying LZ4K source + Kconfig/zcomp wiring =="
+        apply_git_patch "$PATCH_DIR/0005-add-lz4k.patch"
+
+        echo "== lz4k (5.10): sanity-checking touched files =="
+        for f in crypto/lz4k.c include/linux/lz4k.h lib/lz4k/lz4k_encode.c lib/lz4k/lz4k_decode.c; do
+          if [ ! -f "$COMMON_DIR/$f" ]; then
+            echo "::error::expected file missing after patch: $COMMON_DIR/$f"
+            exit 1
+          fi
+        done
+        if ! grep -q '^config CRYPTO_LZ4K$' "$COMMON_DIR/crypto/Kconfig"; then
+          echo "::error::CONFIG_CRYPTO_LZ4K symbol not found in crypto/Kconfig after patch apply"
+          exit 1
+        fi
+        if ! grep -q '"lz4k",' "$COMMON_DIR/drivers/block/zram/zcomp.c"; then
+          echo "::error::lz4k backend not registered in drivers/block/zram/zcomp.c after patch apply"
           exit 1
         fi
 
