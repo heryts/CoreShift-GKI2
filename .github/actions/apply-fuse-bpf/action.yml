@@ -23,14 +23,17 @@ inputs:
     description: 'SHA commit squash "ANDROID: fuse-bpf v1.1" di source_branch.'
   static_patch_path:
     required: false
-    default: ""
+    default: ".github/patches/fuse-bpf/android12-5.10.patch"
     description: >
-      Opsional. Path ke patch statis hasil resolusi manual (mis.
-      .github/patches/fuse-bpf/android12-5.10.patch), relatif ke
-      GITHUB_WORKSPACE. Kalau diisi dan file-nya ada, action akan pakai
-      patch statis ini (git apply biasa) alih-alih clone+diff on the fly.
-      Lebih cepat dan deterministik untuk pemakaian rutin setelah konflik
-      pertama kali diresolusi.
+      Path ke patch statis hasil resolusi manual, relatif ke
+      GITHUB_WORKSPACE. Kalau file-nya ada, action akan pakai patch
+      statis ini (git apply biasa) alih-alih clone+diff on the fly.
+      Lebih cepat dan deterministik. Default sudah mengarah ke patch
+      hasil resolusi konflik android12-5.10-lts -- commit file itu di
+      path ini (lihat android12-5.10.patch) supaya run berikutnya
+      otomatis dipakai tanpa perlu ubah workflow pemanggil. Kosongkan
+      ("") untuk kembali ke mode clone+diff on the fly (mis. kalau
+      squash_sha di-update dan patch statis perlu diregenerasi ulang).
 runs:
   using: composite
   steps:
