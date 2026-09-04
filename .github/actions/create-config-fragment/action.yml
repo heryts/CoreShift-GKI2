@@ -167,14 +167,14 @@ runs:
         fi
 
         echo "== ZRAM LZ4K/LZ4KD/LZ4K_OPLUS: check source tree support =="
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4K; then
-          echo "  CONFIG_CRYPTO_LZ4K found, enabling LZ4K/LZ4KD zram compressors"
+        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KD; then
+          echo "  CONFIG_CRYPTO_LZ4KD found, enabling"
           add_config ZRAM y
           add_config ZSMALLOC y
           add_config CRYPTO_LZ4HC y
-          add_config CRYPTO_LZ4K y
           add_config CRYPTO_LZ4KD y
           add_config CRYPTO_842 y
+
           if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4K; then
             echo "  CONFIG_CRYPTO_LZ4K found, enabling"
             add_config CRYPTO_LZ4K y
@@ -182,6 +182,7 @@ runs:
             echo "  CRYPTO_LZ4K not found in this source tree, skipping"
             echo "  (this kernel_version only has CoreShift's own LZ4KD/LZ4KDR, not SukiSU's LZ4K source patch)"
           fi
+
           if has_kconfig_symbol lib/lz4k_oplus/Kconfig CRYPTO_LZ4K_OPLUS; then
             echo "  CONFIG_CRYPTO_LZ4K_OPLUS found, enabling"
             add_config CRYPTO_LZ4K_OPLUS y
@@ -189,7 +190,7 @@ runs:
             echo "  CRYPTO_LZ4K_OPLUS not found (lib/lz4k_oplus/Kconfig missing/not sourced), skipping"
           fi
         else
-          echo "  CRYPTO_LZ4K not found in this source tree, skipping LZ4K/LZ4KD/LZ4K_OPLUS block"
+          echo "  CRYPTO_LZ4KD not found in this source tree, skipping LZ4K/LZ4KD/LZ4K_OPLUS block"
           echo "  (requires the zram source-add + integration patches to run first)"
         fi
 
@@ -216,19 +217,6 @@ runs:
           echo "  MODULE_SKIP_BUILTIN not found in this source tree, skipping"
           echo "  (requires the module-skip-builtin action to run first and patch init/Kconfig)"
         fi
-
-        if [ "${{ inputs.kernel_version }}" != "5.10" ]; then
-            echo "::error::fuse_bpf=on hanya didukung untuk kernel_version=5.10 (butuh backport via apply-fuse-bpf)"
-            exit 1
-          fi
-          if ! has_kconfig_symbol fs/fuse/Kconfig FUSE_BPF; then
-            echo "::error::CONFIG_FUSE_BPF tidak ditemukan di fs/fuse/Kconfig -- apply-fuse-bpf belum jalan/gagal sebelum step ini"
-            exit 1
-          fi
-          echo "== FUSE-BPF: enabling CONFIG_FUSE_BPF and BPF subsystem deps =="
-          add_config BPF y
-          add_config BPF_SYSCALL y
-          add_config FUSE_BPF y
 
         if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
           add_config KSU y
