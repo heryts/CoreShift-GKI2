@@ -467,6 +467,12 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply FUSE-BPF backport
+        if: inputs.kernel_version == '5.10' && inputs.fuse_bpf == 'on'
+        uses: ./.github/actions/apply-fuse-bpf
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Apply network patches
         uses: ./.github/actions/apply-network-patches
         with:
