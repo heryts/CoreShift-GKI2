@@ -210,6 +210,19 @@ runs:
           echo "  (requires the module-skip-builtin action to run first and patch init/Kconfig)"
         fi
 
+        if [ "${{ inputs.kernel_version }}" != "5.10" ]; then
+            echo "::error::fuse_bpf=on hanya didukung untuk kernel_version=5.10 (butuh backport via apply-fuse-bpf)"
+            exit 1
+          fi
+          if ! has_kconfig_symbol fs/fuse/Kconfig FUSE_BPF; then
+            echo "::error::CONFIG_FUSE_BPF tidak ditemukan di fs/fuse/Kconfig -- apply-fuse-bpf belum jalan/gagal sebelum step ini"
+            exit 1
+          fi
+          echo "== FUSE-BPF: enabling CONFIG_FUSE_BPF and BPF subsystem deps =="
+          add_config BPF y
+          add_config BPF_SYSCALL y
+          add_config FUSE_BPF y
+
         if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
           add_config KSU y
           add_config KSU_HACK_ARM64_BRANCH_LINK y
