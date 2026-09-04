@@ -175,6 +175,13 @@ runs:
           add_config CRYPTO_LZ4K y
           add_config CRYPTO_LZ4KD y
           add_config CRYPTO_842 y
+          if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4K; then
+            echo "  CONFIG_CRYPTO_LZ4K found, enabling"
+            add_config CRYPTO_LZ4K y
+          else
+            echo "  CRYPTO_LZ4K not found in this source tree, skipping"
+            echo "  (this kernel_version only has CoreShift's own LZ4KD/LZ4KDR, not SukiSU's LZ4K source patch)"
+          fi
           if has_kconfig_symbol lib/lz4k_oplus/Kconfig CRYPTO_LZ4K_OPLUS; then
             echo "  CONFIG_CRYPTO_LZ4K_OPLUS found, enabling"
             add_config CRYPTO_LZ4K_OPLUS y
