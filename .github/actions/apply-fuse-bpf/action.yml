@@ -87,6 +87,12 @@ runs:
         echo "== Menerapkan patch (git am -3) ke $COMMON_DIR =="
         pushd "$COMMON_DIR" >/dev/null
 
+        # Runner CI biasanya tidak punya git identity default; git am butuh ini
+        # untuk membuat commit hasil apply. Set lokal (scoped ke repo ini saja),
+        # tidak menimpa identity kalau memang sudah dikonfigurasi sebelumnya.
+        git config user.email >/dev/null 2>&1 || git config user.email "fuse-bpf-backport@ci.local"
+        git config user.name  >/dev/null 2>&1 || git config user.name  "fuse-bpf-backport"
+
         set +e
         git am -3 --keep-cr "$PATCH_FILE"
         AM_STATUS=$?
