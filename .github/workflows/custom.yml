@@ -406,6 +406,56 @@ jobs:
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Dump stock zram/LZ4 source
+        run: |
+          set -euo pipefail
+          COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+          DUMP_DIR="$GITHUB_WORKSPACE/stock-zram-dump"
+          for f in \
+            crypto/Kconfig \
+            crypto/Makefile \
+            crypto/lz4.c \
+            crypto/lz4hc.c \
+            lib/Kconfig \
+            lib/Makefile \
+            drivers/block/zram/Kconfig \
+            drivers/block/zram/zcomp.c \
+            drivers/block/zram/zcomp.h \
+            drivers/block/zram/zram_drv.c \
+            drivers/block/zram/zram_drv.h \
+            mm/zsmalloc.c \
+            include/linux/zsmalloc.h \
+            include/linux/lz4.h \
+            fs/f2fs/compress.c \
+            fs/f2fs/Makefile \
+            fs/incfs/data_mgmt.c \
+          ; do
+            if [ ! -f "$COMMON_DIR/$f" ]; then
+              echo "::warning::stock file missing, skipping: $f"
+              continue
+            fi
+            mkdir -p "$DUMP_DIR/$(dirname "$f")"
+            cp "$COMMON_DIR/$f" "$DUMP_DIR/$f"
+            echo "  dumped $f"
+          done
+          if [ -d "$COMMON_DIR/lib/lz4" ]; then
+            mkdir -p "$DUMP_DIR/lib/lz4"
+            cp -rp "$COMMON_DIR/lib/lz4/." "$DUMP_DIR/lib/lz4/"
+            echo "  dumped lib/lz4/ (whole dir)"
+          else
+            echo "::warning::stock dir missing, skipping: lib/lz4/"
+          fi
+
+      - name: Upload stock zram/LZ4 source dump
+        uses: actions/upload-artifact@v6
+        with:
+          name: stock-zram-dump-${{ inputs.kernel_version }}
+          path: stock-zram-dump/**
+          if-no-files-found: error
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
+
       - name: Apply LZ4KD/LZ4KDR Patches
         if: inputs.source_mode != 'cloudfox'
         uses: ./.github/actions/apply-lz4kd
