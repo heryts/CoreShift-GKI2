@@ -111,9 +111,15 @@ runs:
 
         echo "== enabling BBRv3 TCP congestion control =="
         add_config TCP_CONG_ADVANCED y
-        add_config TCP_CONG_BBR3 y
         add_config TCP_CONG_BBR y
-        add_config DEFAULT_BBR3 y
+
+        if [ "${bbrv3_patch_applied:-false}" = "true" ]; then
+          add_config TCP_CONG_BBR3 y
+          add_config DEFAULT_BBR3 y
+        else
+          echo "  bbrv3_patch_applied=${bbrv3_patch_applied:-unset}: BBRv3 patch was not applied for kernel_version=${{ inputs.kernel_version }}"
+          echo "  (CONFIG_TCP_CONG_BBR3 / CONFIG_DEFAULT_BBR3 Kconfig symbols don't exist on this tree yet, skipping)"
+        fi
 
         echo "== enabling base TCP congestion control algorithms =="
         add_config TCP_CONG_CUBIC y
@@ -166,13 +172,23 @@ runs:
           add_config IKCONFIG_PROC y
         fi
 
+        echo "== ZRAM/ZSMALLOC build type =="
+        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+          echo "  kernel_version=5.10: ZRAM/ZSMALLOC built-in (required by LZ4KDR/multi-comp)"
+          add_config ZRAM y
+          add_config ZSMALLOC y
+        else
+          echo "  kernel_version=${{ inputs.kernel_version }}: ZRAM/ZSMALLOC as modules"
+          echo "  (android/gki_aarch64_modules still expects zram.ko/zsmalloc.ko for this version)"
+          add_config ZRAM m
+          add_config ZSMALLOC m
+        fi
+
         if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
           echo "== ZRAM LZ4KDR: check source tree support (5.10 only) =="
           if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
              has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
             echo "  CONFIG_CRYPTO_LZ4KDR and ZRAM_DEF_COMP_LZ4KDR choice found, enabling"
-            add_config ZRAM y
-            add_config ZSMALLOC y
             add_config ZRAM_DEF_COMP_LZ4KDR y
             add_config CRYPTO_LZ4KDR y
           else
@@ -183,8 +199,6 @@ runs:
           echo "== ZRAM recompression (multi-comp): check source tree support (5.10 only) =="
           if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
             echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
-            add_config ZRAM y
-            add_config ZSMALLOC y
             add_config ZRAM_MULTI_COMP y
             if has_kconfig_symbol crypto/Kconfig CRYPTO_ZSTD; then
               add_config CRYPTO_ZSTD y
@@ -208,16 +222,6 @@ runs:
         echo "== ZRAM LZ4K/LZ4KD/LZ4K_OPLUS: check source tree support =="
         if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KD; then
           echo "  CONFIG_CRYPTO_LZ4KD found, enabling"
-
-          if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-            add_config ZRAM y
-            add_config ZSMALLOC y
-          else
-            echo "  kernel_version=${{ inputs.kernel_version }}: keeping ZRAM/ZSMALLOC as modules"
-            echo "  (android/gki_aarch64_modules still expects zram.ko/zsmalloc.ko for this version)"
-            add_config ZRAM m
-            add_config ZSMALLOC m
-          fi
 
           add_config CRYPTO_LZ4HC y
           add_config CRYPTO_LZ4KD y
