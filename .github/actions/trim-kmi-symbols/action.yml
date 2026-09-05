@@ -1,0 +1,94 @@
+name: Trim unbuilt-driver entries from KMI symbol lists
+description: >
+  Remove ashmem and Rust Binder tracepoint symbols from the
+  common/gki/aarch64/symbols/* KMI symbol lists when the underlying
+  driver isn't actually enabled for this config, so
+  kmi_symbol_list_strict_mode doesn't fail with "Symbols missing from
+  the ksymtab". Only acts on kernel_version=6.12. Must run AFTER
+  "Create private config fragment" (it reads private.fragment) and
+  BEFORE "Build kernel".
+inputs:
+  kernel_version:
+    required: true
+    description: Kernel version to build.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+          echo "kernel_version=${{ inputs.kernel_version }}: KMI symbol trim only applies to 6.12, skipping"
+          exit 0
+        fi
+
+        ROOT_DIR="$GITHUB_WORKSPACE"
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
+        SYMBOLS_DIR="$COMMON_DIR/gki/aarch64/symbols"
+        PRIVATE_FRAGMENT="$COMMON_DIR/private.fragment"
+
+        if [ ! -d "$SYMBOLS_DIR" ]; then
+          echo "  no common/gki/aarch64/symbols directory in this tree, nothing to do, skipping"
+          exit 0
+        fi
+
+        is_config_requested() {
+          local symbol="$1"
+          [ -f "$PRIVATE_FRAGMENT" ] && grep -qE "^CONFIG_${symbol}=(y|m)\$" "$PRIVATE_FRAGMENT"
+        }
+
+        remove_symbol() {
+          local symbol="$1"
+          local removed=0
+          local f
+          for f in "$SYMBOLS_DIR"/*; do
+            [ -f "$f" ] || continue
+            if grep -qxF "  $symbol" "$f"; then
+              sed -i "/^  ${symbol}\$/d" "$f"
+              echo "  removed $symbol from $(basename "$f")"
+              removed=1
+            fi
+          done
+          if [ "$removed" = 0 ]; then
+            echo "  $symbol not listed in any symbol list, nothing to remove"
+          fi
+        }
+
+        echo "== Rust Binder tracepoint symbols =="
+        RUST_BINDER_ENABLED="false"
+        for sym in ANDROID_BINDER_IPC_RUST ANDROID_BINDER_IPC_RUST_DUMMY; do
+          if is_config_requested "$sym"; then
+            echo "  CONFIG_${sym} is requested in private.fragment, leaving Rust Binder symbols alone"
+            RUST_BINDER_ENABLED="true"
+          fi
+        done
+        if [ "$RUST_BINDER_ENABLED" = "false" ]; then
+          echo "  Rust Binder is not enabled for this build, trimming its KMI symbols"
+          for sym in \
+            RUST_BINDER_LAYOUT \
+            __traceiter_android_vh_rust_binder_looper_entry \
+            __traceiter_android_vh_rust_binder_restore_priority \
+            __traceiter_android_vh_rust_binder_set_priority \
+            __tracepoint_android_vh_rust_binder_looper_entry \
+            __tracepoint_android_vh_rust_binder_restore_priority \
+            __tracepoint_android_vh_rust_binder_set_priority \
+          ; do
+            remove_symbol "$sym"
+          done
+        fi
+
+        echo "== ashmem symbols =="
+        ASHMEM_ENABLED="false"
+        for sym in ASHMEM ANDROID_ASHMEM; do
+          if is_config_requested "$sym"; then
+            echo "  CONFIG_${sym} is requested in private.fragment, leaving ashmem symbols alone"
+            ASHMEM_ENABLED="true"
+          fi
+        done
+        if [ "$ASHMEM_ENABLED" = "false" ]; then
+          echo "  ashmem is not enabled for this build, trimming its KMI symbols"
+          for sym in ashmem_area_name ashmem_area_size ashmem_area_vmfile is_ashmem_file; do
+            remove_symbol "$sym"
+          done
+        fi
