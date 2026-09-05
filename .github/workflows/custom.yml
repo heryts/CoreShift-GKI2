@@ -59,12 +59,6 @@ on:
         required: true
         options: ["on", "off"]
         default: "on"
-      nomount_maxsteeel:
-        description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
-        type: choice
-        required: true
-        options: ["off", "on"]
-        default: "on"
       kpm_support:
         description: "Patch the built Image for KPM support"
         type: choice
@@ -139,10 +133,6 @@ on:
       boot_img_url:
         description: "Direct or Google Drive URL to the stock boot.img to patch (required when boot_img_mode=on)"
         type: string
-        required: false
-        default: ""
-      build_stamp:
-        description: "Custom kernel version. Format: 'NAME|DATE'. Leave empty to keep default."
         required: false
         default: ""
 
