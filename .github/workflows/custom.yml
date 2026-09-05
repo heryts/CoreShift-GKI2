@@ -503,6 +503,11 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Trim unbuilt-driver entries from KMI symbol lists
+        uses: ./.github/actions/trim-kmi-symbols
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          
       - name: Install legacy CoreShift build config
         if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/install-legacy-private-fragment
