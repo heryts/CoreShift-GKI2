@@ -1,0 +1,71 @@
+name: Skip unbuilt rust_binder module (android16-6.12)
+description: >
+  If the Rust Binder driver isn't going to be built as a module for this
+  source tree/config, strip drivers/android/binder/rust_binder.ko from
+  common/modules.bzl so the Kleaf dist target (//common:kernel_aarch64_dist)
+  doesn't fail at packaging time looking for a .ko that was never built.
+  Only acts on kernel_version=6.12. Must run AFTER "Create private config
+  fragment" (it reads private.fragment) and BEFORE "Build kernel".
+inputs:
+  kernel_version:
+    required: true
+    description: Kernel version to build.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+          echo "kernel_version=${{ inputs.kernel_version }}: rust_binder module skip only applies to 6.12, skipping"
+          exit 0
+        fi
+
+        ROOT_DIR="$GITHUB_WORKSPACE"
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
+        MODULES_BZL="$COMMON_DIR/modules.bzl"
+        PRIVATE_FRAGMENT="$COMMON_DIR/private.fragment"
+        FIXUP_SCRIPT="$ROOT_DIR/.github/scripts/remove-rust-binder-module.py"
+
+        if [ ! -f "$MODULES_BZL" ]; then
+          echo "  no common/modules.bzl in this tree, nothing to do, skipping"
+          exit 0
+        fi
+
+        if ! grep -q "rust_binder.ko" "$MODULES_BZL"; then
+          echo "  rust_binder.ko not referenced in modules.bzl, nothing to do, skipping"
+          exit 0
+        fi
+
+        echo "== checking whether this build's config actually enables Rust Binder =="
+        RUST_WILL_BUILD="false"
+        for sym in ANDROID_BINDER_IPC_RUST ANDROID_BINDER_IPC_RUST_DUMMY; do
+          if [ -f "$PRIVATE_FRAGMENT" ] && grep -qE "^CONFIG_${sym}=(y|m)\$" "$PRIVATE_FRAGMENT"; then
+            echo "  CONFIG_${sym} is requested as y/m in private.fragment, rust_binder.ko should build"
+            RUST_WILL_BUILD="true"
+          fi
+        done
+
+        if [ "$RUST_WILL_BUILD" = "true" ]; then
+          echo "  Rust Binder is enabled for this build, leaving modules.bzl untouched"
+          exit 0
+        fi
+
+        echo "== rust_binder.ko is listed in modules.bzl but no Rust Binder Kconfig is enabled =="
+        echo "== removing it from common/modules.bzl so the Kleaf dist target doesn't fail looking for it =="
+
+        if [ ! -f "$FIXUP_SCRIPT" ]; then
+          echo "::error::fixup script missing: $FIXUP_SCRIPT"
+          echo "::error::copy remove-rust-binder-module.py into $(dirname "$FIXUP_SCRIPT")"
+          exit 1
+        fi
+
+        python3 "$FIXUP_SCRIPT" "$MODULES_BZL"
+
+        if grep -q "rust_binder.ko" "$MODULES_BZL"; then
+          echo "::error::rust_binder.ko still present in modules.bzl after fixup script ran"
+          exit 1
+        fi
+
+        echo "  removed rust_binder.ko from common/modules.bzl"
