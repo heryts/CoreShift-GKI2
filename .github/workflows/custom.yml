@@ -59,6 +59,12 @@ on:
         required: true
         options: ["on", "off"]
         default: "on"
+      nomount_maxsteeel:
+        description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
+        type: choice
+        required: true
+        options: ["off", "on"]
+        default: "on"
       kpm_support:
         description: "Patch the built Image for KPM support"
         type: choice
@@ -124,15 +130,8 @@ on:
         required: true
         options: ["release", "artifact", "both"]
         default: "artifact"
-      boot_img_mode:
-        description: "Also patch a stock boot.img with the new kernel (fastboot-flashable, LKM-style, unsigned — needs unlocked bootloader)"
-        type: choice
-        required: true
-        options: ["on", "off"]
-        default: "off"
-      boot_img_url:
-        description: "Direct or Google Drive URL to the stock boot.img to patch (required when boot_img_mode=on)"
-        type: string
+      build_stamp:
+        description: "Custom kernel version. Format: 'NAME|DATE'. Leave empty to keep default."
         required: false
         default: ""
 
@@ -192,11 +191,6 @@ jobs:
 
           if [ "${{ inputs.source_mode }}" = "cloudfox" ] && [ "${{ inputs.manager }}" != "Vanilla" ] && [ "${{ inputs.manager }}" != "KowSU" ]; then
             echo "::error::source_mode=cloudfox already vendors the KowSU driver; choose manager=Vanilla or manager=KowSU instead of ${{ inputs.manager }}"
-            exit 1
-          fi
-
-          if [ "${{ inputs.boot_img_mode }}" = "on" ] && [ -z "${{ inputs.boot_img_url }}" ]; then
-            echo "::error::boot_img_url is required when boot_img_mode=on"
             exit 1
           fi
 
@@ -448,6 +442,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply NoMount support (maxsteeel)
+        if: inputs.nomount_maxsteeel == 'on'
         uses: ./.github/actions/apply-nomount
         with:
           kernel_version: ${{ inputs.kernel_version }}
@@ -490,6 +485,7 @@ jobs:
           manager: ${{ inputs.manager }}
           ikconfig: ${{ inputs.ikconfig }}
           susfs: ${{ inputs.susfs }}
+          nomount_maxsteeel: ${{ inputs.nomount_maxsteeel }}
           kpm_support: ${{ inputs.kpm_support }}
           baseband_guard: ${{ inputs.baseband_guard }}
           droidspaces: ${{ inputs.droidspaces }}
@@ -579,76 +575,6 @@ jobs:
           manager: ${{ inputs.manager }}
           susfs: ${{ inputs.susfs }}
           final_name: ${{ steps.build-name.outputs.final_name }}
-
-      - name: Download stock boot.img
-        if: inputs.boot_img_mode == 'on'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p boot-patch
-          url="${{ inputs.boot_img_url }}"
-
-          if [[ "$url" == *"drive.google.com"* ]]; then
-            pip install --break-system-packages -q gdown
-            python3 -m gdown --fuzzy "$url" -O boot-patch/stock_boot.img
-          else
-            curl -L --fail -o boot-patch/stock_boot.img "$url"
-          fi
-
-          if [ ! -s boot-patch/stock_boot.img ]; then
-            echo "::error::Failed to download a non-empty stock boot.img from boot_img_url"
-            exit 1
-          fi
-
-      - name: Fetch magiskboot
-        if: inputs.boot_img_mode == 'on'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          curl -L --fail -o boot-patch/magisk.apk \
-            "https://github.com/topjohnwu/Magisk/releases/latest/download/app-release.apk"
-
-          cd boot-patch
-          unzip -o -j magisk.apk "lib/x86_64/libmagiskboot.so"
-          mv libmagiskboot.so magiskboot
-          chmod +x magiskboot
-
-      - name: Patch boot.img with new kernel (unsigned, LKM-style)
-        if: inputs.boot_img_mode == 'on'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          kernel_image="out/Image-${{ steps.build-name.outputs.final_name }}"
-          if [ ! -f "$kernel_image" ]; then
-            echo "::error::Built kernel image not found at $kernel_image"
-            exit 1
-          fi
-
-          workdir="boot-patch/work"
-          mkdir -p "$workdir"
-          cp boot-patch/stock_boot.img "$workdir/boot.img"
-          new_kernel="$PWD/$kernel_image"
-
-          cd "$workdir"
-          ../magiskboot unpack boot.img
-          cp "$new_kernel" kernel
-          ../magiskboot repack boot.img new-boot.img
-          cd -
-
-          mv "$workdir/new-boot.img" "${{ steps.build-name.outputs.final_name }}-boot.img"
-          echo "Patched boot.img (unsigned — flash only on an unlocked bootloader):"
-          ls -la "${{ steps.build-name.outputs.final_name }}-boot.img"
-
-      - name: Upload flashable boot.img
-        if: inputs.boot_img_mode == 'on'
-        uses: actions/upload-artifact@v6
-        with:
-          name: bootimg-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
-          path: ${{ steps.build-name.outputs.final_name }}-boot.img
-          if-no-files-found: error
 
       - name: Stage artifact outputs
         shell: bash
