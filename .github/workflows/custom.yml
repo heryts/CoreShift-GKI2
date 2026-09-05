@@ -498,6 +498,11 @@ jobs:
           heavy_debug_features: ${{ inputs.heavy_debug_features }}
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Skip unbuilt rust_binder module
+        uses: ./.github/actions/skip-rust-binder-module
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Install legacy CoreShift build config
         if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/install-legacy-private-fragment
