@@ -26,7 +26,7 @@ runs:
         COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
         MODULES_BZL="$COMMON_DIR/modules.bzl"
         PRIVATE_FRAGMENT="$COMMON_DIR/private.fragment"
-        FIXUP_SCRIPT="$ROOT_DIR/.github/scripts/remove-rust-binder-module.py"
+        FIXUP_SCRIPT="$ROOT_DIR/.github/patches/source-fixes/gki-android16-6.12/remove-rust-binder-module.py"
 
         if [ ! -f "$MODULES_BZL" ]; then
           echo "  no common/modules.bzl in this tree, nothing to do, skipping"
