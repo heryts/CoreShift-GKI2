@@ -200,7 +200,7 @@ runs:
 
           build_status=0
           tools/bazel run "${bazel_args[@]}" "$BAZEL_TARGET" -- \
-            --dist_dir=out/dist || build_status=$?
+            --destdir=out/dist || build_status=$?
 
           if [ "$build_status" -ne 0 ] && [ "${{ inputs.kernel_version }}" = "6.12" ]; then
             print_ashmem_kmi_diagnostics
