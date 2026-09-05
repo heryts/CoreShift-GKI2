@@ -1,0 +1,122 @@
+name: Apply fixes for kernel (android16-6.12)
+description: >
+  Apply fixes for unbuilt drivers (android16-6.12)
+inputs:
+  kernel_version:
+    required: true
+    description: Kernel version to build.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+          echo "kernel_version=${{ inputs.kernel_version }}: fixes only apply to 6.12, skipping"
+          exit 0
+        fi
+
+        ROOT_DIR="$GITHUB_WORKSPACE"
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
+        PRIVATE_FRAGMENT="$COMMON_DIR/private.fragment"
+
+        is_config_requested() {
+          local symbol="$1"
+          [ -f "$PRIVATE_FRAGMENT" ] && grep -qE "^CONFIG_${symbol}=(y|m)\$" "$PRIVATE_FRAGMENT"
+        }
+
+        RUST_BINDER_ENABLED="false"
+        for sym in ANDROID_BINDER_IPC_RUST ANDROID_BINDER_IPC_RUST_DUMMY; do
+          if is_config_requested "$sym"; then
+            RUST_BINDER_ENABLED="true"
+          fi
+        done
+
+        ASHMEM_ENABLED="false"
+        for sym in ASHMEM ANDROID_ASHMEM; do
+          if is_config_requested "$sym"; then
+            ASHMEM_ENABLED="true"
+          fi
+        done
+
+        echo "RUST_BINDER_ENABLED=$RUST_BINDER_ENABLED"
+        echo "ASHMEM_ENABLED=$ASHMEM_ENABLED"
+
+        echo
+        echo "== [1/2] Skip unbuilt rust_binder module =="
+        MODULES_BZL="$COMMON_DIR/modules.bzl"
+        FIXUP_SCRIPT="$ROOT_DIR/.github/patches/source-fixes/gki-android16-6.12/remove-rust-binder-module.py"
+
+        if [ ! -f "$MODULES_BZL" ]; then
+          echo "  no common/modules.bzl in this tree, nothing to do, skipping"
+        elif ! grep -q "rust_binder.ko" "$MODULES_BZL"; then
+          echo "  rust_binder.ko not referenced in modules.bzl, nothing to do, skipping"
+        elif [ "$RUST_BINDER_ENABLED" = "true" ]; then
+          echo "  Rust Binder is enabled for this build, leaving modules.bzl untouched"
+        else
+          echo "  rust_binder.ko is listed in modules.bzl but no Rust Binder Kconfig is enabled"
+          echo "  removing it from common/modules.bzl so the Kleaf dist target doesn't fail looking for it"
+          if [ ! -f "$FIXUP_SCRIPT" ]; then
+            echo "::error::fixup script missing: $FIXUP_SCRIPT"
+            echo "::error::copy remove-rust-binder-module.py into $(dirname "$FIXUP_SCRIPT")"
+            exit 1
+          fi
+          python3 "$FIXUP_SCRIPT" "$MODULES_BZL"
+          if grep -q "rust_binder.ko" "$MODULES_BZL"; then
+            echo "::error::rust_binder.ko still present in modules.bzl after fixup script ran"
+            exit 1
+          fi
+          echo "  removed rust_binder.ko from common/modules.bzl"
+        fi
+
+        echo
+        echo "== [2/2] Trim unbuilt-driver entries from KMI symbol lists =="
+        SYMBOLS_DIR="$COMMON_DIR/gki/aarch64/symbols"
+
+        remove_symbol() {
+          local symbol="$1"
+          local removed=0
+          local f
+          for f in "$SYMBOLS_DIR"/*; do
+            [ -f "$f" ] || continue
+            if grep -qxF "  $symbol" "$f"; then
+              sed -i "/^  ${symbol}\$/d" "$f"
+              echo "  removed $symbol from $(basename "$f")"
+              removed=1
+            fi
+          done
+          if [ "$removed" = 0 ]; then
+            echo "  $symbol not listed in any symbol list, nothing to remove"
+          fi
+        }
+
+        if [ ! -d "$SYMBOLS_DIR" ]; then
+          echo "  no common/gki/aarch64/symbols directory in this tree, nothing to do, skipping"
+        else
+          echo "  -- Rust Binder tracepoint symbols --"
+          if [ "$RUST_BINDER_ENABLED" = "true" ]; then
+            echo "  Rust Binder is enabled for this build, leaving its KMI symbols alone"
+          else
+            for sym in \
+              RUST_BINDER_LAYOUT \
+              __traceiter_android_vh_rust_binder_looper_entry \
+              __traceiter_android_vh_rust_binder_restore_priority \
+              __traceiter_android_vh_rust_binder_set_priority \
+              __tracepoint_android_vh_rust_binder_looper_entry \
+              __tracepoint_android_vh_rust_binder_restore_priority \
+              __tracepoint_android_vh_rust_binder_set_priority \
+            ; do
+              remove_symbol "$sym"
+            done
+          fi
+
+          echo "  -- ashmem symbols --"
+          if [ "$ASHMEM_ENABLED" = "true" ]; then
+            echo "  ashmem is enabled for this build, leaving its KMI symbols alone"
+          else
+            for sym in ashmem_area_name ashmem_area_size ashmem_area_vmfile is_ashmem_file; do
+              remove_symbol "$sym"
+            done
+          fi
+        fi
