@@ -179,7 +179,7 @@ runs:
             else
               echo "== manager=${{ inputs.manager }}: no static de-inlined patch at $STATIC_DEINLINED_PATCH =="
               echo "== de-inlining core SUSFS patch on the fly (commit $SUSFS_COMMIT) =="
-              DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/scripts/susfs_deinlined.sh"
+              DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
               if [ ! -x "$DEINLINE_SCRIPT" ]; then
                 echo "::error::missing or non-executable de-inline script: $DEINLINE_SCRIPT"
                 exit 1
