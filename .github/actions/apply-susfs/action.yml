@@ -256,12 +256,39 @@ runs:
         cd "$KSU_ROOT"
 
         echo
-        if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ] || [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+        if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
-          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-            echo "manager=KernelSU-Backslashxx now sources from midori01/KernelSU@xx"
-          else
-            echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
+          echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+          echo "== check/apply KernelSU-Backslashxx SUSFS enablement patch (midori01/KernelSU xx.patch) =="
+          echo "Mirrors midori01/gki_ksu_workflow's own MidoriSU-XX handling: KSU_ROOT here is the"
+          echo "real backslashxx/KernelSU tree (pinned in init-manager), and this patch is the same"
+          echo "commit midori01/KernelSU's 'xx' branch is built from - it adds the SUSFS Kconfig menu"
+          echo "(KSU_SUSFS, SUS_PATH, SUS_MOUNT, etc., all default y - note there is no SUS_SU option"
+          echo "for this hook mode) plus the branch-link-hook/selinux/supercall wiring."
+
+          XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
+          XX_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx.patch"
+
+          echo "fetching $XX_PATCH_URL"
+          if ! curl -fsSL "$XX_PATCH_URL" -o "$XX_PATCH"; then
+            echo "::error::failed to fetch $XX_PATCH_URL"
+            exit 1
+          fi
+
+          if ! git apply --check "$XX_PATCH"; then
+            echo "::error::midori01/KernelSU xx.patch does not apply to this backslashxx/KernelSU tree"
+            echo "::error::backslashxx/KernelSU master may have moved past the commit this patch targets;"
+            echo "::error::check https://github.com/midori01/KernelSU/commits/xx for an updated patch,"
+            echo "::error::or override manager_ref to pin a compatible commit."
+            exit 1
+          fi
+
+          git apply "$XX_PATCH"
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after KernelSU-Backslashxx SUSFS enablement patch"
+            exit 1
           fi
         elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT (safe mode) =="
