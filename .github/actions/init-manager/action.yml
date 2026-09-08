@@ -205,6 +205,22 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
+        if [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
+          for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
+            if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+              echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature =="
+              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+              /return true;/a\
+              \
+              \t// MidoriSU Manager (com.midori.supermanager)\
+              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+              \t\treturn true;
+              }' "$APK_SIGN_FILE"
+              grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+            fi
+          done
+        fi
+        
         if { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ]; } &&
           [ -f drivers/staging/Kconfig ] &&
           grep -q 'source "drivers/staging/kernelsu/kernel/Kconfig"' drivers/staging/Kconfig; then
