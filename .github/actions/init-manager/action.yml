@@ -53,6 +53,10 @@ runs:
           echo "== KSUN-Susfs-Hookless: using MirahSyakilla/KSUN fork (pinned via .gitmodules) =="
         fi
 
+        if [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
+          echo "== $MANAGER: plain backslashxx/KernelSU (submodule default), hook mode is a config-only choice =="
+        fi
+
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== KernelSU-Backslashxx + SUSFS: staying on backslashxx/KernelSU (submodule default) =="
           echo "SUSFS enablement is applied as a patch (midori01/KernelSU xx.patch) in apply-susfs,"
@@ -108,7 +112,7 @@ runs:
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
               ;;
-            KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12)
+            KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12|KernelSU-Midori-Manual:5.10|KernelSU-Midori-Manual:6.1|KernelSU-Midori-Manual:6.6|KernelSU-Midori-Manual:6.12|KernelSU-Midori-BranchLink:5.10|KernelSU-Midori-BranchLink:6.1|KernelSU-Midori-BranchLink:6.6|KernelSU-Midori-BranchLink:6.12|KernelSU-Midori-Tamper:5.10|KernelSU-Midori-Tamper:6.1|KernelSU-Midori-Tamper:6.6|KernelSU-Midori-Tamper:6.12)
               SELECTED_MANAGER_REF="d4632567557312516a9fafdb68cf3ee33ae6075f"
               MANAGER_REF_SOURCE="susfs-default (commit midori01/KernelSU xx.patch is generated against)"
               ;;
@@ -145,7 +149,7 @@ runs:
 
         PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
 
-        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
+        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
           MANAGER_REF_SOURCE="submodule-head"
           echo "using submodule HEAD as setup ref: $SELECTED_MANAGER_REF"
@@ -182,13 +186,14 @@ runs:
         if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "dev-susfs"
-        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; }; then
+        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; }; then
+          echo "== calling setup.sh with explicit ref to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "$SELECTED_MANAGER_REF"
         else
           bash "$SETUP_SCRIPT"
         fi
 
-        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
+        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
           echo "== restore pinned submodule commit after setup.sh =="
           git -C "$MANAGER_DIR" checkout -f "$PRE_SETUP_MANAGER_HEAD"
           RESTORED_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
@@ -247,7 +252,7 @@ runs:
           echo "integrated KSU describe: $INTEGRATED_KSU_DESCRIBE"
           git -C "$KSU_ROOT" remote -v || true
 
-          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; }; then
+          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; }; then
             if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
               echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
               echo "::error::expected=$SELECTED_MANAGER_REF"
@@ -258,5 +263,63 @@ runs:
         else
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
+
+        if [ "$MANAGER" = "KernelSU-Midori-Manual" ]; then
+          echo "== KernelSU-Midori-Manual: applying scope-min-manual-hooks-v2.3.patch to kernel tree =="
+
+          MANUAL_HOOKS_PATCH="${RUNNER_TEMP:-/tmp}/scope-min-manual-hooks-v2.3-${KERNEL_VERSION}.patch"
+
+          if [ "$KERNEL_VERSION" = "5.10" ]; then
+            # midori01/gki_ksu_workflow doesn't publish android12-5.10 at all, but the
+            # patch itself is generic KernelSU manual-hook wiring (do_execveat_common,
+            # do_faccessat, newfstatat family, sys_reboot) - unchanged between
+            # android12-5.10-lts and android14-6.1 at every one of these call sites
+            # (verified directly against aosp-mirror/kernel_common). This is the same
+            # patch, regenerated with 5.10's own line numbers/blob hashes instead of
+            # relying on git apply's fuzzy offset matching against the 6.1 line numbers.
+            LOCAL_MANUAL_PATCH="${GITHUB_WORKSPACE}/.github/patches/manual-hooks/android12-5.10/scope-min-manual-hooks-v2.3.patch"
+            if [ ! -f "$LOCAL_MANUAL_PATCH" ]; then
+              echo "::error::missing $LOCAL_MANUAL_PATCH"
+              echo "::error::android12-5.10 has no upstream source for this patch (not published by"
+              echo "::error::midori01/gki_ksu_workflow); it must be committed to this repo directly."
+              exit 1
+            fi
+            cp "$LOCAL_MANUAL_PATCH" "$MANUAL_HOOKS_PATCH"
+            echo "using locally-committed patch: $LOCAL_MANUAL_PATCH"
+          else
+            case "$KERNEL_VERSION" in
+              6.1)  MIDORI_KMI="android14-6.1" ;;
+              6.6)  MIDORI_KMI="android15-6.6" ;;
+              6.12) MIDORI_KMI="android16-6.12" ;;
+              *)
+                echo "::error::manager=KernelSU-Midori-Manual has no manual-hooks patch for kernel_version=$KERNEL_VERSION"
+                exit 1
+                ;;
+            esac
+
+            MANUAL_HOOKS_PATCH_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/${MIDORI_KMI}/scope-min-manual-hooks-v2.3.patch"
+            echo "fetching $MANUAL_HOOKS_PATCH_URL"
+            if ! curl -fsSL "$MANUAL_HOOKS_PATCH_URL" -o "$MANUAL_HOOKS_PATCH"; then
+              echo "::error::failed to fetch $MANUAL_HOOKS_PATCH_URL"
+              exit 1
+            fi
+          fi
+
+          cd "$COMMON_DIR"
+          if ! git apply --check "$MANUAL_HOOKS_PATCH"; then
+            echo "::error::scope-min-manual-hooks-v2.3.patch (kernel_version=$KERNEL_VERSION) does not apply to this kernel tree"
+            echo "::error::the target kernel branch may have moved past the commit this patch targets"
+            exit 1
+          fi
+          git apply "$MANUAL_HOOKS_PATCH"
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' fs kernel 2>/dev/null; then
+            echo "::error::conflict markers found after scope-min-manual-hooks-v2.3.patch"
+            exit 1
+          fi
+          echo "manual hooks patch applied (kernel_version=$KERNEL_VERSION)"
+        fi
+
+        cd "$COMMON_DIR"
         git add . 2>/dev/null
         git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
