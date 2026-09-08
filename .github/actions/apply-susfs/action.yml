@@ -27,11 +27,6 @@ runs:
           exit 1
         fi
 
-        if [ "${{ inputs.manager }}" = "KowSU" ]; then
-          echo "::error::SUSFS4KSU is not yet supported for manager=${{ inputs.manager }}."
-          exit 1
-        fi
-
         case "${{ inputs.kernel_version }}" in
           5.10) SUSFS_BRANCH="gki-android12-5.10"; SUSFS_DEFAULT_REF="fb16b41" ;;
           6.1)  SUSFS_BRANCH="gki-android14-6.1";  SUSFS_DEFAULT_REF="5727f79" ;;
@@ -163,11 +158,14 @@ runs:
         # applying it. Generated on the fly so it always tracks whatever
         # susfs4ksu commit is pinned above, instead of a stale prebuilt file.
         case "${{ inputs.manager }}" in
-          KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper)
-            # All four managers here are plain backslashxx/KernelSU with only a
-            # Kconfig-level hook-mode choice (or, for -Manual, one extra kernel-tree
-            # patch applied in init-manager) differentiating them - none of that
-            # changes what the core SUSFS patch needs to touch, so they all need
+          KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper|KowSU)
+            # The four KernelSU-Backslashxx/-Midori-* entries are plain backslashxx/KernelSU
+            # with only a Kconfig-level hook-mode choice (or, for -Manual, one extra
+            # kernel-tree patch applied in init-manager) differentiating them. KowSU is
+            # a separate manager (MidoriSU-KX / KOWX712-KernelSU) that also has its own
+            # built-in hook mechanism (supercall) instead of relying on inline
+            # #ifdef CONFIG_KSU_SUSFS call-sites. Neither family changes what the core
+            # SUSFS patch needs to touch, so they all need
             # the same de-inlined core patch (same fs/*, kernel/*, mm/* changes;
             # avoids double-hooking against the manager's own hook call-sites).
             #
@@ -297,6 +295,36 @@ runs:
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
             echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
+            exit 1
+          fi
+        elif [ "${{ inputs.manager }}" = "KowSU" ]; then
+          echo "== check/apply KowSU SUSFS enablement patch (midori01/KernelSU kow.patch) =="
+          echo "Mirrors midori01/gki_ksu_workflow's own MidoriSU-KX handling: KSU_ROOT here is the"
+          echo "real KOWX712/KernelSU tree (pinned in init-manager), and this patch is the same"
+          echo "commit midori01/KernelSU's 'kow' branch is built from - it adds the SUSFS Kconfig"
+          echo "menu plus the de-inlined-hook/selinux/supercall wiring for this manager."
+
+          KOW_PATCH_URL="https://github.com/midori01/KernelSU/commit/kow.patch"
+          KOW_PATCH="${RUNNER_TEMP:-/tmp}/kowsu-susfs-kow.patch"
+
+          echo "fetching $KOW_PATCH_URL"
+          if ! curl -fsSL "$KOW_PATCH_URL" -o "$KOW_PATCH"; then
+            echo "::error::failed to fetch $KOW_PATCH_URL"
+            exit 1
+          fi
+
+          if ! git apply --check "$KOW_PATCH"; then
+            echo "::error::midori01/KernelSU kow.patch does not apply to this KOWX712/KernelSU tree"
+            echo "::error::KOWX712/KernelSU master may have moved past the commit this patch targets;"
+            echo "::error::check https://github.com/midori01/KernelSU/commits/kow for an updated patch,"
+            echo "::error::or override manager_ref to pin a compatible commit."
+            exit 1
+          fi
+
+          git apply "$KOW_PATCH"
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after KowSU SUSFS enablement patch"
             exit 1
           fi
         elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
