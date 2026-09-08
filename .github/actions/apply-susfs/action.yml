@@ -163,7 +163,14 @@ runs:
         # applying it. Generated on the fly so it always tracks whatever
         # susfs4ksu commit is pinned above, instead of a stale prebuilt file.
         case "${{ inputs.manager }}" in
-          KernelSU-Backslashxx)
+          KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper)
+            # All four managers here are plain backslashxx/KernelSU with only a
+            # Kconfig-level hook-mode choice (or, for -Manual, one extra kernel-tree
+            # patch applied in init-manager) differentiating them - none of that
+            # changes what the core SUSFS patch needs to touch, so they all need
+            # the same de-inlined core patch (same fs/*, kernel/*, mm/* changes;
+            # avoids double-hooking against the manager's own hook call-sites).
+            #
             # .github/patches/susfs4ksu/<branch>/ is the reference location for
             # reviewed, committed de-inlined core patches (kept in sync with the
             # susfs4ksu version pinned above by whoever refreshes them). Prefer
@@ -259,13 +266,15 @@ runs:
         if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          echo "== check/apply KernelSU-Backslashxx SUSFS enablement patch (midori01/KernelSU xx.patch) =="
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
+          echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU xx.patch) =="
           echo "Mirrors midori01/gki_ksu_workflow's own MidoriSU-XX handling: KSU_ROOT here is the"
           echo "real backslashxx/KernelSU tree (pinned in init-manager), and this patch is the same"
           echo "commit midori01/KernelSU's 'xx' branch is built from - it adds the SUSFS Kconfig menu"
           echo "(KSU_SUSFS, SUS_PATH, SUS_MOUNT, etc., all default y - note there is no SUS_SU option"
-          echo "for this hook mode) plus the branch-link-hook/selinux/supercall wiring."
+          echo "for this hook mode) plus the branch-link-hook/selinux/supercall wiring. Applies the"
+          echo "same way regardless of which of the three hook modes (manual/branch-link/tamper) is"
+          echo "in effect - the hook mode is a Kconfig-only choice made separately in config.yml."
 
           XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
           XX_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx.patch"
@@ -287,7 +296,7 @@ runs:
           git apply "$XX_PATCH"
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
-            echo "::error::conflict markers found after KernelSU-Backslashxx SUSFS enablement patch"
+            echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
             exit 1
           fi
         elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
