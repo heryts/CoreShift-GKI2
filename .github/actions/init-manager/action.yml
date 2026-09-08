@@ -175,6 +175,16 @@ runs:
           echo "linked $COMMON_DIR/KernelSU-Next -> $MANAGER_DIR"
         fi
 
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "== link expected KernelSU repo folder to submodule =="
+          echo "midori01/KernelSU@xx's setup.sh hardcodes 'git clone https://github.com/backslashxx/KernelSU'"
+          echo "when \$COMMON_DIR/KernelSU doesn't exist yet, which would silently pull the wrong repo"
+          echo "(and lack our pinned SUSFS commit). Pre-link it to the already-cloned fork so setup.sh's"
+          echo "test -d check finds it and operates on the correct repo/commit instead of re-cloning."
+          ln -sfn "$MANAGER_DIR" "$COMMON_DIR/KernelSU"
+          echo "linked $COMMON_DIR/KernelSU -> $MANAGER_DIR"
+        fi
+
         if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "dev-susfs"
