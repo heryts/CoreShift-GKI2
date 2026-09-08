@@ -164,22 +164,38 @@ runs:
         # susfs4ksu commit is pinned above, instead of a stale prebuilt file.
         case "${{ inputs.manager }}" in
           KernelSU-Backslashxx)
-            echo "== manager=${{ inputs.manager }}: de-inlining core SUSFS patch (commit $SUSFS_COMMIT) =="
-            DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/scripts/susfs_deinlined.sh"
-            if [ ! -x "$DEINLINE_SCRIPT" ]; then
-              echo "::error::missing or non-executable de-inline script: $DEINLINE_SCRIPT"
-              exit 1
+            # .github/patches/susfs4ksu/<branch>/ is the reference location for
+            # reviewed, committed de-inlined core patches (kept in sync with the
+            # susfs4ksu version pinned above by whoever refreshes them). Prefer
+            # that static file when it exists for this branch; only fall back to
+            # generating one on the fly (via the plain de-inline script, no manual
+            # review) for branches that don't have a static patch yet.
+            STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${SUSFS_BRANCH}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
+
+            if [ -f "$STATIC_DEINLINED_PATCH" ]; then
+              echo "== manager=${{ inputs.manager }}: using static de-inlined core SUSFS patch =="
+              echo "static_patch=$STATIC_DEINLINED_PATCH"
+              SUSFS_PATCH="$STATIC_DEINLINED_PATCH"
+            else
+              echo "== manager=${{ inputs.manager }}: no static de-inlined patch at $STATIC_DEINLINED_PATCH =="
+              echo "== de-inlining core SUSFS patch on the fly (commit $SUSFS_COMMIT) =="
+              DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/scripts/susfs_deinlined.sh"
+              if [ ! -x "$DEINLINE_SCRIPT" ]; then
+                echo "::error::missing or non-executable de-inline script: $DEINLINE_SCRIPT"
+                exit 1
+              fi
+
+              DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
+              bash "$DEINLINE_SCRIPT" "$SUSFS_PATCH" "$DEINLINED_PATCH"
+
+              if [ ! -s "$DEINLINED_PATCH" ]; then
+                echo "::error::de-inlined SUSFS patch is empty, aborting"
+                exit 1
+              fi
+
+              SUSFS_PATCH="$DEINLINED_PATCH"
+              echo "::notice::generated on the fly (unreviewed) - consider committing this as $STATIC_DEINLINED_PATCH"
             fi
-
-            DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
-            bash "$DEINLINE_SCRIPT" "$SUSFS_PATCH" "$DEINLINED_PATCH"
-
-            if [ ! -s "$DEINLINED_PATCH" ]; then
-              echo "::error::de-inlined SUSFS patch is empty, aborting"
-              exit 1
-            fi
-
-            SUSFS_PATCH="$DEINLINED_PATCH"
             ;;
         esac
 
