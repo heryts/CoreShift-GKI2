@@ -154,10 +154,6 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; set susfs=off or choose a different manager"
-            exit 1
-          fi
 
           if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ] && [ "${{ inputs.susfs }}" = "on" ]; then
             echo "::error::SUSFS is not supported on the tinyfs branch; set susfs=off, or choose manager=KernelSU-Backslashxx for SUSFS support"
