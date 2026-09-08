@@ -352,9 +352,20 @@ runs:
           echo "'default y', so they land without add_config. No KSU_SUSFS_SUS_SU option exists for"
           echo "this hook family (same as KernelSU-Backslashxx)."
 
-        elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-          echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
-          exit 1
+        elif [ "${{ inputs.manager }}" = "KowSU" ]; then
+          add_config KSU y
+          add_config KALLSYMS y
+          add_config KALLSYMS_ALL y
+
+          if [ "${{ inputs.susfs }}" = "on" ]; then
+            echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
+            echo "midori01/KernelSU kow.patch (applied in apply-susfs when susfs=on) is expected to set"
+            echo "KSU_SUSFS, SUS_PATH, SUS_MOUNT, etc. to 'default y' the same way xx.patch does for"
+            echo "KernelSU-Backslashxx (same author, same de-inlined-hook architecture per the"
+            echo "MidoriSU-KX-SUSFS row in gki_ksu_workflow's README) - NOT independently verified"
+            echo "against kow.patch's actual Kconfig menu yet. If strict_config later reports a"
+            echo "missing/unexpected KSU_SUSFS_* symbol for this manager, add_config it explicitly here."
+          fi
 
         elif [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
           if [ "${{ inputs.susfs }}" = "on" ]; then
