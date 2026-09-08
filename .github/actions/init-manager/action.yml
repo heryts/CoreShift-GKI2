@@ -54,10 +54,10 @@ runs:
         fi
 
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-          echo "== KernelSU-Backslashxx + SUSFS: switching to midori01/KernelSU xx branch =="
-          rm -rf "manager/${MANAGER}"
-          git clone --branch "xx" --depth 1 "https://github.com/midori01/KernelSU.git" "manager/${MANAGER}"
-          echo "cloned midori01/KernelSU @ xx"
+          echo "== KernelSU-Backslashxx + SUSFS: staying on backslashxx/KernelSU (submodule default) =="
+          echo "SUSFS enablement is applied as a patch (midori01/KernelSU xx.patch) in apply-susfs,"
+          echo "matching midori01/gki_ksu_workflow's own MidoriSU-XX handling, instead of swapping"
+          echo "the manager source to a separately-tracked branch."
         fi
 
         if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
@@ -108,7 +108,11 @@ runs:
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
               ;;
-            ResukiSU:*|Wild_KSU:*|Rissu:*|KernelSU-Backslashxx:*|KernelSU-Next:*)
+            KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12)
+              SELECTED_MANAGER_REF="d4632567557312516a9fafdb68cf3ee33ae6075f"
+              MANAGER_REF_SOURCE="susfs-default (commit midori01/KernelSU xx.patch is generated against)"
+              ;;
+            ResukiSU:*|Wild_KSU:*|Rissu:*|KernelSU-Next:*)
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="submodule-default (no known SUSFS-pinned commit)"
               ;;
@@ -173,16 +177,6 @@ runs:
           echo "== link expected KernelSU-Next repo folder to submodule =="
           ln -sfn "$MANAGER_DIR" "$COMMON_DIR/KernelSU-Next"
           echo "linked $COMMON_DIR/KernelSU-Next -> $MANAGER_DIR"
-        fi
-
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-          echo "== link expected KernelSU repo folder to submodule =="
-          echo "midori01/KernelSU@xx's setup.sh hardcodes 'git clone https://github.com/backslashxx/KernelSU'"
-          echo "when \$COMMON_DIR/KernelSU doesn't exist yet, which would silently pull the wrong repo"
-          echo "(and lack our pinned SUSFS commit). Pre-link it to the already-cloned fork so setup.sh's"
-          echo "test -d check finds it and operates on the correct repo/commit instead of re-cloning."
-          ln -sfn "$MANAGER_DIR" "$COMMON_DIR/KernelSU"
-          echo "linked $COMMON_DIR/KernelSU -> $MANAGER_DIR"
         fi
 
         if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
