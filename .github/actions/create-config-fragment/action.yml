@@ -323,6 +323,35 @@ runs:
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
+        elif [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
+          add_config KSU y
+          add_config KALLSYMS y
+          add_config KALLSYMS_ALL y
+          add_config KSU_THRONE_TRACKER_ALWAYS_THREADED y
+          add_config KSU_HOSTSREDIRECT y
+
+          case "${{ inputs.manager }}" in
+            KernelSU-Midori-BranchLink)
+              add_config KSU_HACK_ARM64_BRANCH_LINK y
+              ;;
+            KernelSU-Midori-Tamper)
+              add_config KSU_TAMPER_SYSCALL_TABLE y
+              ;;
+            KernelSU-Midori-Manual)
+              echo "== KernelSU-Midori-Manual: no hook Kconfig requested =="
+              echo "KSU_KPROBES_KSUD/KSU_HACK_ARM64_BRANCH_LINK/KSU_TAMPER_SYSCALL_TABLE all default n;"
+              echo "manual mode's hooks come from the scope-min-manual-hooks-v2.3.patch call-sites"
+              echo "applied to the kernel tree in init-manager, gated on plain CONFIG_KSU."
+              ;;
+          esac
+
+          echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
+          echo "midori01/KernelSU xx.patch (applied in apply-susfs when susfs=on) already sets KSU_SUSFS,"
+          echo "SUS_PATH, SUS_MOUNT, SUS_KSTAT, TRY_UMOUNT, SPOOF_UNAME, ENABLE_LOG,"
+          echo "HIDE_KSU_SUSFS_SYMBOLS, SPOOF_CMDLINE_OR_BOOTCONFIG, OPEN_REDIRECT, and SUS_MAP to"
+          echo "'default y', so they land without add_config. No KSU_SUSFS_SUS_SU option exists for"
+          echo "this hook family (same as KernelSU-Backslashxx)."
+
         elif [ "${{ inputs.manager }}" = "KowSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "::error::SUSFS is not yet supported for manager=${{ inputs.manager }}; no SUSFS Kconfig will be added"
           exit 1
