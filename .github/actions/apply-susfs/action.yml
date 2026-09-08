@@ -154,6 +154,35 @@ runs:
         cp "$SUSFS_INCLUDE_DIR"/* include/linux/
         ls -l fs/susfs.c include/linux/susfs*.h
 
+        # Managers with their own built-in hook mechanism (e.g. MidoriSU-XX /
+        # BackSlash's ARM64 branch-link hooks) must not receive the stock
+        # inline-hook core patch: the inline #ifdef CONFIG_KSU_SUSFS hook
+        # call-sites would double-hook / duplicate-symbol against the
+        # manager's own hooks. For those managers, de-inline the freshly
+        # cloned core patch (strip its hook call-sites, keep the rest) before
+        # applying it. Generated on the fly so it always tracks whatever
+        # susfs4ksu commit is pinned above, instead of a stale prebuilt file.
+        case "${{ inputs.manager }}" in
+          KernelSU-Backslashxx)
+            echo "== manager=${{ inputs.manager }}: de-inlining core SUSFS patch (commit $SUSFS_COMMIT) =="
+            DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/scripts/susfs_deinlined.sh"
+            if [ ! -x "$DEINLINE_SCRIPT" ]; then
+              echo "::error::missing or non-executable de-inline script: $DEINLINE_SCRIPT"
+              exit 1
+            fi
+
+            DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
+            bash "$DEINLINE_SCRIPT" "$SUSFS_PATCH" "$DEINLINED_PATCH"
+
+            if [ ! -s "$DEINLINED_PATCH" ]; then
+              echo "::error::de-inlined SUSFS patch is empty, aborting"
+              exit 1
+            fi
+
+            SUSFS_PATCH="$DEINLINED_PATCH"
+            ;;
+        esac
+
         echo
         echo "== check/apply core SUSFS patch =="
         if ! git apply --check "$SUSFS_PATCH"; then
