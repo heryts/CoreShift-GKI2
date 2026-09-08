@@ -149,6 +149,22 @@ runs:
 
         PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
 
+        if [ "$MANAGER" = "KowSU" ]; then
+          echo "== KowSU: applying extra_features patch (midori01/gki_ksu_workflow 24_extra_features_for_ksu.patch) =="
+          echo "Adds supercall dispatch extras (get_hook_type/get_susfs_version/get_driver_name) that some"
+          echo "manager apps query; independent of susfs (applied regardless of susfs on/off, matching"
+          echo "midori01/gki_ksu_workflow's own MidoriSU-KX 'Setup KernelSU' step order: clone -> this patch"
+          echo "-> setup script). Best-effort only, matching their own '|| true' - must not fail the build."
+
+          EXTRA_FEATURES_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/24_extra_features_for_ksu.patch"
+          if [ -f "$EXTRA_FEATURES_PATCH" ]; then
+            patch -p1 --forward < "$EXTRA_FEATURES_PATCH" || \
+              echo "::warning::24_extra_features_for_ksu.patch did not apply cleanly to manager=$MANAGER (non-fatal)"
+          else
+            echo "::warning::missing $EXTRA_FEATURES_PATCH, skipping extra_features patch for manager=$MANAGER"
+          fi
+        fi
+
         if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
           MANAGER_REF_SOURCE="submodule-head"
