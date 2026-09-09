@@ -88,7 +88,8 @@ runs:
             echo "== pinning to explicitly-provided ref: $SUSFS_REF =="
             git -C "$SUSFS_CLONE_DIR" checkout "$SUSFS_REF"
           else
-            echo "== skipping susfs_ref pin for ResukiSU; using branch HEAD =="
+            echo "== pinning to known-good default for manager=ResukiSU: $SUSFS_DEFAULT_REF =="
+            git -C "$SUSFS_CLONE_DIR" checkout "$SUSFS_DEFAULT_REF"
           fi
         else
           echo "== pinning to ref: $SUSFS_REF =="
