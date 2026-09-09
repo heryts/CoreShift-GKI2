@@ -519,6 +519,90 @@ jobs:
         with:
           size_gb: "8"
 
+      - name: Patch ReSukiSU Kbuild for Kleaf/Bazel sandbox compatibility
+        if: inputs.manager == 'ResukiSU'
+        working-directory: kernel/common
+        run: |
+          set -e
+          # Root cause: Bazel's common_kernel_sources filegroup globs "**" with
+          # exclude = [".git/**", ...]. Bazel's glob() also never matches any
+          # hidden path (dot-prefixed) regardless of the exclude list, at any
+          # depth. So KernelSU/.git (the submodule ReSukiSU/Kbuild reads via
+          # `test -e $(KSU_SRC)/../.git`, and via live `git` shell-outs for the
+          # version banner) never gets materialized into the sandboxed source
+          # tree that the kernel_aarch64 kernel_build() action actually sees.
+          # Outside the sandbox the submodule is 100% valid (git rev-parse HEAD
+          # resolves fine) - it's purely a "Kbuild expects a live .git inside a
+          # tree Bazel deliberately strips it from" mismatch.
+          #
+          # Fix: resolve everything Kbuild would normally ask `git` for RIGHT
+          # NOW (while .git is still reachable), then bake those as literal
+          # values into Kbuild itself, so no git/.git lookup is needed once
+          # Bazel sandboxes the build.
+          python3 - <<'PYEOF'
+          import pathlib, subprocess, sys
+
+          def sh(cmd):
+              r = subprocess.run(cmd, shell=True, cwd="KernelSU",
+                                  capture_output=True, text=True)
+              return r.stdout.strip(), r.returncode
+
+          commit_count, _ = sh("git rev-list --count HEAD")
+          commit_count = commit_count or "0"
+
+          tag_name, rc = sh("git describe --abbrev=0 --tags 2>/dev/null")
+          tag_name = tag_name if rc == 0 and tag_name else "v4.1.0"
+
+          commit_sha, rc = sh("git rev-parse --short=8 HEAD 2>/dev/null")
+          commit_sha = commit_sha if rc == 0 and commit_sha else "unknown"
+
+          branch_name, rc = sh("git branch --show-current 2>/dev/null")
+          branch_name = branch_name if rc == 0 and branch_name else "unknown"
+
+          _, dirty_rc = sh("git diff-index --quiet HEAD")
+
+          kbuild_path = pathlib.Path("drivers/kernelsu/Kbuild")
+          text = kbuild_path.read_text()
+
+          replacements = [
+              ("LOCAL_GIT_EXISTS := $(shell test -e $(KSU_SRC)/../.git && echo 1 || echo 0)",
+               "LOCAL_GIT_EXISTS := 1"),
+              ("KSU_LOCAL_VERSION := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-list --count HEAD)",
+               "KSU_LOCAL_VERSION := %s" % commit_count),
+              ('KSU_TAG_NAME    := $(shell cd $(KSU_SRC); $(GIT_BIN) describe --abbrev=0 --tags 2>/dev/null || echo "v4.1.0")',
+               'KSU_TAG_NAME    := %s' % tag_name),
+              ('KSU_COMMIT_SHA  := $(shell cd $(KSU_SRC); $(GIT_BIN) rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")',
+               'KSU_COMMIT_SHA  := %s' % commit_sha),
+              ("ifneq ($(shell cd $(KSU_SRC); $(GIT_BIN) diff-index --quiet HEAD; echo $$?),0)",
+               "ifneq (%s,0)" % dirty_rc),
+              ('KSU_BRANCH_NAME := $(shell cd $(KSU_SRC); $(GIT_BIN) branch --show-current 2>/dev/null || echo "unknown")',
+               'KSU_BRANCH_NAME := %s' % branch_name),
+          ]
+
+          missing = []
+          for old, new in replacements:
+              if old not in text:
+                  missing.append(old)
+              else:
+                  text = text.replace(old, new, 1)
+
+          kbuild_path.write_text(text)
+
+          print("commit_count=%s tag=%s sha=%s branch=%s dirty_rc=%s"
+                % (commit_count, tag_name, commit_sha, branch_name, dirty_rc))
+
+          if missing:
+              print("::warning::Some expected Kbuild lines were not found - "
+                    "ReSukiSU's Kbuild may have changed upstream. "
+                    "Re-run the debug dump and update this patch step.")
+              for m in missing:
+                  print("  MISSING:", m)
+              # Don't hard-fail the job over this - fall through so the real
+              # Bazel error (if any) still surfaces with full context.
+              sys.exit(0)
+          print("Kbuild patched OK - no live .git lookup needed anymore.")
+          PYEOF
+
       - name: Commit kernel changes
         uses: ./.github/actions/commit-kernel-changes
 
