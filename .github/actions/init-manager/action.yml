@@ -90,7 +90,7 @@ runs:
             'KernelSU  6.1     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
             'KernelSU  6.6     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
             'KernelSU  6.12    aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
-            'KowSU     *       (no pin; uses submodule HEAD, same as KernelSU-Backslashxx)' \
+            'KowSU     *       (no static pin; live submodule HEAD, probed against kow.patch)' \
             'KernelSU-Backslashxx / Midori-Manual / Midori-BranchLink / Midori-Tamper' \
             '                  *  (no static pin; live submodule HEAD, probed against xx.patch)' \
             'KernelSU-Next 5.10 (pinned via .gitmodules branch)' \
@@ -104,8 +104,25 @@ runs:
               MANAGER_REF_SOURCE="susfs-default"
               ;;
             KowSU:5.10|KowSU:6.1|KowSU:6.6|KowSU:6.12)
-              SELECTED_MANAGER_REF=""
-              MANAGER_REF_SOURCE="submodule-default (no reliable SUSFS-pinned commit for KowSU)"
+              echo "== ${MANAGER}: probing kow.patch against live submodule HEAD before pinning =="
+              LIVE_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
+              KOW_PROBE_PATCH="${RUNNER_TEMP:-/tmp}/kow-probe.patch"
+              KOW_PROBE_LOG="${RUNNER_TEMP:-/tmp}/kow-probe.log"
+
+              if ! curl -fsSL "https://github.com/midori01/KernelSU/commit/kow.patch" -o "$KOW_PROBE_PATCH"; then
+                echo "::error::failed to fetch midori01/KernelSU kow.patch for the compatibility probe."
+                exit 1
+              fi
+
+              if git -C "$MANAGER_DIR" apply --check "$KOW_PROBE_PATCH" >"$KOW_PROBE_LOG" 2>&1; then
+                echo "  kow.patch applies cleanly to live HEAD $LIVE_HEAD, pinning to it"
+                SELECTED_MANAGER_REF="$LIVE_HEAD"
+                MANAGER_REF_SOURCE="susfs-live-verified (kow.patch applies cleanly to live submodule HEAD)"
+              else
+                echo "::error::kow.patch does not apply to KOWX712/KernelSU's current HEAD ($LIVE_HEAD) for manager=${MANAGER}."
+                sed -n '1,60p' "$KOW_PROBE_LOG"
+                exit 1
+              fi
               ;;
             KSUN-Susfs-Hookless:5.10|KSUN-Susfs-Hookless:6.1|KSUN-Susfs-Hookless:6.6|KSUN-Susfs-Hookless:6.12)
               SELECTED_MANAGER_REF=""
@@ -164,18 +181,6 @@ runs:
         echo "manager describe: $MANAGER_DESCRIBE"
 
         PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
-
-        if [ "$MANAGER" = "KowSU" ]; then
-          echo "== KowSU: applying extra_features patch (midori01/gki_ksu_workflow 24_extra_features_for_ksu.patch) =="
-
-          EXTRA_FEATURES_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/24_extra_features_for_ksu.patch"
-          if [ -f "$EXTRA_FEATURES_PATCH" ]; then
-            patch -p1 --forward < "$EXTRA_FEATURES_PATCH" || \
-              echo "::warning::24_extra_features_for_ksu.patch did not apply cleanly to manager=$MANAGER (non-fatal)"
-          else
-            echo "::warning::missing $EXTRA_FEATURES_PATCH, skipping extra_features patch for manager=$MANAGER"
-          fi
-        fi
 
         if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
