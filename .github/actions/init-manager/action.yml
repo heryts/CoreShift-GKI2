@@ -313,6 +313,65 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
+          echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
+
+          GH_API_TOKEN="${{ github.token }}"
+
+          echo "-- GitHub API rate-limit check (confirms whether the token is actually being used) --"
+          RATE_HEADERS="$(
+            curl -s -D - -o /dev/null \
+              -H "Authorization: Bearer ${GH_API_TOKEN}" \
+              "https://api.github.com/rate_limit"
+          )"
+          RATE_LIMIT="$(printf '%s\n' "$RATE_HEADERS" | grep -i '^x-ratelimit-limit:' | tr -d '\r' | awk '{print $2}')"
+          RATE_REMAINING="$(printf '%s\n' "$RATE_HEADERS" | grep -i '^x-ratelimit-remaining:' | tr -d '\r' | awk '{print $2}')"
+          echo "x-ratelimit-limit=${RATE_LIMIT:-unknown} x-ratelimit-remaining=${RATE_REMAINING:-unknown}"
+          if [ "${RATE_LIMIT:-0}" = "60" ]; then
+            echo "::warning::rate limit is 60/hour -> github.token is NOT being sent/accepted; commit-count fetch is likely to fail under load"
+          elif [ -n "${RATE_LIMIT:-}" ]; then
+            echo "rate limit is ${RATE_LIMIT}/hour -> authenticated request confirmed"
+          fi
+
+          COMMIT_COUNT="$(
+            curl -s \
+              -H "Authorization: Bearer ${GH_API_TOKEN}" \
+              "https://api.github.com/repos/midori01/KernelSU/commits?per_page=1" \
+              -I 2>/dev/null | grep -i '^link:' | grep -oP '&page=\K\d+(?=>; rel="last")' || true
+          )"
+          COMMIT_COUNT="${COMMIT_COUNT:-0}"
+
+          if [ "$COMMIT_COUNT" = "0" ]; then
+            echo "::warning::failed to fetch midori01/KernelSU commit count via GitHub API; KSU_VERSION left as source default (this is the gap you saw between kernel and manager version)"
+          else
+            SYNCED_KSU_VERSION=$((30999 + COMMIT_COUNT))
+            echo "midori01/KernelSU commit_count=$COMMIT_COUNT"
+            echo "computed KSU_VERSION=$SYNCED_KSU_VERSION"
+
+            KSU_MAKEFILE="$KSU_ROOT/kernel/Makefile"
+            KSU_KBUILD="$KSU_ROOT/kernel/Kbuild"
+
+            if [ -f "$KSU_MAKEFILE" ]; then
+              sed -i "s|^CFLAGS_ksu\.o += -DKSU_VERSION=.*|CFLAGS_ksu.o += -DKSU_VERSION=${SYNCED_KSU_VERSION}|" "$KSU_MAKEFILE"
+              if grep -q -- "-DKSU_VERSION=${SYNCED_KSU_VERSION}" "$KSU_MAKEFILE"; then
+                echo "patched $KSU_MAKEFILE -> KSU_VERSION=$SYNCED_KSU_VERSION"
+              else
+                echo "::warning::-DKSU_VERSION pattern not found/replaced in $KSU_MAKEFILE; source default kept"
+              fi
+            else
+              echo "::warning::$KSU_MAKEFILE not found, skipping Makefile patch"
+            fi
+
+            if [ -f "$KSU_KBUILD" ]; then
+              sed -i "s|^ccflags-y += -DKSU_VERSION=.*|ccflags-y += -DKSU_VERSION=${SYNCED_KSU_VERSION}|" "$KSU_KBUILD"
+              echo "also patched $KSU_KBUILD (if pattern existed)"
+            fi
+
+            mkdir -p "${GITHUB_WORKSPACE}/commit_info"
+            echo "$SYNCED_KSU_VERSION" > "${GITHUB_WORKSPACE}/commit_info/driver_version"
+          fi
+        fi
+
         if [ "$MANAGER" = "KernelSU-Midori-Manual" ]; then
           echo "== KernelSU-Midori-Manual: applying scope-min-manual-hooks-v2.3.patch to kernel tree =="
 
