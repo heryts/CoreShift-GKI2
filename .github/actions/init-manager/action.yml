@@ -94,6 +94,8 @@ runs:
             'KernelSU  6.6     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
             'KernelSU  6.12    aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
             'KowSU     *       (no pin; uses submodule HEAD, same as KernelSU-Backslashxx)' \
+            'KernelSU-Backslashxx / Midori-Manual / Midori-BranchLink / Midori-Tamper' \
+            '                  *  (no static pin; live submodule HEAD, probed against xx.patch)' \
             'KernelSU-Next 5.10 (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.1  (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.6  (pinned via .gitmodules branch)' \
@@ -113,8 +115,43 @@ runs:
               MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
               ;;
             KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12|KernelSU-Midori-Manual:5.10|KernelSU-Midori-Manual:6.1|KernelSU-Midori-Manual:6.6|KernelSU-Midori-Manual:6.12|KernelSU-Midori-BranchLink:5.10|KernelSU-Midori-BranchLink:6.1|KernelSU-Midori-BranchLink:6.6|KernelSU-Midori-BranchLink:6.12|KernelSU-Midori-Tamper:5.10|KernelSU-Midori-Tamper:6.1|KernelSU-Midori-Tamper:6.6|KernelSU-Midori-Tamper:6.12)
-              SELECTED_MANAGER_REF="d4632567557312516a9fafdb68cf3ee33ae6075f"
-              MANAGER_REF_SOURCE="susfs-default (commit midori01/KernelSU xx.patch is generated against)"
+              # backslashxx/KernelSU's master branch is periodically rewritten/force-pushed
+              # (it is not append-only history), so any commit hardcoded here has a short
+              # shelf life: it can become unreachable from a fresh clone within ~1 day,
+              # which is exactly what broke this pin (d4632567... rewritten away by
+              # fa9f952a... between when this table was written and this run).
+              #
+              # Instead of hardcoding a SHA, probe the live submodule HEAD (already fetched
+              # above via `git submodule update --init --remote`) against xx.patch, the same
+              # patch apply-susfs will apply later. If it applies cleanly, pin to that live
+              # HEAD - self-healing against future upstream rewrites, exactly like the
+              # susfs=off / submodule-head fallback path already does. If it does not, fail
+              # now with a clear reason instead of deferring to a confusing HEAD-mismatch
+              # error further down (or a silent fallback-to-default-branch inside setup.sh).
+              echo "== ${MANAGER}: probing xx.patch against live submodule HEAD before pinning =="
+              LIVE_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
+              XX_PROBE_PATCH="${RUNNER_TEMP:-/tmp}/xx-probe.patch"
+              XX_PROBE_LOG="${RUNNER_TEMP:-/tmp}/xx-probe.log"
+
+              if ! curl -fsSL "https://github.com/midori01/KernelSU/commit/xx.patch" -o "$XX_PROBE_PATCH"; then
+                echo "::error::failed to fetch midori01/KernelSU xx.patch for the compatibility probe."
+                echo "::error::set manager_ref explicitly to bypass this probe, or retry once the fetch succeeds."
+                exit 1
+              fi
+
+              if git -C "$MANAGER_DIR" apply --check "$XX_PROBE_PATCH" >"$XX_PROBE_LOG" 2>&1; then
+                echo "  xx.patch applies cleanly to live HEAD $LIVE_HEAD, pinning to it"
+                SELECTED_MANAGER_REF="$LIVE_HEAD"
+                MANAGER_REF_SOURCE="susfs-live-verified (xx.patch applies cleanly to live submodule HEAD)"
+              else
+                echo "::error::xx.patch does not apply to backslashxx/KernelSU's current HEAD ($LIVE_HEAD) for manager=${MANAGER}."
+                echo "::error::backslashxx/KernelSU master likely moved past the commit midori01/KernelSU's xx.patch"
+                echo "::error::was generated against, and diverged enough that it no longer applies cleanly."
+                echo "::error::Check https://github.com/midori01/KernelSU/commits/xx for an updated xx.patch, or"
+                echo "::error::override manager_ref explicitly to a commit you have verified xx.patch applies to."
+                sed -n '1,60p' "$XX_PROBE_LOG"
+                exit 1
+              fi
               ;;
             ResukiSU:*|Wild_KSU:*|Rissu:*|KernelSU-Next:*)
               SELECTED_MANAGER_REF=""
