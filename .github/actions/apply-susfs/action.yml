@@ -233,23 +233,30 @@ runs:
 
         echo
         echo "== check/apply core SUSFS patch =="
-        if ! git apply --check "$SUSFS_PATCH"; then
-          echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree"
-          echo "== dumping reject hunks for diagnosis (manager=${{ inputs.manager }}) =="
-          find . -name '*.rej' -delete
-          git apply --reject "$SUSFS_PATCH" 2>/tmp/susfs_reject.log || true
-          cat /tmp/susfs_reject.log || true
-          for rej in $(find . -name '*.rej'); do
-            echo "---- $rej ----"
-            cat "$rej"
-          done
-          git checkout -- . 2>/dev/null || true
-          find . -name '*.orig' -delete 2>/dev/null || true
-          find . -name '*.rej' -delete 2>/dev/null || true
-          exit 1
+        if git apply --check "$SUSFS_PATCH"; then
+          git apply "$SUSFS_PATCH"
+        else
+          echo "::warning::core SUSFS patch (commit $SUSFS_COMMIT) does not apply cleanly via 'git apply' (strict context match)"
+          echo "== retrying with 'patch --fuzz=3' (tolerates minor upstream GKI header drift) =="
+          if (patch --dry-run --fuzz=3 -p1 < "$SUSFS_PATCH") >/tmp/susfs_fuzz_dry_run.log 2>&1; then
+            patch --fuzz=3 -p1 < "$SUSFS_PATCH"
+            echo "== core SUSFS patch applied via fuzzy fallback =="
+          else
+            echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree, even with fuzz=3"
+            echo "== dumping reject hunks for diagnosis (manager=${{ inputs.manager }}) =="
+            find . -name '*.rej' -delete
+            git apply --reject "$SUSFS_PATCH" 2>/tmp/susfs_reject.log || true
+            cat /tmp/susfs_reject.log || true
+            for rej in $(find . -name '*.rej'); do
+              echo "---- $rej ----"
+              cat "$rej"
+            done
+            git checkout -- . 2>/dev/null || true
+            find . -name '*.orig' -delete 2>/dev/null || true
+            find . -name '*.rej' -delete 2>/dev/null || true
+            exit 1
+          fi
         fi
-
-        git apply "$SUSFS_PATCH"
 
         if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== fixing set_nameidata() call-site/declaration mismatch =="
