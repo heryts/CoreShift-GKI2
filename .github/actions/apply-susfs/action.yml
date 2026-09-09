@@ -149,32 +149,8 @@ runs:
         cp "$SUSFS_INCLUDE_DIR"/* include/linux/
         ls -l fs/susfs.c include/linux/susfs*.h
 
-        # Managers with their own built-in hook mechanism (e.g. MidoriSU-XX /
-        # BackSlash's ARM64 branch-link hooks) must not receive the stock
-        # inline-hook core patch: the inline #ifdef CONFIG_KSU_SUSFS hook
-        # call-sites would double-hook / duplicate-symbol against the
-        # manager's own hooks. For those managers, de-inline the freshly
-        # cloned core patch (strip its hook call-sites, keep the rest) before
-        # applying it. Generated on the fly so it always tracks whatever
-        # susfs4ksu commit is pinned above, instead of a stale prebuilt file.
         case "${{ inputs.manager }}" in
           KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper|KowSU)
-            # The four KernelSU-Backslashxx/-Midori-* entries are plain backslashxx/KernelSU
-            # with only a Kconfig-level hook-mode choice (or, for -Manual, one extra
-            # kernel-tree patch applied in init-manager) differentiating them. KowSU is
-            # a separate manager (MidoriSU-KX / KOWX712-KernelSU) that also has its own
-            # built-in hook mechanism (supercall) instead of relying on inline
-            # #ifdef CONFIG_KSU_SUSFS call-sites. Neither family changes what the core
-            # SUSFS patch needs to touch, so they all need
-            # the same de-inlined core patch (same fs/*, kernel/*, mm/* changes;
-            # avoids double-hooking against the manager's own hook call-sites).
-            #
-            # .github/patches/susfs4ksu/<branch>/ is the reference location for
-            # reviewed, committed de-inlined core patches (kept in sync with the
-            # susfs4ksu version pinned above by whoever refreshes them). Prefer
-            # that static file when it exists for this branch; only fall back to
-            # generating one on the fly (via the plain de-inline script, no manual
-            # review) for branches that don't have a static patch yet.
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${SUSFS_BRANCH}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
 
             if [ -f "$STATIC_DEINLINED_PATCH" ]; then
@@ -266,13 +242,6 @@ runs:
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
         elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
           echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU xx.patch) =="
-          echo "Mirrors midori01/gki_ksu_workflow's own MidoriSU-XX handling: KSU_ROOT here is the"
-          echo "real backslashxx/KernelSU tree (pinned in init-manager), and this patch is the same"
-          echo "commit midori01/KernelSU's 'xx' branch is built from - it adds the SUSFS Kconfig menu"
-          echo "(KSU_SUSFS, SUS_PATH, SUS_MOUNT, etc., all default y - note there is no SUS_SU option"
-          echo "for this hook mode) plus the branch-link-hook/selinux/supercall wiring. Applies the"
-          echo "same way regardless of which of the three hook modes (manual/branch-link/tamper) is"
-          echo "in effect - the hook mode is a Kconfig-only choice made separately in config.yml."
 
           XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
           XX_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx.patch"
@@ -285,9 +254,6 @@ runs:
 
           if ! git apply --check "$XX_PATCH"; then
             echo "::error::midori01/KernelSU xx.patch does not apply to this backslashxx/KernelSU tree"
-            echo "::error::backslashxx/KernelSU master may have moved past the commit this patch targets;"
-            echo "::error::check https://github.com/midori01/KernelSU/commits/xx for an updated patch,"
-            echo "::error::or override manager_ref to pin a compatible commit."
             exit 1
           fi
 
@@ -299,10 +265,6 @@ runs:
           fi
         elif [ "${{ inputs.manager }}" = "KowSU" ]; then
           echo "== check/apply KowSU SUSFS enablement patch (midori01/KernelSU kow.patch) =="
-          echo "Mirrors midori01/gki_ksu_workflow's own MidoriSU-KX handling: KSU_ROOT here is the"
-          echo "real KOWX712/KernelSU tree (pinned in init-manager), and this patch is the same"
-          echo "commit midori01/KernelSU's 'kow' branch is built from - it adds the SUSFS Kconfig"
-          echo "menu plus the de-inlined-hook/selinux/supercall wiring for this manager."
 
           KOW_PATCH_URL="https://github.com/midori01/KernelSU/commit/kow.patch"
           KOW_PATCH="${RUNNER_TEMP:-/tmp}/kowsu-susfs-kow.patch"
@@ -315,9 +277,6 @@ runs:
 
           if ! git apply --check "$KOW_PATCH"; then
             echo "::error::midori01/KernelSU kow.patch does not apply to this KOWX712/KernelSU tree"
-            echo "::error::KOWX712/KernelSU master may have moved past the commit this patch targets;"
-            echo "::error::check https://github.com/midori01/KernelSU/commits/kow for an updated patch,"
-            echo "::error::or override manager_ref to pin a compatible commit."
             exit 1
           fi
 
