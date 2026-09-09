@@ -431,12 +431,6 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           manager: ${{ inputs.manager }}
 
-      - name: Apply ReSukiSU manual hooks
-        if: inputs.manager == 'ResukiSU' && inputs.susfs == 'off'
-        uses: ./.github/actions/apply-resukisu-hooks
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
       - name: Apply NoMount support (maxsteeel)
         if: inputs.nomount_maxsteeel == 'on'
         uses: ./.github/actions/apply-nomount
