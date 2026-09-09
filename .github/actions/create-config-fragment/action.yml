@@ -210,8 +210,6 @@ runs:
           echo "== MODULE_SKIP_BUILTIN: check source tree support (5.10 only) =="
           if has_kconfig_symbol init/Kconfig MODULE_SKIP_BUILTIN; then
             echo "  CONFIG_MODULE_SKIP_BUILTIN found, enabling as a safety net"
-            echo "  (ramdisk/recovery insmod of a .ko already built into vmlinux will now"
-            echo "   report success instead of failing with -EBUSY and panicking init)"
             add_config MODULE_SKIP_BUILTIN y
           else
             echo "  MODULE_SKIP_BUILTIN not found in this source tree, skipping"
@@ -310,10 +308,6 @@ runs:
             fi
 
             echo "== ${{ inputs.manager }}: KSU_SUSFS_SUS_SU not applicable =="
-            echo "midori01/KernelSU@xx's kernel/Kconfig does not define KSU_SUSFS_SUS_SU at all -"
-            echo "this manager hides su via its own KSU_HACK_ARM64_BRANCH_LINK hook instead of the"
-            echo "susfs4ksu sus_su mechanism, so there is no Kconfig symbol to set here. Forcing it"
-            echo "(even to n) trips strict_config since it never lands. Intentionally not requested."
           fi
 
         elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ]; then
@@ -339,18 +333,10 @@ runs:
               ;;
             KernelSU-Midori-Manual)
               echo "== KernelSU-Midori-Manual: no hook Kconfig requested =="
-              echo "KSU_KPROBES_KSUD/KSU_HACK_ARM64_BRANCH_LINK/KSU_TAMPER_SYSCALL_TABLE all default n;"
-              echo "manual mode's hooks come from the scope-min-manual-hooks-v2.3.patch call-sites"
-              echo "applied to the kernel tree in init-manager, gated on plain CONFIG_KSU."
               ;;
           esac
 
           echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
-          echo "midori01/KernelSU xx.patch (applied in apply-susfs when susfs=on) already sets KSU_SUSFS,"
-          echo "SUS_PATH, SUS_MOUNT, SUS_KSTAT, TRY_UMOUNT, SPOOF_UNAME, ENABLE_LOG,"
-          echo "HIDE_KSU_SUSFS_SYMBOLS, SPOOF_CMDLINE_OR_BOOTCONFIG, OPEN_REDIRECT, and SUS_MAP to"
-          echo "'default y', so they land without add_config. No KSU_SUSFS_SUS_SU option exists for"
-          echo "this hook family (same as KernelSU-Backslashxx)."
 
         elif [ "${{ inputs.manager }}" = "KowSU" ]; then
           add_config KSU y
@@ -359,12 +345,6 @@ runs:
 
           if [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
-            echo "midori01/KernelSU kow.patch (applied in apply-susfs when susfs=on) is expected to set"
-            echo "KSU_SUSFS, SUS_PATH, SUS_MOUNT, etc. to 'default y' the same way xx.patch does for"
-            echo "KernelSU-Backslashxx (same author, same de-inlined-hook architecture per the"
-            echo "MidoriSU-KX-SUSFS row in gki_ksu_workflow's README) - NOT independently verified"
-            echo "against kow.patch's actual Kconfig menu yet. If strict_config later reports a"
-            echo "missing/unexpected KSU_SUSFS_* symbol for this manager, add_config it explicitly here."
           fi
 
         elif [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
