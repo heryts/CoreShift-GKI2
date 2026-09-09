@@ -151,22 +151,48 @@ runs:
 
         case "${{ inputs.manager }}" in
           KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper|KowSU)
-            STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${SUSFS_BRANCH}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
+            DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
+            STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
+            RESOLVED_DEINLINED_PATCH=""
 
-            if [ -f "$STATIC_DEINLINED_PATCH" ]; then
-              echo "== manager=${{ inputs.manager }}: using static de-inlined core SUSFS patch =="
-              echo "static_patch=$STATIC_DEINLINED_PATCH"
-              SUSFS_PATCH="$STATIC_DEINLINED_PATCH"
+            if [ "$SUSFS_BRANCH" = "gki-android12-5.10" ]; then
+              echo "== manager=${{ inputs.manager }}, branch=$SUSFS_BRANCH: de-inlined patch is hand-maintained locally =="
+              if [ -f "$STATIC_DEINLINED_PATCH" ]; then
+                echo "static_patch=$STATIC_DEINLINED_PATCH"
+                RESOLVED_DEINLINED_PATCH="$STATIC_DEINLINED_PATCH"
+              else
+                echo "== no local static de-inlined patch at $STATIC_DEINLINED_PATCH =="
+              fi
             else
-              echo "== manager=${{ inputs.manager }}: no static de-inlined patch at $STATIC_DEINLINED_PATCH =="
-              echo "== de-inlining core SUSFS patch on the fly (commit $SUSFS_COMMIT) =="
+              REMOTE_BRANCH_DIR="${SUSFS_BRANCH#gki-}"
+              REMOTE_DEINLINED_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/${REMOTE_BRANCH_DIR}/${DEINLINED_FILENAME}"
+              REMOTE_DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/${DEINLINED_FILENAME}"
+
+              echo "== manager=${{ inputs.manager }}, branch=$SUSFS_BRANCH: fetching de-inlined core SUSFS patch from midori01/gki_ksu_workflow =="
+              echo "remote_patch=$REMOTE_DEINLINED_URL"
+
+              if curl -fsSL "$REMOTE_DEINLINED_URL" -o "$REMOTE_DEINLINED_PATCH" && [ -s "$REMOTE_DEINLINED_PATCH" ]; then
+                RESOLVED_DEINLINED_PATCH="$REMOTE_DEINLINED_PATCH"
+              elif [ -f "$STATIC_DEINLINED_PATCH" ]; then
+                echo "::warning::failed to fetch $REMOTE_DEINLINED_URL, falling back to local static patch =="
+                RESOLVED_DEINLINED_PATCH="$STATIC_DEINLINED_PATCH"
+              else
+                echo "::warning::failed to fetch $REMOTE_DEINLINED_URL and no local fallback present =="
+              fi
+            fi
+
+            if [ -n "$RESOLVED_DEINLINED_PATCH" ]; then
+              echo "== manager=${{ inputs.manager }}: using de-inlined core SUSFS patch =="
+              SUSFS_PATCH="$RESOLVED_DEINLINED_PATCH"
+            else
+              echo "== manager=${{ inputs.manager }}: no de-inlined patch available, de-inlining core SUSFS patch on the fly (commit $SUSFS_COMMIT) =="
               DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
               if [ ! -f "$DEINLINE_SCRIPT" ]; then
                 echo "::error::missing de-inline script: $DEINLINE_SCRIPT"
                 exit 1
               fi
 
-              DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
+              DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/${DEINLINED_FILENAME}"
               bash "$DEINLINE_SCRIPT" "$SUSFS_PATCH" "$DEINLINED_PATCH"
 
               if [ ! -s "$DEINLINED_PATCH" ]; then
