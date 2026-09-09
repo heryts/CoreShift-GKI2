@@ -59,9 +59,6 @@ runs:
 
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
           echo "== KernelSU-Backslashxx + SUSFS: staying on backslashxx/KernelSU (submodule default) =="
-          echo "SUSFS enablement is applied as a patch (midori01/KernelSU xx.patch) in apply-susfs,"
-          echo "matching midori01/gki_ksu_workflow's own MidoriSU-XX handling, instead of swapping"
-          echo "the manager source to a separately-tracked branch."
         fi
 
         if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
@@ -115,19 +112,6 @@ runs:
               MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
               ;;
             KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12|KernelSU-Midori-Manual:5.10|KernelSU-Midori-Manual:6.1|KernelSU-Midori-Manual:6.6|KernelSU-Midori-Manual:6.12|KernelSU-Midori-BranchLink:5.10|KernelSU-Midori-BranchLink:6.1|KernelSU-Midori-BranchLink:6.6|KernelSU-Midori-BranchLink:6.12|KernelSU-Midori-Tamper:5.10|KernelSU-Midori-Tamper:6.1|KernelSU-Midori-Tamper:6.6|KernelSU-Midori-Tamper:6.12)
-              # backslashxx/KernelSU's master branch is periodically rewritten/force-pushed
-              # (it is not append-only history), so any commit hardcoded here has a short
-              # shelf life: it can become unreachable from a fresh clone within ~1 day,
-              # which is exactly what broke this pin (d4632567... rewritten away by
-              # fa9f952a... between when this table was written and this run).
-              #
-              # Instead of hardcoding a SHA, probe the live submodule HEAD (already fetched
-              # above via `git submodule update --init --remote`) against xx.patch, the same
-              # patch apply-susfs will apply later. If it applies cleanly, pin to that live
-              # HEAD - self-healing against future upstream rewrites, exactly like the
-              # susfs=off / submodule-head fallback path already does. If it does not, fail
-              # now with a clear reason instead of deferring to a confusing HEAD-mismatch
-              # error further down (or a silent fallback-to-default-branch inside setup.sh).
               echo "== ${MANAGER}: probing xx.patch against live submodule HEAD before pinning =="
               LIVE_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
               XX_PROBE_PATCH="${RUNNER_TEMP:-/tmp}/xx-probe.patch"
@@ -135,7 +119,6 @@ runs:
 
               if ! curl -fsSL "https://github.com/midori01/KernelSU/commit/xx.patch" -o "$XX_PROBE_PATCH"; then
                 echo "::error::failed to fetch midori01/KernelSU xx.patch for the compatibility probe."
-                echo "::error::set manager_ref explicitly to bypass this probe, or retry once the fetch succeeds."
                 exit 1
               fi
 
@@ -145,10 +128,6 @@ runs:
                 MANAGER_REF_SOURCE="susfs-live-verified (xx.patch applies cleanly to live submodule HEAD)"
               else
                 echo "::error::xx.patch does not apply to backslashxx/KernelSU's current HEAD ($LIVE_HEAD) for manager=${MANAGER}."
-                echo "::error::backslashxx/KernelSU master likely moved past the commit midori01/KernelSU's xx.patch"
-                echo "::error::was generated against, and diverged enough that it no longer applies cleanly."
-                echo "::error::Check https://github.com/midori01/KernelSU/commits/xx for an updated xx.patch, or"
-                echo "::error::override manager_ref explicitly to a commit you have verified xx.patch applies to."
                 sed -n '1,60p' "$XX_PROBE_LOG"
                 exit 1
               fi
@@ -188,10 +167,6 @@ runs:
 
         if [ "$MANAGER" = "KowSU" ]; then
           echo "== KowSU: applying extra_features patch (midori01/gki_ksu_workflow 24_extra_features_for_ksu.patch) =="
-          echo "Adds supercall dispatch extras (get_hook_type/get_susfs_version/get_driver_name) that some"
-          echo "manager apps query; independent of susfs (applied regardless of susfs on/off, matching"
-          echo "midori01/gki_ksu_workflow's own MidoriSU-KX 'Setup KernelSU' step order: clone -> this patch"
-          echo "-> setup script). Best-effort only, matching their own '|| true' - must not fail the build."
 
           EXTRA_FEATURES_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/24_extra_features_for_ksu.patch"
           if [ -f "$EXTRA_FEATURES_PATCH" ]; then
@@ -339,13 +314,7 @@ runs:
           MANUAL_HOOKS_PATCH="${RUNNER_TEMP:-/tmp}/scope-min-manual-hooks-v2.3-${KERNEL_VERSION}.patch"
 
           if [ "$KERNEL_VERSION" = "5.10" ]; then
-            # midori01/gki_ksu_workflow doesn't publish android12-5.10 at all, but the
-            # patch itself is generic KernelSU manual-hook wiring (do_execveat_common,
-            # do_faccessat, newfstatat family, sys_reboot) - unchanged between
-            # android12-5.10-lts and android14-6.1 at every one of these call sites
-            # (verified directly against aosp-mirror/kernel_common). This is the same
-            # patch, regenerated with 5.10's own line numbers/blob hashes instead of
-            # relying on git apply's fuzzy offset matching against the 6.1 line numbers.
+            # midori01/gki_ksu_workflow doesn't publish android12-5.10 at all
             LOCAL_MANUAL_PATCH="${GITHUB_WORKSPACE}/.github/patches/manual-hooks/android12-5.10/scope-min-manual-hooks-v2.3.patch"
             if [ ! -f "$LOCAL_MANUAL_PATCH" ]; then
               echo "::error::missing $LOCAL_MANUAL_PATCH"
