@@ -371,7 +371,11 @@ runs:
           else
             echo "== ResukiSU: manual hook integration mode =="
             add_config KSU_MANUAL_HOOK y
-            add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK y
+            if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+              echo "  kernel_version=6.12: using manual setresuid patch (05_setuid_hook.patch), disabling LSM auto setuid hook"
+            else
+              add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK y
+            fi
             add_config KSU_MANUAL_HOOK_AUTO_INPUT_HOOK y
             add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK y
             add_config KALLSYMS_ALL y
