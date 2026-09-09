@@ -235,6 +235,17 @@ runs:
         echo "== check/apply core SUSFS patch =="
         if ! git apply --check "$SUSFS_PATCH"; then
           echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree"
+          echo "== dumping reject hunks for diagnosis (manager=${{ inputs.manager }}) =="
+          find . -name '*.rej' -delete
+          git apply --reject "$SUSFS_PATCH" 2>/tmp/susfs_reject.log || true
+          cat /tmp/susfs_reject.log || true
+          for rej in $(find . -name '*.rej'); do
+            echo "---- $rej ----"
+            cat "$rej"
+          done
+          git checkout -- . 2>/dev/null || true
+          find . -name '*.orig' -delete 2>/dev/null || true
+          find . -name '*.rej' -delete 2>/dev/null || true
           exit 1
         fi
 
