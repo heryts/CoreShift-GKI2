@@ -6,12 +6,11 @@ on:
       kernel_version:
         type: choice
         required: true
-        options: ["5.10", "6.1", "6.6"]
-        default: "5.10"
+        options: ["5.10", "6.1", "6.6", "6.12"]
       manager:
         type: choice
         required: true
-        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Next", "KSUN-Susfs-Hookless", "KowSU", "ResukiSU", "Rissu", "Wild_KSU"]
+        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Backslashxx-Tinyfs", "KernelSU-Midori-Manual", "KernelSU-Midori-BranchLink", "KernelSU-Midori-Tamper", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "Rissu", "Wild_KSU"]
         default: "Vanilla"
       manager_ref:
         description: "Optional manager git ref/commit/tag"
@@ -20,7 +19,7 @@ on:
       source_mode:
         type: choice
         required: true
-        options: ["google-lts", "maintained", "pixel", "custom"]
+        options: ["google-lts", "maintained", "pixel", "cloudfox", "custom"]
         default: "google-lts"
       pixel_branch:
         type: choice
@@ -54,13 +53,23 @@ on:
         type: choice
         required: true
         options: ["on", "off"]
-        default: "off"
-      add_nomount_maxsteeel:
+        default: "on"
+      nomount_maxsteeel:
         description: "NoMount_support (On:maxsteeel-nomount, Off:KSUN-Hookless-Only)"
         type: choice
         required: true
         options: ["off", "on"]
+        default: "on"
+      kpm_support:
+        description: "Patch the built Image for KPM support"
+        type: choice
+        required: true
+        options: ["off", "on"]
         default: "off"
+      kpm_superkey:
+        description: "Optional superkey to embed (leave empty for no superkey)"
+        required: false
+        default: ""
       baseband_guard:
         description: "Apply Baseband Guard / BBG patches"
         type: choice
@@ -71,7 +80,7 @@ on:
         description: "Droidspaces support (5.10~6.6: slot patch, 6.12: on/off)"
         type: choice
         required: true
-        options: ["off", "678", "123", "345"]
+        options: ["off", "678", "123", "345", "on"]
         default: "off"
       droidspaces_ntsync:
         description: "NTSync support for Droidspaces containers"
@@ -80,21 +89,24 @@ on:
         options: ["off", "on"]
         default: "off"
       re_kernel:
-        description: "启用 Re-Kernel 驱动"
+        description: "Enable Re-Kernel Driver"
         type: choice
         required: true
         options: ["off", "on"]
         default: "off"
       publish_mode:
-        description: "Choose where the build is uploaded"
         type: choice
         required: true
-        options: ["artifact", "release"]
+        options: ["release", "artifact", "both"]
         default: "artifact"
+      build_stamp:
+        description: "Custom kernel version. Format: 'NAME|DATE'. Leave empty to keep default."
+        required: false
+        default: ""
 
 jobs:
   build:
-    name: ${{ inputs.kernel_version }} / ${{ inputs.manager }} / SUSFS ${{ inputs.susfs }} / BBG ${{ inputs.baseband_guard }}
+    name: ${{ inputs.kernel_version }} / ${{ inputs.manager }} / SUSFS ${{ inputs.susfs }} / BBG ${{ inputs.baseband_guard }} / KPM ${{ inputs.kpm_support }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -106,15 +118,11 @@ jobs:
       IKCONFIG: "on"
       CONTAINER_CORE: "off"
       CONTAINER_IPC: "off"
-      MOUNT_FILESYSTEMS: "on"
       CONTAINER_NETWORKING: "off"
-      FQ_CODEL_FEATURES: "off"
-      PERFORMANCE_FEATURES: "off"
       DEBUG_FEATURES: "off"
       HEAVY_DEBUG_FEATURES: "off"
       STRICT_CONFIG: "on"
       LEGACY_KMI_CHECK: "on"
-      PUBLISH_MODE: ${{ inputs.publish_mode }}
 
     steps:
       - name: Validate inputs
@@ -127,11 +135,12 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "::error::SUSFS is not supported with manager=KernelSU-Backslashxx (this fork has no built-in SUSFS wiring and known instability when combined with SUSFS4KSU; use KernelSU, KernelSU-Next, or ResukiSU for SUSFS builds)"
+
+          if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+            echo "::error::SUSFS is not supported on the tinyfs branch; set susfs=off, or choose manager=KernelSU-Backslashxx for SUSFS support"
             exit 1
           fi
-          
+
           if [ "${{ inputs.source_mode }}" = "custom" ] && [ -z "${{ inputs.source_repo }}" ]; then
             echo "::error::source_repo is required when source_mode=custom"
             exit 1
@@ -142,8 +151,28 @@ jobs:
             exit 1
           fi
 
+          if [ "${{ inputs.droidspaces_ntsync }}" = "on" ] && [ "${{ inputs.droidspaces }}" = "off" ]; then
+            echo "::error::droidspaces_ntsync=on requires droidspaces to be enabled (not 'off')"
+            exit 1
+          fi
+
+          if [ "${{ inputs.kernel_version }}" = "6.12" ] && [ "${{ inputs.droidspaces }}" != "off" ] && [ "${{ inputs.droidspaces }}" != "on" ]; then
+            echo "::error::kernel_version=6.12 uses droidspaces=on/off only; slot values (678/123/345) are for 5.10~6.6"
+            exit 1
+          fi
+
+          if [ "${{ inputs.kernel_version }}" != "6.12" ] && [ "${{ inputs.droidspaces }}" = "on" ]; then
+            echo "::error::droidspaces=on is only valid for kernel_version=6.12; choose a slot value (678/123/345) or 'off' for 5.10~6.6"
+            exit 1
+          fi
+
+          if [ "${{ inputs.source_mode }}" = "cloudfox" ] && [ "${{ inputs.manager }}" != "Vanilla" ] && [ "${{ inputs.manager }}" != "KowSU" ]; then
+            echo "::error::source_mode=cloudfox already vendors the KowSU driver; choose manager=Vanilla or manager=KowSU instead of ${{ inputs.manager }}"
+            exit 1
+          fi
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: false
           fetch-depth: 1
@@ -163,32 +192,80 @@ jobs:
           echo "BUILD_ENGINE=kleaf" >> "$GITHUB_ENV"
           echo "Pixel source mode selected: official Google Pixel manifest branch ${{ inputs.pixel_branch }}"
 
-      - name: Set build output name
+      - name: Generate build output name
         id: build-name
         shell: bash
         run: |
           set -euo pipefail
 
           susfs_label=""
+          susfs_status="Disabled"
           if [ "${{ inputs.susfs }}" = "on" ]; then
             susfs_label="-susfs"
+            susfs_status="Enabled"
+          fi
+
+          kpm_label=""
+          kpm_status="Disabled"
+          if [ "${{ inputs.kpm_support }}" = "on" ]; then
+            kpm_label="-kpm"
+            kpm_status="Enabled"
           fi
 
           bbg_label=""
+          bbg_status="Disabled"
           if [ "${{ inputs.baseband_guard }}" = "on" ]; then
             bbg_label="-bbg"
+            bbg_status="Enabled"
           fi
 
-          variant_suffix="${susfs_label}${bbg_label}"
+          variant_suffix="${susfs_label}${kpm_label}${bbg_label}"
           final_name="build-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}-${DATE}-${{ github.run_number }}"
           config_base="config-${{ inputs.kernel_version }}-${{ inputs.manager }}${variant_suffix}"
+
+          publish_release="false"
+          publish_artifact="false"
+          case "${{ inputs.publish_mode }}" in
+            release) publish_release="true" ;;
+            artifact) publish_artifact="true" ;;
+            both) publish_release="true"; publish_artifact="true" ;;
+          esac
 
           {
             echo "date=${DATE}"
             echo "variant_suffix=${variant_suffix}"
             echo "final_name=${final_name}"
             echo "config_base=${config_base}"
+            echo "susfs_status=${susfs_status}"
+            echo "kpm_status=${kpm_status}"
+            echo "bbg_status=${bbg_status}"
+            echo "publish_release=${publish_release}"
+            echo "publish_artifact=${publish_artifact}"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Parse custom build stamp
+        id: build-stamp
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RAW="${{ inputs.build_stamp }}"
+          BUILD_NAME=""
+          BUILD_DATE=""
+
+          if [ -n "$RAW" ]; then
+            BUILD_NAME="${RAW%%|*}"
+            if [ "$RAW" != "${RAW#*|}" ]; then
+              BUILD_DATE="${RAW#*|}"
+            fi
+          fi
+
+          echo "custom_build_name=${BUILD_NAME}" >> "$GITHUB_OUTPUT"
+          echo "custom_build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$BUILD_NAME" ] || [ -n "$BUILD_DATE" ]; then
+            echo "Custom build stamp requested -> name='${BUILD_NAME}' date='${BUILD_DATE}'"
+          fi
 
       - name: Install host tools
         uses: ./.github/actions/install-host-tools
@@ -230,11 +307,23 @@ jobs:
                 6.6)
                   effective_source_repo="https://github.com/ramabondanp/android_kernel_common-6.6"
                   ;;
+                6.12)
+                  effective_source_repo="https://android.googlesource.com/kernel/common"
+                  if [ -z "$effective_source_ref" ]; then
+                    effective_source_ref="android16-6.12"
+                  fi
+                  ;;
                 *)
                   echo "::error::No maintained source repo for kernel_version=${{ inputs.kernel_version }}"
                   exit 1
                   ;;
               esac
+              ;;
+            cloudfox)
+              effective_source_repo="https://github.com/CloudFox-INC/CloudFox-Kernel"
+              if [ -z "$effective_source_ref" ]; then
+                effective_source_ref="android12-5.10-cloudfox"
+              fi
               ;;
             custom)
               effective_source_repo="${{ inputs.source_repo }}"
@@ -245,38 +334,46 @@ jobs:
               ;;
           esac
 
+          is_alt_source="false"
+          case "${{ inputs.source_mode }}" in
+            maintained|cloudfox|custom)
+              is_alt_source="true"
+              ;;
+          esac
+
           {
             echo "source_repo=$effective_source_repo"
             echo "source_ref=$effective_source_ref"
+            echo "is_alt_source=$is_alt_source"
           } >> "$GITHUB_OUTPUT"
 
       - name: Replace kernel/common source
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/replace-common-source
         with:
           source_repo: ${{ steps.source-repo.outputs.source_repo }}
           source_ref: ${{ steps.source-repo.outputs.source_ref }}
 
       - name: Clean bundled KernelSU staging leftovers
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/fix-stale-kernelsu-kconfig
         with:
           remove_bundled_staging: "true"
 
       - name: Apply source fixes
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/apply-source-fixes
         with:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
 
       - name: Ensure expected Clang
-        if: inputs.source_mode == 'maintained' || inputs.source_mode == 'custom'
+        if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/ensure-expected-clang
         with:
           enabled: "true"
           kernel_version: ${{ inputs.kernel_version }}
-          
+
       - name: Init manager
         if: inputs.manager != 'Vanilla'
         uses: ./.github/actions/init-manager
@@ -285,7 +382,29 @@ jobs:
           manager_ref: ${{ inputs.manager_ref }}
           susfs: ${{ inputs.susfs }}
           kernel_version: ${{ inputs.kernel_version }}
-          
+
+      - name: Apply ZRAM Patches
+        if: inputs.source_mode != 'cloudfox'
+        uses: ./.github/actions/apply-zram
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply FUSE-BPF backport
+        if: inputs.kernel_version == '5.10'
+        uses: ./.github/actions/apply-fuse-bpf
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply Unicode Patches
+        uses: ./.github/actions/apply-unicode-fix
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
+      - name: Apply network patches
+        uses: ./.github/actions/apply-network-patches
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Apply SUSFS4KSU patches
         if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
         uses: ./.github/actions/apply-susfs
@@ -300,11 +419,11 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply NoMount support (maxsteeel)
-        if: inputs.add_nomount_maxsteeel == 'on'
+        if: inputs.nomount_maxsteeel == 'on'
         uses: ./.github/actions/apply-nomount
         with:
           kernel_version: ${{ inputs.kernel_version }}
-          
+
       - name: Apply Baseband Guard
         if: inputs.baseband_guard == 'on'
         uses: ./.github/actions/apply-baseband-guard
@@ -325,45 +444,42 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Apply IPC KABI patches
+        if: env.CONTAINER_IPC == 'on' && inputs.droidspaces == 'off'
+        uses: ./.github/actions/apply-ipc-kabi-patches
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+
       - name: Apply Re-Kernel driver
         if: inputs.re_kernel == 'on'
         uses: ./.github/actions/apply-re-kernel
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply Unicode Fix Patch
-        uses: ./.github/actions/apply-unicode-fix
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-          
-
       - name: Create private config fragment
         uses: ./.github/actions/create-config-fragment
         with:
           manager: ${{ inputs.manager }}
-          add_nomount_maxsteeel: ${{ inputs.add_nomount_maxsteeel }}
+          ikconfig: ${{ env.IKCONFIG }}
+          susfs: ${{ inputs.susfs }}
+          nomount_maxsteeel: ${{ inputs.nomount_maxsteeel }}
+          kpm_support: ${{ inputs.kpm_support }}
+          baseband_guard: ${{ inputs.baseband_guard }}
           droidspaces: ${{ inputs.droidspaces }}
           droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
-          re_kernel: ${{ inputs.re_kernel }}
-          ikconfig: ${{ env.IKCONFIG }}
           container_core: ${{ env.CONTAINER_CORE }}
           container_ipc: ${{ env.CONTAINER_IPC }}
-          mount_filesystems: ${{ env.MOUNT_FILESYSTEMS }}
           container_networking: ${{ env.CONTAINER_NETWORKING }}
-          fq_codel_features: ${{ env.FQ_CODEL_FEATURES }}
-          performance_features: ${{ env.PERFORMANCE_FEATURES }}
+          re_kernel: ${{ inputs.re_kernel }}
           debug_features: ${{ env.DEBUG_FEATURES }}
           heavy_debug_features: ${{ env.HEAVY_DEBUG_FEATURES }}
-          susfs: ${{ inputs.susfs }}
-          baseband_guard: ${{ inputs.baseband_guard }}
           kernel_version: ${{ inputs.kernel_version }}
 
-      - name: Apply IPC KABI patches
-        if: env.CONTAINER_IPC == 'on'
-        uses: ./.github/actions/apply-ipc-kabi-patches
+      - name: Apply source fixes for unbuilt drivers
+        uses: ./.github/actions/apply-fixes-for-kernel-6.12
         with:
           kernel_version: ${{ inputs.kernel_version }}
-
+          
       - name: Install legacy CoreShift build config
         if: inputs.kernel_version == '5.10'
         uses: ./.github/actions/install-legacy-private-fragment
@@ -400,6 +516,15 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           source_mode: ${{ inputs.source_mode }}
           kmi_bypass: ${{ inputs.kmi_bypass }}
+          custom_build_name: ${{ steps.build-stamp.outputs.custom_build_name }}
+          custom_build_date: ${{ steps.build-stamp.outputs.custom_build_date }}
+
+      - name: Apply KPM support
+        if: inputs.kpm_support == 'on'
+        uses: ./.github/actions/apply-kpm-support
+        with:
+          kernel_version: ${{ inputs.kernel_version }}
+          kpm_superkey: ${{ inputs.kpm_superkey }}
 
       - name: Write compiler metadata
         uses: ./.github/actions/write-compiler-metadata
@@ -437,22 +562,22 @@ jobs:
           cp "out/Image-${FINAL_NAME}" image-artifact/
           cp compiler-version.txt image-artifact/
 
-          if [ "${PUBLISH_MODE}" = "artifact" ]; then
+          if [ "${{ steps.build-name.outputs.publish_artifact }}" = "true" ]; then
             mkdir -p artifact-root
             cp -a ak3_work/. artifact-root/
             cp compiler-version.txt artifact-root/
           fi
 
       - name: Upload flashable artifact tree
-        if: env.PUBLISH_MODE == 'artifact'
-        uses: actions/upload-artifact@v4
+        if: steps.build-name.outputs.publish_artifact == 'true'
+        uses: actions/upload-artifact@v6
         with:
-          name: flashable-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
+          name: anykernel3-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
           path: artifact-root/**
           if-no-files-found: error
 
       - name: Upload raw Image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: image-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
           path: |
@@ -461,7 +586,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload config artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: config-${{ inputs.kernel_version }}-${{ inputs.manager }}${{ steps.build-name.outputs.variant_suffix }}-${{ steps.build-name.outputs.date }}
           path: |
@@ -471,7 +596,7 @@ jobs:
           if-no-files-found: error
 
       - name: Stage release zip
-        if: env.PUBLISH_MODE == 'release'
+        if: steps.build-name.outputs.publish_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -489,20 +614,10 @@ jobs:
           cp "$zip_path" "$release_dir/"
 
       - name: Write release body
-        if: env.PUBLISH_MODE == 'release'
+        if: steps.build-name.outputs.publish_release == 'true'
         shell: bash
         run: |
           set -euo pipefail
-
-          susfs_label="Disabled"
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            susfs_label="Enabled"
-          fi
-
-          bbg_label="Disabled"
-          if [ "${{ inputs.baseband_guard }}" = "on" ]; then
-            bbg_label="Enabled"
-          fi
 
           cat > release-body.md <<EOF
           CoreShift GKI
@@ -510,15 +625,16 @@ jobs:
           - Kernel: ${{ inputs.kernel_version }}
           - Manager: ${{ inputs.manager }}
           - LTO: ${{ inputs.lto }}
-          - SUSFS: ${susfs_label}
-          - BBG: ${bbg_label}
+          - SUSFS: ${{ steps.build-name.outputs.susfs_status }}
+          - KPM: ${{ steps.build-name.outputs.kpm_status }}
+          - BBG: ${{ steps.build-name.outputs.bbg_status }}
           - Date: ${DATE}
 
           Configs, raw images, and compiler metadata are available in workflow artifacts, not release assets.
           EOF
 
       - name: Create release
-        if: env.PUBLISH_MODE == 'release'
+        if: steps.build-name.outputs.publish_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.build-name.outputs.final_name }}
