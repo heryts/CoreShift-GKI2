@@ -1,623 +1,394 @@
-name: Create private config fragment
-description: Generate private.fragment and private.required from workflow inputs.
+name: Init manager
+description: Initialize selected kernel manager.
+
 inputs:
   manager:
     required: true
-    description: Selected manager, used to select SUSFS Kconfig symbol source.
-  ikconfig:
-    required: true
-    description: Enable IKCONFIG.
+    description: Manager submodule name.
+  manager_ref:
+    required: false
+    default: ""
+    description: Optional manager git ref, commit, or tag.
   susfs:
     required: true
-    description: Add SUSFS4KSU configs.
-  nomount_maxsteeel:
-    required: false
-    default: "off"
-    description: Enable maxsteeel/nomount (manager-agnostic VFS-level NoMount, independent from fork built-in NoMount).
-  kpm_support:
-    required: false
-    default: "off"
-    description: Enable base Kconfig requirement for KPM (KPatch-Next-EXP) support - the actual image patching happens post-build in apply-kpm-support.
-  baseband_guard:
-    required: true
-    description: Add Baseband Guard config.
-  droidspaces:
-    required: false
-    default: "off"
-    description: Droidspaces slot selection (off/678/123/345), used to enable required container configs.
-  droidspaces_ntsync:
-    required: false
-    default: "off"
-    description: Enable NTSync-related Kconfig for Droidspaces containers.
-  container_core:
-    required: true
-    description: Enable core container primitives.
-  container_ipc:
-    required: true
-    description: Enable IPC container primitives.
-  container_networking:
-    required: true
-    description: Enable container networking helpers.
-  re_kernel:
-    required: false
-    default: "off"
-    description: Enable Re-Kernel driver Kconfig.
-  debug_features:
-    required: true
-    description: Enable debug features.
-  heavy_debug_features:
-    required: true
-    description: Enable heavy debug features.
+    description: Whether SUSFS4KSU patches are enabled.
   kernel_version:
     required: true
-    description: Kernel version used to select SUSFS patch metadata.
+    description: Kernel version used for SUSFS manager compatibility selection.
+
 runs:
   using: composite
   steps:
     - shell: bash
       run: |
         set -euo pipefail
+        
+        git config --global user.email "bot@github.com"
+        git config --global user.name "Workflow Bot"
 
-        COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+        MANAGER="${{ inputs.manager }}"
+        KERNEL_VERSION="${{ inputs.kernel_version }}"
+        MANAGER_DIR="${GITHUB_WORKSPACE}/manager/${MANAGER}"
+        COMMON_DIR="${KERNEL_COMMON_DIR:-${GITHUB_WORKSPACE}/kernel/common}"
+
+        SELECTED_MANAGER_REF=""
+        MANAGER_REF_SOURCE="submodule-default"
+
+        echo "== init manager =="
+        echo "manager=$MANAGER"
+        echo "kernel_version=$KERNEL_VERSION"
+        echo "manager_dir=$MANAGER_DIR"
+        echo "common_dir=$COMMON_DIR"
+
+        git submodule update --init --remote --depth 1 --single-branch "manager/${MANAGER}"
+
+        if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "== KernelSU-Next + SUSFS: switching to pershoot/KernelSU-Next dev-susfs branch =="
+          rm -rf "manager/${MANAGER}"
+          git clone --branch "dev-susfs" --depth 1 "https://github.com/pershoot/KernelSU-Next.git" "manager/${MANAGER}"
+          echo "cloned pershoot/KernelSU-Next @ dev-susfs"
+        fi
+
+        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
+          echo "== KSUN-Susfs-Hookless: using MirahSyakilla/KSUN fork (pinned via .gitmodules) =="
+        fi
+
+        if [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
+          echo "== $MANAGER: plain backslashxx/KernelSU (submodule default), hook mode is a config-only choice =="
+        fi
+
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "== KernelSU-Backslashxx + SUSFS: staying on backslashxx/KernelSU (submodule default) =="
+          echo "SUSFS enablement is applied as a patch (midori01/KernelSU xx.patch) in apply-susfs,"
+          echo "matching midori01/gki_ksu_workflow's own MidoriSU-XX handling, instead of swapping"
+          echo "the manager source to a separately-tracked branch."
+        fi
+
+        if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
+          echo "== KernelSU-Backslashxx-Tinyfs: switching to backslashxx/KernelSU tinyfs branch =="
+          rm -rf "manager/${MANAGER}"
+          git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
+          echo "cloned backslashxx/KernelSU @ tinyfs"
+        fi
+
+        if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
+          echo "== unshallow KernelSU-Next-family submodule =="
+          if [ "$(git -C "manager/${MANAGER}" rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+            git -C "manager/${MANAGER}" fetch --unshallow origin
+            git -C "manager/${MANAGER}" fetch --tags origin || true
+            echo "submodule unshallowed, commit count now: $(git -C "manager/${MANAGER}" rev-list --count HEAD)"
+          else
+            echo "submodule already not shallow, skipping"
+          fi
+        fi
+
+        if [ -n "${{ inputs.manager_ref }}" ]; then
+          SELECTED_MANAGER_REF="${{ inputs.manager_ref }}"
+          MANAGER_REF_SOURCE="explicit"
+        elif [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "== SUSFS manager compatibility table =="
+          printf '%s\n' \
+            'manager   kernel  ref' \
+            'KernelSU  5.10    aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KernelSU  6.1     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KernelSU  6.6     aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KernelSU  6.12    aab67974f1210cad94880ce1fdc14cf63f6e30e0' \
+            'KowSU     *       (no pin; uses submodule HEAD, same as KernelSU-Backslashxx)' \
+            'KernelSU-Backslashxx / Midori-Manual / Midori-BranchLink / Midori-Tamper' \
+            '                  *  (no static pin; live submodule HEAD, probed against xx.patch)' \
+            'KernelSU-Next 5.10 (pinned via .gitmodules branch)' \
+            'KernelSU-Next 6.1  (pinned via .gitmodules branch)' \
+            'KernelSU-Next 6.6  (pinned via .gitmodules branch)' \
+            'KernelSU-Next 6.12 (pinned via .gitmodules branch)'
+
+          case "${MANAGER}:${KERNEL_VERSION}" in
+            KernelSU:5.10|KernelSU:6.1|KernelSU:6.6|KernelSU:6.12)
+              SELECTED_MANAGER_REF="aab67974f1210cad94880ce1fdc14cf63f6e30e0"
+              MANAGER_REF_SOURCE="susfs-default"
+              ;;
+            KowSU:5.10|KowSU:6.1|KowSU:6.6|KowSU:6.12)
+              SELECTED_MANAGER_REF=""
+              MANAGER_REF_SOURCE="submodule-default (no reliable SUSFS-pinned commit for KowSU)"
+              ;;
+            KSUN-Susfs-Hookless:5.10|KSUN-Susfs-Hookless:6.1|KSUN-Susfs-Hookless:6.6|KSUN-Susfs-Hookless:6.12)
+              SELECTED_MANAGER_REF=""
+              MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
+              ;;
+            KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12|KernelSU-Midori-Manual:5.10|KernelSU-Midori-Manual:6.1|KernelSU-Midori-Manual:6.6|KernelSU-Midori-Manual:6.12|KernelSU-Midori-BranchLink:5.10|KernelSU-Midori-BranchLink:6.1|KernelSU-Midori-BranchLink:6.6|KernelSU-Midori-BranchLink:6.12|KernelSU-Midori-Tamper:5.10|KernelSU-Midori-Tamper:6.1|KernelSU-Midori-Tamper:6.6|KernelSU-Midori-Tamper:6.12)
+              # backslashxx/KernelSU's master branch is periodically rewritten/force-pushed
+              # (it is not append-only history), so any commit hardcoded here has a short
+              # shelf life: it can become unreachable from a fresh clone within ~1 day,
+              # which is exactly what broke this pin (d4632567... rewritten away by
+              # fa9f952a... between when this table was written and this run).
+              #
+              # Instead of hardcoding a SHA, probe the live submodule HEAD (already fetched
+              # above via `git submodule update --init --remote`) against xx.patch, the same
+              # patch apply-susfs will apply later. If it applies cleanly, pin to that live
+              # HEAD - self-healing against future upstream rewrites, exactly like the
+              # susfs=off / submodule-head fallback path already does. If it does not, fail
+              # now with a clear reason instead of deferring to a confusing HEAD-mismatch
+              # error further down (or a silent fallback-to-default-branch inside setup.sh).
+              echo "== ${MANAGER}: probing xx.patch against live submodule HEAD before pinning =="
+              LIVE_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
+              XX_PROBE_PATCH="${RUNNER_TEMP:-/tmp}/xx-probe.patch"
+              XX_PROBE_LOG="${RUNNER_TEMP:-/tmp}/xx-probe.log"
+
+              if ! curl -fsSL "https://github.com/midori01/KernelSU/commit/xx.patch" -o "$XX_PROBE_PATCH"; then
+                echo "::error::failed to fetch midori01/KernelSU xx.patch for the compatibility probe."
+                echo "::error::set manager_ref explicitly to bypass this probe, or retry once the fetch succeeds."
+                exit 1
+              fi
+
+              if git -C "$MANAGER_DIR" apply --check "$XX_PROBE_PATCH" >"$XX_PROBE_LOG" 2>&1; then
+                echo "  xx.patch applies cleanly to live HEAD $LIVE_HEAD, pinning to it"
+                SELECTED_MANAGER_REF="$LIVE_HEAD"
+                MANAGER_REF_SOURCE="susfs-live-verified (xx.patch applies cleanly to live submodule HEAD)"
+              else
+                echo "::error::xx.patch does not apply to backslashxx/KernelSU's current HEAD ($LIVE_HEAD) for manager=${MANAGER}."
+                echo "::error::backslashxx/KernelSU master likely moved past the commit midori01/KernelSU's xx.patch"
+                echo "::error::was generated against, and diverged enough that it no longer applies cleanly."
+                echo "::error::Check https://github.com/midori01/KernelSU/commits/xx for an updated xx.patch, or"
+                echo "::error::override manager_ref explicitly to a commit you have verified xx.patch applies to."
+                sed -n '1,60p' "$XX_PROBE_LOG"
+                exit 1
+              fi
+              ;;
+            ResukiSU:*|Wild_KSU:*|Rissu:*|KernelSU-Next:*)
+              SELECTED_MANAGER_REF=""
+              MANAGER_REF_SOURCE="submodule-default (no known SUSFS-pinned commit)"
+              ;;
+            *)
+              echo "::error::No SUSFS-compatible default manager ref for manager=${MANAGER}, kernel_version=${KERNEL_VERSION}. Set manager_ref explicitly."
+              exit 1
+              ;;
+          esac
+        fi
+
+        cd "$MANAGER_DIR"
+
+        if [ -n "$SELECTED_MANAGER_REF" ]; then
+          echo "== pin manager ref =="
+          echo "manager_ref=$SELECTED_MANAGER_REF"
+
+          git fetch --depth=1 origin "$SELECTED_MANAGER_REF" ||
+            git fetch origin "$SELECTED_MANAGER_REF"
+
+          git checkout FETCH_HEAD
+        fi
+
+        MANAGER_HEAD="$(git rev-parse HEAD)"
+        MANAGER_DESCRIBE="$(git describe --tags --always || git rev-parse --short HEAD)"
+
+        echo "manager ref source: $MANAGER_REF_SOURCE"
+        echo "selected manager ref: ${SELECTED_MANAGER_REF:-submodule-default}"
+        echo "manager HEAD: $MANAGER_HEAD"
+        echo "manager describe: $MANAGER_DESCRIBE"
+
+        PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
+
+        if [ "$MANAGER" = "KowSU" ]; then
+          echo "== KowSU: applying extra_features patch (midori01/gki_ksu_workflow 24_extra_features_for_ksu.patch) =="
+          echo "Adds supercall dispatch extras (get_hook_type/get_susfs_version/get_driver_name) that some"
+          echo "manager apps query; independent of susfs (applied regardless of susfs on/off, matching"
+          echo "midori01/gki_ksu_workflow's own MidoriSU-KX 'Setup KernelSU' step order: clone -> this patch"
+          echo "-> setup script). Best-effort only, matching their own '|| true' - must not fail the build."
+
+          EXTRA_FEATURES_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/24_extra_features_for_ksu.patch"
+          if [ -f "$EXTRA_FEATURES_PATCH" ]; then
+            patch -p1 --forward < "$EXTRA_FEATURES_PATCH" || \
+              echo "::warning::24_extra_features_for_ksu.patch did not apply cleanly to manager=$MANAGER (non-fatal)"
+          else
+            echo "::warning::missing $EXTRA_FEATURES_PATCH, skipping extra_features patch for manager=$MANAGER"
+          fi
+        fi
+
+        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "Wild_KSU" ] || [ "$MANAGER" = "Rissu" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ] || [ "$MANAGER" = "KernelSU-Next" ]; }; then
+          SELECTED_MANAGER_REF="$MANAGER_HEAD"
+          MANAGER_REF_SOURCE="submodule-head"
+          echo "using submodule HEAD as setup ref: $SELECTED_MANAGER_REF"
+        fi
+
+        if [ -f "$MANAGER_DIR/kernel/setup.sh" ]; then
+          SETUP_SCRIPT="$MANAGER_DIR/kernel/setup.sh"
+        elif [ -f "$MANAGER_DIR/setup.sh" ]; then
+          SETUP_SCRIPT="$MANAGER_DIR/setup.sh"
+        else
+          echo "::error::No setup.sh found for manager=${MANAGER}"
+          exit 1
+        fi
+
+        git config --global pull.rebase false
+        echo "== run manager setup =="
+        echo "setup_script=$SETUP_SCRIPT"
+        echo "setup_ref=${SELECTED_MANAGER_REF:-none}"
+
+        if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
+          echo "== link expected KernelSU-Next repo folder to submodule =="
+          ln -sfn "$MANAGER_DIR" "$COMMON_DIR/KernelSU-Next"
+          echo "linked $COMMON_DIR/KernelSU-Next -> $MANAGER_DIR"
+        fi
 
         cd "$COMMON_DIR"
 
-        : > private.fragment
-        : > private.required
+        if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
+          echo "== link expected KernelSU-Next repo folder to submodule =="
+          ln -sfn "$MANAGER_DIR" "$COMMON_DIR/KernelSU-Next"
+          echo "linked $COMMON_DIR/KernelSU-Next -> $MANAGER_DIR"
+        fi
 
-        ADDED_CONFIG_KEYS=""
-
-        add_config() {
-          key="$1"
-          val="$2"
-
-          case " $ADDED_CONFIG_KEYS " in
-            *" $key "*)
-              return 0
-              ;;
-          esac
-          ADDED_CONFIG_KEYS="${ADDED_CONFIG_KEYS} $key"
-
-          if [ "$val" = "y" ]; then
-            printf 'CONFIG_%s=y\n' "$key" >> private.fragment
-            printf 'CONFIG_%s=y\n' "$key" >> private.required
-          elif [ "$val" = "m" ]; then
-            printf 'CONFIG_%s=m\n' "$key" >> private.fragment
-            printf 'CONFIG_%s=m\n' "$key" >> private.required
-          elif [ "$val" = "n" ]; then
-            printf '# CONFIG_%s is not set\n' "$key" >> private.fragment
-            printf 'CONFIG_%s=n\n' "$key" >> private.required
-          else
-            printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.fragment
-            printf 'CONFIG_%s=%s\n' "$key" "$val" >> private.required
-          fi
-        }
-
-        add_str_config() {
-          key="$1"
-          val="$2"
-
-          printf 'CONFIG_%s="%s"\n' "$key" "$val" >> private.fragment
-          printf 'CONFIG_%s="%s"\n' "$key" "$val" >> private.required
-        }
-        
-        has_kconfig_symbol() {
-          local kconfig_file="$1"
-          local symbol="$2"
-
-          [ -f "$kconfig_file" ] || return 1
-          grep -qE "^[[:space:]]*config[[:space:]]+${symbol}\$" "$kconfig_file"
-        }
-
-        echo "== enabling BBRv3 TCP congestion control =="
-        add_config TCP_CONG_ADVANCED y
-        add_config TCP_CONG_BBR y
-
-        if [ "${bbrv3_patch_applied:-false}" = "true" ]; then
-          add_config TCP_CONG_BBR3 y
-          add_config DEFAULT_BBR3 y
+        if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
+          bash "$SETUP_SCRIPT" "dev-susfs"
+        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; }; then
+          echo "== calling setup.sh with explicit ref to prevent it from switching to latest tag =="
+          bash "$SETUP_SCRIPT" "$SELECTED_MANAGER_REF"
         else
-          echo "  bbrv3_patch_applied=${bbrv3_patch_applied:-unset}: BBRv3 patch was not applied for kernel_version=${{ inputs.kernel_version }}"
-          echo "  (CONFIG_TCP_CONG_BBR3 / CONFIG_DEFAULT_BBR3 Kconfig symbols don't exist on this tree yet, skipping)"
+          bash "$SETUP_SCRIPT"
         fi
 
-        echo "== enabling base TCP congestion control algorithms =="
-        add_config TCP_CONG_CUBIC y
-        add_config TCP_CONG_BIC y
-        add_config TCP_CONG_WESTWOOD y
-        add_config TCP_CONG_HTCP y
-        
-        echo "== enabling traffic shaping (qdisc) =="
-        add_config NET_SCH_FQ y
-        add_config NET_SCH_FQ_CODEL y
-        add_config NET_SCH_CAKE y
-
-        echo "== enabling connection marking =="
-        add_config NET_ACT_CONNMARK y
-
-        echo "== enabling TTL/Hop Limit target =="
-        add_config IP_NF_TARGET_TTL y
-        add_config IP6_NF_TARGET_HL y
-        add_config IP6_NF_MATCH_HL y
-
-        echo "== enabling Wireguard VPN =="
-        add_config WIREGUARD y
-
-        echo "== enabling CIFS =="
-        add_config CIFS y
-        add_config NETWORK_FILESYSTEMS y
-        if grep -qE '^\s*select\s+NETFS_SUPPORT\s*$' fs/cifs/Kconfig 2>/dev/null || \
-           grep -qE '^\s*select\s+NETFS_SUPPORT\s*$' fs/smb/client/Kconfig 2>/dev/null; then
-          echo "  CIFS selects NETFS_SUPPORT on this tree, enabling"
-          add_config NETFS_SUPPORT y
-        else
-          echo "  CIFS does not select NETFS_SUPPORT on this tree (no Kconfig prompt exists), skipping"
-        fi
-        add_config KEYS y
-        add_config CIFS_XATTR y
-        add_config CIFS_POSIX y
-
-        echo "== enabling mount_filesystems =="
-        add_config TMPFS y
-        add_config TMPFS_XATTR y
-        add_config TMPFS_POSIX_ACL y
-        add_config OVERLAY_FS y
-        add_config FUSE_FS y
-
-        echo "== enabling performance feature =="
-        add_config PSI y
-
-        if [ "${{ inputs.ikconfig }}" = "on" ]; then
-          add_config IKCONFIG y
-          add_config IKCONFIG_PROC y
-        fi
-
-        echo "== ZRAM/ZSMALLOC build type =="
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-          echo "  kernel_version=5.10: ZRAM/ZSMALLOC built-in (required by LZ4KDR/multi-comp)"
-          add_config ZRAM y
-          add_config ZSMALLOC y
-        else
-          echo "  kernel_version=${{ inputs.kernel_version }}: ZRAM/ZSMALLOC as modules"
-          echo "  (android/gki_aarch64_modules still expects zram.ko/zsmalloc.ko for this version)"
-          add_config ZRAM m
-          add_config ZSMALLOC m
-        fi
-
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-          echo "== ZRAM LZ4KDR: check source tree support (5.10 only) =="
-          if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
-             has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
-            echo "  CONFIG_CRYPTO_LZ4KDR and ZRAM_DEF_COMP_LZ4KDR choice found, enabling"
-            add_config ZRAM_DEF_COMP_LZ4KDR y
-            add_config CRYPTO_LZ4KDR y
-          else
-            echo "  CRYPTO_LZ4KDR / ZRAM_DEF_COMP_LZ4KDR not found in this source tree, skipping"
-            echo "  (LZ4KDR requires a source with the vendor lz4k/lz4kdr patch already applied)"
-          fi
-
-          echo "== ZRAM recompression (multi-comp): check source tree support (5.10 only) =="
-          if has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_MULTI_COMP; then
-            echo "  CONFIG_ZRAM_MULTI_COMP found, enabling secondary (zstd) recompression"
-            add_config ZRAM_MULTI_COMP y
-            if has_kconfig_symbol crypto/Kconfig CRYPTO_ZSTD; then
-              add_config CRYPTO_ZSTD y
-            fi
-          else
-            echo "  ZRAM_MULTI_COMP not found in this source tree, skipping recompression support"
-          fi
-
-          echo "== MODULE_SKIP_BUILTIN: check source tree support (5.10 only) =="
-          if has_kconfig_symbol init/Kconfig MODULE_SKIP_BUILTIN; then
-            echo "  CONFIG_MODULE_SKIP_BUILTIN found, enabling as a safety net"
-            echo "  (ramdisk/recovery insmod of a .ko already built into vmlinux will now"
-            echo "   report success instead of failing with -EBUSY and panicking init)"
-            add_config MODULE_SKIP_BUILTIN y
-          else
-            echo "  MODULE_SKIP_BUILTIN not found in this source tree, skipping"
-            echo "  (requires the module-skip-builtin action to run first and patch init/Kconfig)"
-          fi
-        fi
-
-        echo "== ZRAM LZ4K/LZ4KD/LZ4K_OPLUS: check source tree support =="
-        if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KD; then
-          echo "  CONFIG_CRYPTO_LZ4KD found, enabling"
-
-          add_config CRYPTO_LZ4HC y
-          add_config CRYPTO_LZ4KD y
-          add_config CRYPTO_842 y
-
-          if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4K; then
-            echo "  CONFIG_CRYPTO_LZ4K found, enabling"
-            add_config CRYPTO_LZ4K y
-          else
-            echo "  CRYPTO_LZ4K not found in this source tree, skipping"
-            echo "  (this kernel_version only has CoreShift's own LZ4KD/LZ4KDR, not SukiSU's LZ4K source patch)"
-          fi
-
-          if has_kconfig_symbol lib/lz4k_oplus/Kconfig CRYPTO_LZ4K_OPLUS; then
-            echo "  CONFIG_CRYPTO_LZ4K_OPLUS found, enabling"
-            add_config CRYPTO_LZ4K_OPLUS y
-          else
-            echo "  CRYPTO_LZ4K_OPLUS not found (lib/lz4k_oplus/Kconfig missing/not sourced), skipping"
-          fi
-
-          if has_kconfig_symbol crypto/Kconfig CRYPTO_DEFLATE; then
-            echo "  CONFIG_CRYPTO_DEFLATE found, enabling"
-            add_config CRYPTO_DEFLATE y
-          else
-            echo "  CRYPTO_DEFLATE not found in this source tree, skipping"
-          fi
-        else
-          echo "  CRYPTO_LZ4KD not found in this source tree, skipping LZ4K/LZ4KD/LZ4K_OPLUS block"
-          echo "  (requires the zram source-add + integration patches to run first)"
-        fi
-
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
-          if ! has_kconfig_symbol fs/fuse/Kconfig FUSE_BPF; then
-            echo "::error::CONFIG_FUSE_BPF tidak ditemukan di fs/fuse/Kconfig -- apply-fuse-bpf belum jalan/gagal sebelum step ini"
+        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
+          echo "== restore pinned submodule commit after setup.sh =="
+          git -C "$MANAGER_DIR" checkout -f "$PRE_SETUP_MANAGER_HEAD"
+          RESTORED_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
+          if [ "$RESTORED_HEAD" != "$PRE_SETUP_MANAGER_HEAD" ]; then
+            echo "::error::failed to restore submodule to pinned commit after setup.sh"
+            echo "::error::expected=$PRE_SETUP_MANAGER_HEAD actual=$RESTORED_HEAD"
             exit 1
           fi
-          echo "== FUSE-BPF: enabling CONFIG_FUSE_BPF and BPF subsystem deps =="
-          add_config BPF y
-          add_config BPF_SYSCALL y
-          add_config FUSE_BPF y
+          echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
-          add_config KSU y
-          add_config KSU_HACK_ARM64_BRANCH_LINK y
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ${{ inputs.manager }}: SUSFS integration mode (custom enablement patch) =="
-            case "${{ inputs.kernel_version }}" in
-              5.10) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10" ;;
-              6.1)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android14-6.1" ;;
-              6.6)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android15-6.6" ;;
-              6.12) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12" ;;
-              *)
-                echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
-                exit 1
-                ;;
-            esac
-
-            echo "== SUSFS config scan: $SUSFS_PATCH_DIR =="
-
-            if [ ! -d "$SUSFS_PATCH_DIR" ]; then
-              echo "::error::missing SUSFS patch directory: $SUSFS_PATCH_DIR"
-              exit 1
-            fi
-
-            SUSFS_CONFIGS="$(
-              { grep -RhoE '^\+[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_PATCH_DIR" 2>/dev/null || true; } |
-              sed -E 's/^\+[[:space:]]*config[[:space:]]+//' |
-              sort -u
-            )"
-
-            if [ -z "$SUSFS_CONFIGS" ]; then
-              echo "::warning::No required SUSFS CONFIG_* names found in selected patches/Kconfig."
-            else
-              echo "$SUSFS_CONFIGS" | while read -r key; do
-                [ -z "$key" ] && continue
-                if [ "$key" = "KSU_SUSFS_SUS_SU" ]; then
-                  echo "skipping KSU_SUSFS_SUS_SU for manager=${{ inputs.manager }} (see note below)"
-                  continue
-                fi
-                add_config "$key" y
-              done
-            fi
-
-            echo "== ${{ inputs.manager }}: KSU_SUSFS_SUS_SU not applicable =="
-            echo "midori01/KernelSU@xx's kernel/Kconfig does not define KSU_SUSFS_SUS_SU at all -"
-            echo "this manager hides su via its own KSU_HACK_ARM64_BRANCH_LINK hook instead of the"
-            echo "susfs4ksu sus_su mechanism, so there is no Kconfig symbol to set here. Forcing it"
-            echo "(even to n) trips strict_config since it never lands. Intentionally not requested."
-          fi
-
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ]; then
-          add_config KSU y
-          add_config KSU_TINYFS_SUCOMPAT y
-          add_config KSU_FEATURE_ADBROOT n
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-
-        elif [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
-          add_config KSU y
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-          add_config KSU_THRONE_TRACKER_ALWAYS_THREADED y
-          add_config KSU_HOSTSREDIRECT y
-
-          case "${{ inputs.manager }}" in
-            KernelSU-Midori-BranchLink)
-              add_config KSU_HACK_ARM64_BRANCH_LINK y
-              ;;
-            KernelSU-Midori-Tamper)
-              add_config KSU_TAMPER_SYSCALL_TABLE y
-              ;;
-            KernelSU-Midori-Manual)
-              echo "== KernelSU-Midori-Manual: no hook Kconfig requested =="
-              echo "KSU_KPROBES_KSUD/KSU_HACK_ARM64_BRANCH_LINK/KSU_TAMPER_SYSCALL_TABLE all default n;"
-              echo "manual mode's hooks come from the scope-min-manual-hooks-v2.3.patch call-sites"
-              echo "applied to the kernel tree in init-manager, gated on plain CONFIG_KSU."
-              ;;
-          esac
-
-          echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
-          echo "midori01/KernelSU xx.patch (applied in apply-susfs when susfs=on) already sets KSU_SUSFS,"
-          echo "SUS_PATH, SUS_MOUNT, SUS_KSTAT, TRY_UMOUNT, SPOOF_UNAME, ENABLE_LOG,"
-          echo "HIDE_KSU_SUSFS_SYMBOLS, SPOOF_CMDLINE_OR_BOOTCONFIG, OPEN_REDIRECT, and SUS_MAP to"
-          echo "'default y', so they land without add_config. No KSU_SUSFS_SUS_SU option exists for"
-          echo "this hook family (same as KernelSU-Backslashxx)."
-
-        elif [ "${{ inputs.manager }}" = "KowSU" ]; then
-          add_config KSU y
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
-            echo "midori01/KernelSU kow.patch (applied in apply-susfs when susfs=on) is expected to set"
-            echo "KSU_SUSFS, SUS_PATH, SUS_MOUNT, etc. to 'default y' the same way xx.patch does for"
-            echo "KernelSU-Backslashxx (same author, same de-inlined-hook architecture per the"
-            echo "MidoriSU-KX-SUSFS row in gki_ksu_workflow's README) - NOT independently verified"
-            echo "against kow.patch's actual Kconfig menu yet. If strict_config later reports a"
-            echo "missing/unexpected KSU_SUSFS_* symbol for this manager, add_config it explicitly here."
-          fi
-
-        elif [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== SUSFS config: KernelSU-Next (hookless/kprobes fork) =="
-            add_config KPROBES y
-            add_config KRETPROBES y
-            add_config KALLSYMS y
-            add_config KSU_KPROBES_SUSFS y
-            if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
-              echo "nomount_maxsteeel=on: standalone NoMount (maxsteeel/nomount) takes"
-            else
-              add_config KSU_KPROBES_NOMOUNT y
-            fi
-            echo "Enabling ARM64 branch-link hook mode (KSU_HACK_ARM64_BRANCH_LINK)."
-            add_config KSU_HACK_ARM64_BRANCH_LINK y
-          fi
-
-        elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
-          add_config KSU y
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ResukiSU: SUSFS integration mode =="
-            add_config KSU_SUSFS y
-          else
-            echo "== ResukiSU: manual hook integration mode =="
-            add_config KSU_MANUAL_HOOK y
-            add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK y
-            add_config KSU_MANUAL_HOOK_AUTO_INPUT_HOOK y
-            add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK y
-            add_config KALLSYMS_ALL y
-          fi
-
-        elif [ "${{ inputs.susfs }}" = "on" ]; then
-          echo "== ensuring base KSU config is enabled (SUSFS Kconfig depends on it) =="
-          add_config KSU y
-          case "${{ inputs.kernel_version }}" in
-            5.10)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10"
-              ;;
-            6.1)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android14-6.1"
-              ;;
-            6.6)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android15-6.6"
-              ;;
-            6.12)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12"
-              ;;
-            *)
-              echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
-              exit 1
-              ;;
-          esac
-
-          echo "== SUSFS config scan: $SUSFS_PATCH_DIR =="
-
-          if [ ! -d "$SUSFS_PATCH_DIR" ]; then
-            echo "::error::missing SUSFS patch directory: $SUSFS_PATCH_DIR"
-            exit 1
-          fi
-
-          SUSFS_CONFIGS="$(
-            { grep -RhoE '^\+[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_PATCH_DIR" 2>/dev/null || true; } |
-            sed -E 's/^\+[[:space:]]*config[[:space:]]+//' |
-            sort -u
-          )"
-
-          if [ -z "$SUSFS_CONFIGS" ]; then
-            echo "::warning::No required SUSFS CONFIG_* names found in selected patches/Kconfig."
-          else
-            echo "$SUSFS_CONFIGS" | while read -r key; do
-              [ -z "$key" ] && continue
-              if [ "${{ inputs.manager }}" = "KernelSU-Next" ] && [ "$key" = "KSU_SUSFS_OPEN_REDIRECT" ]; then
-                echo "skipping KSU_SUSFS_OPEN_REDIRECT for manager=KernelSU-Next"
-                echo "(this fork's fs/namei.c set_nameidata() lacks the 4th param OPEN_REDIRECT needs)"
-                continue
-              fi
-              add_config "$key" y
-            done
-          fi
-
-        else
-          echo "== manager=${{ inputs.manager }}, susfs=off: no manager-specific KSU config block matched =="
-        fi
-
-        if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
-          echo "== NoMount (maxsteeel) config =="
-          add_config NOMOUNT y
-        fi
-
-        if [ "${{ inputs.kpm_support }}" = "on" ]; then
-          if grep -qxF "CONFIG_KALLSYMS=y" private.fragment 2>/dev/null; then
-            echo "  already requested: CONFIG_KALLSYMS=y"
-          else
-            add_config KALLSYMS y
-          fi
-        fi
-        
-        if [ "${{ inputs.baseband_guard }}" = "on" ]; then
-          add_config BBG y
-        fi
-
-        if [ "${{ inputs.droidspaces }}" != "off" ]; then
-          echo "== Droidspaces config: enabling container primitives =="
-          for cfg in SYSVIPC POSIX_MQUEUE IPC_NS PID_NS DEVTMPFS; do
-            if grep -qxF "CONFIG_${cfg}=y" private.fragment 2>/dev/null; then
-              echo "  already requested via container_features: CONFIG_${cfg}"
-            else
-              add_config "$cfg" y
+        if [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; then
+          for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
+            if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+              echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature =="
+              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+              /return true;/a\
+              \
+              \t// MidoriSU Manager (com.midori.supermanager)\
+              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+              \t\treturn true;
+              }' "$APK_SIGN_FILE"
+              grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
             fi
           done
         fi
         
-        if [ "${{ inputs.droidspaces_ntsync }}" = "on" ]; then
-          echo "== NTSync config =="
-          add_config NTSYNC y
-        fi
-
-        if [ "${{ inputs.container_core }}" = "on" ]; then
-          add_config NAMESPACES y
-          add_config USER_NS y
-          add_config UTS_NS y
-          add_config NET_NS y
-          add_config PID_NS y
-
-          add_config CGROUPS y
-          add_config CGROUP_PIDS y
-          add_config CGROUP_DEVICE y
-
-          add_config DEVTMPFS y
-
-          add_config SECCOMP y
-          add_config SECCOMP_FILTER y
-        fi
-
-        if [ "${{ inputs.container_ipc }}" = "on" ]; then
-          add_config SYSCTL y
-          add_config SYSVIPC y
-          add_config SYSVIPC_SYSCTL y
-          add_config IPC_NS y
-          add_config POSIX_MQUEUE y
-          add_config POSIX_MQUEUE_SYSCTL y
-        fi
-
-        if [ "${{ inputs.container_networking }}" = "on" ]; then
-          add_config TUN y
-          add_config VETH y
-          add_config BRIDGE y
-          add_config BRIDGE_NETFILTER y
-
-          add_config NETFILTER y
-          add_config NETFILTER_ADVANCED y
-          add_config NETFILTER_XTABLES y
-
-          add_config NETFILTER_XT_TARGET_MASQUERADE y
-          add_config NETFILTER_XT_TARGET_REDIRECT y
-          add_config NETFILTER_XT_TARGET_MARK y
-
-          add_config NETFILTER_XT_MATCH_CONNTRACK y
-          add_config NETFILTER_XT_MATCH_STATE y
-          add_config NETFILTER_XT_MATCH_MARK y
-          add_config NETFILTER_XT_MATCH_MULTIPORT y
-          add_config NETFILTER_XT_MATCH_OWNER y
-
-          add_config NF_CONNTRACK y
-          add_config NF_NAT y
-          add_config IP_NF_IPTABLES y
-          add_config IP_NF_FILTER y
-          add_config IP_NF_NAT y
-          add_config IP_NF_TARGET_MASQUERADE y
-
-          echo "== enabling IP Set & Firewall =="
-          add_config IP_SET y
-          add_config IP_SET_BITMAP_IP y
-          add_config IP_SET_BITMAP_IPMAC y
-          add_config IP_SET_BITMAP_PORT y
-          add_config IP_SET_HASH_IP y
-          add_config IP_SET_HASH_IPMARK y
-          add_config IP_SET_HASH_IPPORT y
-          add_config IP_SET_HASH_IPPORTIP y
-          add_config IP_SET_HASH_IPPORTNET y
-          add_config IP_SET_HASH_IPMAC y
-          add_config IP_SET_HASH_MAC y
-          add_config IP_SET_HASH_NETPORTNET y
-          add_config IP_SET_HASH_NET y
-          add_config IP_SET_HASH_NETNET y
-          add_config IP_SET_HASH_NETPORT y
-          add_config IP_SET_HASH_NETIFACE y
-          add_config IP_SET_LIST_SET y
-          add_config NETFILTER_XT_MATCH_ADDRTYPE y
-          add_config NETFILTER_XT_SET y
-          add_config NETFILTER_XT_TARGET_LOG y
-          add_config NETFILTER_XT_MATCH_RECENT y
-          add_config IP6_NF_NAT y
-          add_config IP6_NF_TARGET_MASQUERADE y
-        fi
-
-        if [ "${{ inputs.re_kernel }}" = "on" ]; then
-          echo "== Re-Kernel config =="
-          add_config REKERNEL y
-          add_config REKERNEL_NETWORK y
-        fi
-
-        if [ "${{ inputs.debug_features }}" = "on" ]; then
-          add_config KPROBES y
-          add_config KPROBE_EVENTS y
-          add_config UPROBES y
-          add_config FTRACE y
-          add_config FUNCTION_TRACER y
-          add_config DYNAMIC_FTRACE y
-        fi
-
-        if [ "${{ inputs.heavy_debug_features }}" = "on" ]; then
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-          add_config KASAN y
-          add_config KASAN_HW_TAGS y
-          add_config BTRFS_FS y
-        fi
-        
-        if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
-          android_kconfig="drivers/android/Kconfig"
-
-          add_config ANDROID_BINDER_IPC y
-          add_config ANDROID_BINDERFS y
-
-          if has_kconfig_symbol "$android_kconfig" ANDROID_BINDER_IPC_RUST_DUMMY; then
-            add_config ANDROID_BINDER_IPC_RUST_DUMMY m
+        if { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ]; } &&
+          [ -f drivers/staging/Kconfig ] &&
+          grep -q 'source "drivers/staging/kernelsu/kernel/Kconfig"' drivers/staging/Kconfig; then
+          if [ -f drivers/kernelsu/Kconfig ]; then
+            echo "== normalize KernelSU Kconfig layout =="
+            echo "removing stale staging KernelSU include; manager setup installed drivers/kernelsu/Kconfig"
+            sed -i '\|source "drivers/staging/kernelsu/kernel/Kconfig"|d' drivers/staging/Kconfig
           fi
         fi
 
-        echo "== private.fragment =="
-        cat private.fragment
+        echo "== KernelSU Kconfig validation =="
+        grep -R -n 'kernelsu.*/kernel/Kconfig\|KernelSU.*/kernel/Kconfig' drivers Kconfig 2>/dev/null || true
+        find . -path '*/kernel/Kconfig' | grep -i 'kernelsu\|ksu' || true
 
-        echo
-        echo "== private.required =="
-        cat private.required
+        if grep -R -q 'drivers/staging/kernelsu/kernel/Kconfig' drivers/staging/Kconfig 2>/dev/null; then
+          test -f drivers/staging/kernelsu/kernel/Kconfig || {
+            echo "::error::drivers/staging/Kconfig references missing drivers/staging/kernelsu/kernel/Kconfig"
+            exit 1
+          }
+        fi
 
-        if [ "${BUILD_ENGINE:-}" = "kleaf" ]; then
-          touch BUILD.bazel
+        echo "== verify integrated KernelSU =="
+        KSU_MARKERS="$(
+          find -L "$COMMON_DIR" \
+            -type f \
+            \( -path "*/kernel/include/ksu.h" -o -path "*/kernel/ksu.h" \) \
+            -print || true
+        )"
 
-          if ! grep -q 'private.fragment' BUILD.bazel; then
-            {
-              printf '\n'
-              printf 'exports_files(["private.fragment"])\n'
-            } >> BUILD.bazel
+        if [ -z "$KSU_MARKERS" ]; then
+          echo "::error::KernelSU marker kernel/include/ksu.h was not found after setup"
+          exit 1
+        fi
+
+        KSU_MARKER="$(printf '%s\n' "$KSU_MARKERS" | sort | head -n 1)"
+        KSU_ROOT="${KSU_MARKER%/kernel/include/ksu.h}"
+
+        echo "integrated KSU_ROOT=$KSU_ROOT"
+
+        if git -C "$KSU_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          INTEGRATED_KSU_HEAD="$(git -C "$KSU_ROOT" rev-parse HEAD)"
+          INTEGRATED_KSU_DESCRIBE="$(git -C "$KSU_ROOT" describe --tags --always || git -C "$KSU_ROOT" rev-parse --short HEAD)"
+
+          echo "integrated KSU HEAD: $INTEGRATED_KSU_HEAD"
+          echo "integrated KSU describe: $INTEGRATED_KSU_DESCRIBE"
+          git -C "$KSU_ROOT" remote -v || true
+
+          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "KernelSU-Midori-Manual" ] || [ "$MANAGER" = "KernelSU-Midori-BranchLink" ] || [ "$MANAGER" = "KernelSU-Midori-Tamper" ]; }; then
+            if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
+              echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
+              echo "::error::expected=$SELECTED_MANAGER_REF"
+              echo "::error::actual=$INTEGRATED_KSU_HEAD"
+              exit 1
+            fi
           fi
-
-          echo
-          echo "== BUILD.bazel private fragment export =="
-          grep -n 'private.fragment' BUILD.bazel || true
         else
-          echo
-          echo "== legacy private fragment =="
-          echo "Skipping Bazel BUILD.bazel export for BUILD_ENGINE=${BUILD_ENGINE:-unknown}"
+          echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
+
+        if [ "$MANAGER" = "KernelSU-Midori-Manual" ]; then
+          echo "== KernelSU-Midori-Manual: applying scope-min-manual-hooks-v2.3.patch to kernel tree =="
+
+          MANUAL_HOOKS_PATCH="${RUNNER_TEMP:-/tmp}/scope-min-manual-hooks-v2.3-${KERNEL_VERSION}.patch"
+
+          if [ "$KERNEL_VERSION" = "5.10" ]; then
+            # midori01/gki_ksu_workflow doesn't publish android12-5.10 at all, but the
+            # patch itself is generic KernelSU manual-hook wiring (do_execveat_common,
+            # do_faccessat, newfstatat family, sys_reboot) - unchanged between
+            # android12-5.10-lts and android14-6.1 at every one of these call sites
+            # (verified directly against aosp-mirror/kernel_common). This is the same
+            # patch, regenerated with 5.10's own line numbers/blob hashes instead of
+            # relying on git apply's fuzzy offset matching against the 6.1 line numbers.
+            LOCAL_MANUAL_PATCH="${GITHUB_WORKSPACE}/.github/patches/manual-hooks/android12-5.10/scope-min-manual-hooks-v2.3.patch"
+            if [ ! -f "$LOCAL_MANUAL_PATCH" ]; then
+              echo "::error::missing $LOCAL_MANUAL_PATCH"
+              echo "::error::android12-5.10 has no upstream source for this patch (not published by"
+              echo "::error::midori01/gki_ksu_workflow); it must be committed to this repo directly."
+              exit 1
+            fi
+            cp "$LOCAL_MANUAL_PATCH" "$MANUAL_HOOKS_PATCH"
+            echo "using locally-committed patch: $LOCAL_MANUAL_PATCH"
+          else
+            case "$KERNEL_VERSION" in
+              6.1)  MIDORI_KMI="android14-6.1" ;;
+              6.6)  MIDORI_KMI="android15-6.6" ;;
+              6.12) MIDORI_KMI="android16-6.12" ;;
+              *)
+                echo "::error::manager=KernelSU-Midori-Manual has no manual-hooks patch for kernel_version=$KERNEL_VERSION"
+                exit 1
+                ;;
+            esac
+
+            MANUAL_HOOKS_PATCH_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/${MIDORI_KMI}/scope-min-manual-hooks-v2.3.patch"
+            echo "fetching $MANUAL_HOOKS_PATCH_URL"
+            if ! curl -fsSL "$MANUAL_HOOKS_PATCH_URL" -o "$MANUAL_HOOKS_PATCH"; then
+              echo "::error::failed to fetch $MANUAL_HOOKS_PATCH_URL"
+              exit 1
+            fi
+          fi
+
+          cd "$COMMON_DIR"
+          if ! git apply --check "$MANUAL_HOOKS_PATCH"; then
+            echo "::error::scope-min-manual-hooks-v2.3.patch (kernel_version=$KERNEL_VERSION) does not apply to this kernel tree"
+            echo "::error::the target kernel branch may have moved past the commit this patch targets"
+            exit 1
+          fi
+          git apply "$MANUAL_HOOKS_PATCH"
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' fs kernel 2>/dev/null; then
+            echo "::error::conflict markers found after scope-min-manual-hooks-v2.3.patch"
+            exit 1
+          fi
+          echo "manual hooks patch applied (kernel_version=$KERNEL_VERSION)"
+        fi
+
+        cd "$COMMON_DIR"
+        git add . 2>/dev/null
+        git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
