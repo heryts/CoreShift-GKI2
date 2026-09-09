@@ -522,6 +522,68 @@ jobs:
       - name: Commit kernel changes
         uses: ./.github/actions/commit-kernel-changes
 
+      - name: Debug dump ReSukiSU Kbuild + git submodule state
+        if: inputs.manager == 'ResukiSU'
+        working-directory: kernel/common
+        run: |
+          set +e
+          DUMP_DIR="${{ github.workspace }}/ksu-debug-dump"
+          mkdir -p "$DUMP_DIR"
+          {
+            echo "== pwd =="
+            pwd
+            echo
+            echo "== ls -la drivers/kernelsu =="
+            ls -la drivers/kernelsu
+            echo
+            echo "== drivers/kernelsu/.git (file or dir?) =="
+            ls -la drivers/kernelsu/.git 2>&1
+            file drivers/kernelsu/.git 2>&1
+            echo
+            echo "== is drivers/kernelsu a real git checkout from here? =="
+            git -C drivers/kernelsu rev-parse --is-inside-work-tree 2>&1
+            git -C drivers/kernelsu rev-parse HEAD 2>&1
+            echo
+            echo "== .gitmodules (top-level common repo) =="
+            cat .gitmodules 2>&1
+            echo
+            echo "== git submodule status =="
+            git submodule status 2>&1
+            echo
+            echo "== git status for drivers/kernelsu, from common repo root =="
+            git status --ignore-submodules=none -- drivers/kernelsu 2>&1
+            echo
+            echo "== find any Kbuild/Makefile/Kconfig under drivers/kernelsu =="
+            find drivers/kernelsu -maxdepth 2 -iname 'Kbuild' -o -maxdepth 2 -iname 'Makefile' -o -maxdepth 2 -iname 'Kconfig'
+            echo
+            for f in $(find drivers/kernelsu -maxdepth 2 -iname 'Kbuild' -o -maxdepth 2 -iname 'Makefile'); do
+              echo "---- $f ----"
+              cat -n "$f"
+              echo
+            done
+            echo "== grep KSU_SRC / submodule check across drivers/kernelsu =="
+            grep -RIn "KSU_SRC\|git submodule\|wildcard.*\.git\|test -d.*\.git" drivers/kernelsu 2>&1
+            echo
+            echo "== BUILD.bazel glob/srcs relevant to kernel_aarch64 =="
+            grep -n "glob(\|kernel_build(\|name = \"kernel_aarch64\|srcs" BUILD.bazel 2>&1 | head -200
+          } > "$DUMP_DIR/resukisu-debug-dump.txt" 2>&1
+          # also grab the raw files themselves for exact byte-for-byte inspection
+          mkdir -p "$DUMP_DIR/drivers-kernelsu-flat"
+          find drivers/kernelsu -maxdepth 2 \( -iname 'Kbuild' -o -iname 'Makefile' -o -iname 'Kconfig' \) \
+            -exec cp --parents {} "$DUMP_DIR/drivers-kernelsu-flat/" \; 2>/dev/null
+          cp BUILD.bazel "$DUMP_DIR/" 2>/dev/null
+          cat "$DUMP_DIR/resukisu-debug-dump.txt"
+          exit 0
+
+      - name: Upload ReSukiSU debug dump
+        if: inputs.manager == 'ResukiSU'
+        uses: actions/upload-artifact@v6
+        with:
+          name: resukisu-debug-dump
+          path: ksu-debug-dump/**
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Build kernel
         uses: ./.github/actions/build-kernel
         with:
