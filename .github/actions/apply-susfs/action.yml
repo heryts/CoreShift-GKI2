@@ -153,6 +153,7 @@ runs:
           KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper|KowSU)
             DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
+            DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
             RESOLVED_DEINLINED_PATCH=""
 
             if [ "$SUSFS_BRANCH" = "gki-android12-5.10" ]; then
@@ -161,23 +162,48 @@ runs:
                 echo "static_patch=$STATIC_DEINLINED_PATCH"
                 RESOLVED_DEINLINED_PATCH="$STATIC_DEINLINED_PATCH"
               else
-                echo "== no local static de-inlined patch at $STATIC_DEINLINED_PATCH =="
+                echo "::error::missing local de-inlined patch: $STATIC_DEINLINED_PATCH"
+                exit 1
               fi
             else
-              REMOTE_BRANCH_DIR="${SUSFS_BRANCH#gki-}"
-              REMOTE_DEINLINED_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/${REMOTE_BRANCH_DIR}/${DEINLINED_FILENAME}"
-              REMOTE_DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/${DEINLINED_FILENAME}"
+              case "$SUSFS_BRANCH" in
+                gki-android14-6.1)  REMOTE_SRC_DIR="android14-6.1";  REMOTE_SRC_FILE="50_add_susfs_in_gki-android14-6.1.patch" ;;
+                gki-android15-6.6)  REMOTE_SRC_DIR="android15-6.6";  REMOTE_SRC_FILE="50_add_susfs_in_gki-android15-6.6.patch" ;;
+                gki-android16-6.12) REMOTE_SRC_DIR="android16-6.12"; REMOTE_SRC_FILE="50_add_susfs_in_gki-android16-6.12.92.patch" ;;
+                *)
+                  echo "::error::no midori01/gki_ksu_workflow source mapping for branch $SUSFS_BRANCH"
+                  exit 1
+                  ;;
+              esac
 
-              echo "== manager=${{ inputs.manager }}, branch=$SUSFS_BRANCH: fetching de-inlined core SUSFS patch from midori01/gki_ksu_workflow =="
-              echo "remote_patch=$REMOTE_DEINLINED_URL"
+              REMOTE_INLINE_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/${REMOTE_SRC_DIR}/${REMOTE_SRC_FILE}"
+              REMOTE_INLINE_PATCH="${RUNNER_TEMP:-/tmp}/${REMOTE_SRC_FILE}"
 
-              if curl -fsSL "$REMOTE_DEINLINED_URL" -o "$REMOTE_DEINLINED_PATCH" && [ -s "$REMOTE_DEINLINED_PATCH" ]; then
-                RESOLVED_DEINLINED_PATCH="$REMOTE_DEINLINED_PATCH"
-              elif [ -f "$STATIC_DEINLINED_PATCH" ]; then
-                echo "::warning::failed to fetch $REMOTE_DEINLINED_URL, falling back to local static patch =="
-                RESOLVED_DEINLINED_PATCH="$STATIC_DEINLINED_PATCH"
+              echo "== manager=${{ inputs.manager }}, branch=$SUSFS_BRANCH: fetching original SUSFS patch from midori01/gki_ksu_workflow =="
+              echo "source_patch=$REMOTE_INLINE_URL"
+
+              if curl -fsSL "$REMOTE_INLINE_URL" -o "$REMOTE_INLINE_PATCH" && [ -s "$REMOTE_INLINE_PATCH" ]; then
+                if [ ! -f "$DEINLINE_SCRIPT" ]; then
+                  echo "::error::missing de-inline script: $DEINLINE_SCRIPT"
+                  exit 1
+                fi
+
+                GENERATED_DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/${DEINLINED_FILENAME}"
+                echo "== de-inlining fetched patch (source: midori01/gki_ksu_workflow, $REMOTE_SRC_DIR/$REMOTE_SRC_FILE) =="
+                bash "$DEINLINE_SCRIPT" "$REMOTE_INLINE_PATCH" "$GENERATED_DEINLINED_PATCH"
+
+                if [ -s "$GENERATED_DEINLINED_PATCH" ]; then
+                  RESOLVED_DEINLINED_PATCH="$GENERATED_DEINLINED_PATCH"
+                else
+                  echo "::warning::de-inlining fetched midori01 patch produced an empty result"
+                fi
               else
-                echo "::warning::failed to fetch $REMOTE_DEINLINED_URL and no local fallback present =="
+                echo "::warning::failed to fetch $REMOTE_INLINE_URL"
+              fi
+
+              if [ -z "$RESOLVED_DEINLINED_PATCH" ] && [ -f "$STATIC_DEINLINED_PATCH" ]; then
+                echo "::warning::falling back to local static de-inlined patch: $STATIC_DEINLINED_PATCH =="
+                RESOLVED_DEINLINED_PATCH="$STATIC_DEINLINED_PATCH"
               fi
             fi
 
@@ -185,8 +211,7 @@ runs:
               echo "== manager=${{ inputs.manager }}: using de-inlined core SUSFS patch =="
               SUSFS_PATCH="$RESOLVED_DEINLINED_PATCH"
             else
-              echo "== manager=${{ inputs.manager }}: no de-inlined patch available, de-inlining core SUSFS patch on the fly (commit $SUSFS_COMMIT) =="
-              DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
+              echo "== manager=${{ inputs.manager }}: no de-inlined patch available, de-inlining core SUSFS patch (from susfs4ksu clone) on the fly (commit $SUSFS_COMMIT) =="
               if [ ! -f "$DEINLINE_SCRIPT" ]; then
                 echo "::error::missing de-inline script: $DEINLINE_SCRIPT"
                 exit 1
@@ -201,7 +226,6 @@ runs:
               fi
 
               SUSFS_PATCH="$DEINLINED_PATCH"
-              echo "::notice::generated on the fly (unreviewed) - consider committing this as $STATIC_DEINLINED_PATCH"
             fi
             ;;
         esac
