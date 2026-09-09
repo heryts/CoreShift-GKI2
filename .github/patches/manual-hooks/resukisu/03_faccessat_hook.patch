@@ -1,0 +1,28 @@
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -393,8 +393,14 @@ static const struct cred *access_override_creds(void)
+ 	put_cred(override_cred);
+ 
+ 	return old_cred;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
++				int *mode, int *flags);
++#endif
++
+ static long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ {
+ 	struct path path;
+@@ -467,7 +473,10 @@ static long do_faccessat(int dfd, const char __user *filename, int mode, int flags)
+ 	return res;
+ }
+ 
+ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
+ {
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++#endif
+ 	return do_faccessat(dfd, filename, mode, 0);
+ }
