@@ -258,6 +258,79 @@ runs:
           fi
         fi
 
+        if [ "${{ inputs.kernel_version }}" = "6.12" ] && [ -f fs/proc/task_mmu.c ]; then
+          echo
+          echo "== fixup: relocate CONFIG_KSU_SUSFS_SUS_MAP hunk in fs/proc/task_mmu.c =="
+          echo "This tree renames vma_pages() -> vma_data_pages(), so the core SUSFS patch's"
+          echo "show_smap() context match fails and 'patch --fuzz=3' can misplace the hunk"
+          echo "mid-argument inside __show_smap()'s SEQ_PUT_DEC(...) call, breaking compilation."
+          python3 - <<'PYEOF'
+import re
+import sys
+
+path = "fs/proc/task_mmu.c"
+text = open(path, encoding="utf-8").read()
+
+# Pattern the fuzzy patch produces when it misplaces the hunk inside __show_smap(),
+# splitting the SEQ_PUT_DEC("...SwapPss...", <arg>) call in two.
+bad_block = (
+    '\tSEQ_PUT_DEC(" kB\\nSwapPss:        ",\n'
+    '#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n'
+    '\tif (vma->vm_file) {\n'
+    '\t\tif (SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n'
+    '\t\t\treturn 0;\n'
+    '\t}\n'
+    '#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP\n'
+    '\n'
+    '\t\t\t\t\tmss->swap_pss >> PSS_SHIFT);'
+)
+good_call = (
+    '\tSEQ_PUT_DEC(" kB\\nSwapPss:        ",\n'
+    '\t\t\t\t\tmss->swap_pss >> PSS_SHIFT);'
+)
+
+if bad_block in text:
+    text = text.replace(bad_block, good_call)
+    print("removed misplaced CONFIG_KSU_SUSFS_SUS_MAP block from __show_smap()")
+else:
+    print("misplaced block not found in __show_smap() (already clean, or upstream patch changed) - skipping removal")
+
+susfs_block = (
+    '#ifdef CONFIG_KSU_SUSFS_SUS_MAP\n'
+    '\tif (vma->vm_file) {\n'
+    '\t\tif (SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))\n'
+    '\t\t\treturn 0;\n'
+    '\t}\n'
+    '#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP\n'
+)
+
+if susfs_block not in text:
+    pattern = re.compile(
+        r'(static int show_smap\(struct seq_file \*m, void \*v\)\n'
+        r'\{\n'
+        r'\tstruct vm_area_struct \*vma = v;\n'
+        r'\tstruct mem_size_stats mss = \{\};\n)'
+        r'\n?'
+        r'(\tif \(!vma_(?:data_)?pages\(vma\)\)\n)'
+    )
+
+    def _insert(m):
+        return m.group(1) + "\n" + susfs_block + "\n" + m.group(2)
+
+    new_text, n = pattern.subn(_insert, text, count=1)
+    if n == 1:
+        text = new_text
+        print("inserted CONFIG_KSU_SUSFS_SUS_MAP block at the start of show_smap()")
+    else:
+        print("::error::could not locate show_smap() insertion point for CONFIG_KSU_SUSFS_SUS_MAP fixup")
+        sys.exit(1)
+else:
+    print("CONFIG_KSU_SUSFS_SUS_MAP block already present in show_smap() - skipping insertion")
+
+open(path, "w", encoding="utf-8").write(text)
+PYEOF
+        fi
+
         if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== fixing set_nameidata() call-site/declaration mismatch =="
           echo "50_add_susfs_in_*.patch adds a 4th arg at call sites but this source tree's"
