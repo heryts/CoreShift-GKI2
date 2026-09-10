@@ -543,7 +543,7 @@ runs:
         git commit -m "Integrate $MANAGER and remove dirty tag" || true
 
     - name: Patch ReSukiSU Kbuild for Kleaf/Bazel sandbox compatibility
-      if: inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-ResukiSU-Deinlined'
+      if: (inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-ResukiSU-Deinlined') && env.BUILD_ENGINE == 'kleaf'
       working-directory: kernel/common
       shell: bash
       run: |
