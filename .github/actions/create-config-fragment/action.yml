@@ -411,6 +411,62 @@ runs:
             add_config KALLSYMS_ALL y
           fi
 
+        elif [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+          add_config KSU y
+          add_config KALLSYMS y
+          add_config KALLSYMS_ALL y
+
+          if [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+            echo "== $MANAGER: backslashxx/KernelSU source needs an explicit hook mode =="
+            add_config KSU_HACK_ARM64_BRANCH_LINK y
+          fi
+
+          if [ "$SUSFS" = "on" ]; then
+            echo "== $MANAGER: SUSFS integration mode (deinlined enablement patch) =="
+
+            echo "== locate integrated KernelSU root (for SUSFS config scan) =="
+            KSU_MARKERS="$(
+              find -L "$COMMON_DIR" \
+                -type f \
+                \( -path "*/kernel/include/ksu.h" -o -path "*/kernel/ksu.h" \) \
+                -print
+            )"
+
+            if [ -z "$KSU_MARKERS" ]; then
+              echo "::error::No integrated KernelSU root found under $COMMON_DIR for SUSFS config scan"
+              exit 1
+            fi
+
+            KSU_MARKER="$(printf '%s\n' "$KSU_MARKERS" | sort | head -n 1)"
+            KSU_ROOT="${KSU_MARKER%/kernel/include/ksu.h}"
+            KSU_ROOT="${KSU_ROOT%/kernel/ksu.h}"
+            SUSFS_KCONFIG="$KSU_ROOT/kernel/Kconfig"
+
+            echo "== SUSFS config scan: $SUSFS_KCONFIG =="
+
+            if [ ! -f "$SUSFS_KCONFIG" ]; then
+              echo "::error::missing KernelSU Kconfig (expected SUSFS options here): $SUSFS_KCONFIG"
+              exit 1
+            fi
+
+            SUSFS_CONFIGS="$(
+              grep -hoE '^[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_KCONFIG" 2>/dev/null |
+              sed -E 's/^[[:space:]]*config[[:space:]]+//' |
+              sort -u
+            )"
+
+            if [ -z "$SUSFS_CONFIGS" ]; then
+              echo "::warning::No required SUSFS CONFIG_* names found in selected patches/Kconfig."
+            else
+              echo "$SUSFS_CONFIGS" | while read -r key; do
+                [ -z "$key" ] && continue
+                add_config "$key" y
+              done
+            fi
+          else
+            echo "== $MANAGER: susfs=off, only baseline/hook Kconfig applied above =="
+          fi
+
         elif [ "$SUSFS" = "on" ]; then
           echo "== ensuring base KSU config is enabled (SUSFS Kconfig depends on it) =="
           add_config KSU y
