@@ -102,7 +102,9 @@ runs:
             'KernelSU-Next 6.6  (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.12 (pinned via .gitmodules branch)' \
             'MidoriSU-Deinlined / MidoriSU-Next-Deinlined / MidoriSU-ResukiSU-Deinlined' \
-            '                  *  (no static pin; live submodule HEAD, probed against official.patch/next.patch/resuki.patch)'
+            '                  *  (no static pin; live submodule HEAD, probed against official.patch/next.patch/resuki.patch)' \
+            'MidoriSU-KOW-Deinlined *  (no static pin; live submodule HEAD, probed against kow-deinlined.patch)' \
+            'MidoriSU-BackslashXX-Deinlined *  (no static pin; live submodule HEAD, probed against xx-deinlined.patch)'
 
           probe_midori01_patch() {
             local patch_name="$1"
@@ -195,6 +197,14 @@ runs:
               echo "== ${MANAGER}: probing resuki.patch against live submodule HEAD before pinning =="
               probe_midori01_patch "resuki.patch"
               ;;
+            MidoriSU-KOW-Deinlined:5.10|MidoriSU-KOW-Deinlined:6.1|MidoriSU-KOW-Deinlined:6.6|MidoriSU-KOW-Deinlined:6.12)
+              echo "== ${MANAGER}: probing kow-deinlined.patch against live submodule HEAD before pinning =="
+              probe_midori01_patch "kow-deinlined.patch"
+              ;;
+            MidoriSU-BackslashXX-Deinlined:5.10|MidoriSU-BackslashXX-Deinlined:6.1|MidoriSU-BackslashXX-Deinlined:6.6|MidoriSU-BackslashXX-Deinlined:6.12)
+              echo "== ${MANAGER}: probing xx-deinlined.patch against live submodule HEAD before pinning =="
+              probe_midori01_patch "xx-deinlined.patch"
+              ;;
             *)
               echo "::error::No SUSFS-compatible default manager ref for manager=${MANAGER}, kernel_version=${KERNEL_VERSION}. Set manager_ref explicitly."
               exit 1
@@ -224,7 +234,7 @@ runs:
 
         PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
 
-        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; }; then
+        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
           MANAGER_REF_SOURCE="submodule-head"
           echo "using submodule HEAD as setup ref: $SELECTED_MANAGER_REF"
@@ -280,7 +290,7 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; then
+        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
               if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
