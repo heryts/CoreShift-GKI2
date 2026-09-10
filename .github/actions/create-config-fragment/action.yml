@@ -55,6 +55,22 @@ runs:
   using: composite
   steps:
     - shell: bash
+      env:
+        MANAGER: ${{ inputs.manager }}
+        IKCONFIG: ${{ inputs.ikconfig }}
+        SUSFS: ${{ inputs.susfs }}
+        NOMOUNT_MAXSTEEEL: ${{ inputs.nomount_maxsteeel }}
+        KPM_SUPPORT: ${{ inputs.kpm_support }}
+        BASEBAND_GUARD: ${{ inputs.baseband_guard }}
+        DROIDSPACES: ${{ inputs.droidspaces }}
+        DROIDSPACES_NTSYNC: ${{ inputs.droidspaces_ntsync }}
+        CONTAINER_CORE: ${{ inputs.container_core }}
+        CONTAINER_IPC: ${{ inputs.container_ipc }}
+        CONTAINER_NETWORKING: ${{ inputs.container_networking }}
+        RE_KERNEL: ${{ inputs.re_kernel }}
+        DEBUG_FEATURES: ${{ inputs.debug_features }}
+        HEAVY_DEBUG_FEATURES: ${{ inputs.heavy_debug_features }}
+        KERNEL_VERSION: ${{ inputs.kernel_version }}
       run: |
         set -euo pipefail
 
@@ -117,7 +133,7 @@ runs:
           add_config TCP_CONG_BBR3 y
           add_config DEFAULT_BBR3 y
         else
-          echo "  bbrv3_patch_applied=${bbrv3_patch_applied:-unset}: BBRv3 patch was not applied for kernel_version=${{ inputs.kernel_version }}"
+          echo "  bbrv3_patch_applied=${bbrv3_patch_applied:-unset}: BBRv3 patch was not applied for kernel_version=$KERNEL_VERSION"
           echo "  (CONFIG_TCP_CONG_BBR3 / CONFIG_DEFAULT_BBR3 Kconfig symbols don't exist on this tree yet, skipping)"
         fi
 
@@ -167,24 +183,24 @@ runs:
         echo "== enabling performance feature =="
         add_config PSI y
 
-        if [ "${{ inputs.ikconfig }}" = "on" ]; then
+        if [ "$IKCONFIG" = "on" ]; then
           add_config IKCONFIG y
           add_config IKCONFIG_PROC y
         fi
 
         echo "== ZRAM/ZSMALLOC build type =="
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+        if [ "$KERNEL_VERSION" = "5.10" ]; then
           echo "  kernel_version=5.10: ZRAM/ZSMALLOC built-in (required by LZ4KDR/multi-comp)"
           add_config ZRAM y
           add_config ZSMALLOC y
         else
-          echo "  kernel_version=${{ inputs.kernel_version }}: ZRAM/ZSMALLOC as modules"
+          echo "  kernel_version=$KERNEL_VERSION: ZRAM/ZSMALLOC as modules"
           echo "  (android/gki_aarch64_modules still expects zram.ko/zsmalloc.ko for this version)"
           add_config ZRAM m
           add_config ZSMALLOC m
         fi
 
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+        if [ "$KERNEL_VERSION" = "5.10" ]; then
           echo "== ZRAM LZ4KDR: check source tree support (5.10 only) =="
           if has_kconfig_symbol crypto/Kconfig CRYPTO_LZ4KDR && \
              has_kconfig_symbol drivers/block/zram/Kconfig ZRAM_DEF_COMP_LZ4KDR; then
@@ -251,7 +267,7 @@ runs:
           echo "  (requires the zram source-add + integration patches to run first)"
         fi
 
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+        if [ "$KERNEL_VERSION" = "5.10" ]; then
           if ! has_kconfig_symbol fs/fuse/Kconfig FUSE_BPF; then
             echo "::error::CONFIG_FUSE_BPF tidak ditemukan di fs/fuse/Kconfig -- apply-fuse-bpf belum jalan/gagal sebelum step ini"
             exit 1
@@ -262,21 +278,21 @@ runs:
           add_config FUSE_BPF y
         fi
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ]; then
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
           add_config KSU y
           add_config KSU_HACK_ARM64_BRANCH_LINK y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ${{ inputs.manager }}: SUSFS integration mode (custom enablement patch) =="
-            case "${{ inputs.kernel_version }}" in
+          if [ "$SUSFS" = "on" ]; then
+            echo "== $MANAGER: SUSFS integration mode (custom enablement patch) =="
+            case "$KERNEL_VERSION" in
               5.10) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10" ;;
               6.1)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android14-6.1" ;;
               6.6)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android15-6.6" ;;
               6.12) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12" ;;
               *)
-                echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
+                echo "::error::unsupported kernel_version for SUSFS: $KERNEL_VERSION"
                 exit 1
                 ;;
             esac
@@ -300,31 +316,31 @@ runs:
               echo "$SUSFS_CONFIGS" | while read -r key; do
                 [ -z "$key" ] && continue
                 if [ "$key" = "KSU_SUSFS_SUS_SU" ]; then
-                  echo "skipping KSU_SUSFS_SUS_SU for manager=${{ inputs.manager }} (see note below)"
+                  echo "skipping KSU_SUSFS_SUS_SU for manager=$MANAGER (see note below)"
                   continue
                 fi
                 add_config "$key" y
               done
             fi
 
-            echo "== ${{ inputs.manager }}: KSU_SUSFS_SUS_SU not applicable =="
+            echo "== $MANAGER: KSU_SUSFS_SUS_SU not applicable =="
           fi
 
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx-Tinyfs" ]; then
+        elif [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
           add_config KSU y
           add_config KSU_TINYFS_SUCOMPAT y
           add_config KSU_FEATURE_ADBROOT n
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
-        elif [ "${{ inputs.manager }}" = "MidoriSU-Manual" ] || [ "${{ inputs.manager }}" = "MidoriSU-BranchLink" ] || [ "${{ inputs.manager }}" = "MidoriSU-Syscall-Table-Tampering" ]; then
+        elif [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
           add_config KSU y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
           add_config KSU_THRONE_TRACKER_ALWAYS_THREADED y
           add_config KSU_HOSTSREDIRECT y
 
-          case "${{ inputs.manager }}" in
+          case "$MANAGER" in
             MidoriSU-BranchLink)
               add_config KSU_HACK_ARM64_BRANCH_LINK y
               ;;
@@ -336,25 +352,25 @@ runs:
               ;;
           esac
 
-          echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
+          echo "== $MANAGER: SUSFS Kconfig not explicitly requested =="
 
-        elif [ "${{ inputs.manager }}" = "KowSU" ]; then
+        elif [ "$MANAGER" = "KowSU" ]; then
           add_config KSU y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
-          if [ "${{ inputs.susfs }}" = "on" ]; then
-            echo "== ${{ inputs.manager }}: SUSFS Kconfig not explicitly requested =="
+          if [ "$SUSFS" = "on" ]; then
+            echo "== $MANAGER: SUSFS Kconfig not explicitly requested =="
           fi
 
-        elif [ "${{ inputs.manager }}" = "KSUN-Susfs-Hookless" ]; then
-          if [ "${{ inputs.susfs }}" = "on" ]; then
+        elif [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
+          if [ "$SUSFS" = "on" ]; then
             echo "== SUSFS config: KernelSU-Next (hookless/kprobes fork) =="
             add_config KPROBES y
             add_config KRETPROBES y
             add_config KALLSYMS y
             add_config KSU_KPROBES_SUSFS y
-            if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
+            if [ "$NOMOUNT_MAXSTEEEL" = "on" ]; then
               echo "nomount_maxsteeel=on: standalone NoMount (maxsteeel/nomount) takes"
             else
               add_config KSU_KPROBES_NOMOUNT y
@@ -363,22 +379,22 @@ runs:
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
 
-        elif [ "${{ inputs.manager }}" = "ResukiSU" ] || { [ "${{ inputs.manager }}" = "MidoriSU-ResukiSU-Deinlined" ] && [ "${{ inputs.susfs }}" = "off" ]; }; then
+        elif [ "$MANAGER" = "ResukiSU" ] || { [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] && [ "$SUSFS" = "off" ]; }; then
           add_config KSU y
-          if [ "${{ inputs.manager }}" = "ResukiSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+          if [ "$MANAGER" = "ResukiSU" ] && [ "$SUSFS" = "on" ]; then
             echo "== ResukiSU: SUSFS integration mode =="
             add_config KSU_SUSFS y
           else
-            echo "== ${{ inputs.manager }}: manual hook integration mode =="
+            echo "== $MANAGER: manual hook integration mode =="
             add_config KSU_MANUAL_HOOK y
-            if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+            if [ "$KERNEL_VERSION" = "6.12" ]; then
               echo "  kernel_version=6.12: using manual setresuid patch (05_setuid_hook.patch), explicitly disabling LSM auto setuid hook"
               add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK n
             else
               add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK y
             fi
             add_config KSU_MANUAL_HOOK_AUTO_INPUT_HOOK y
-            if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+            if [ "$KERNEL_VERSION" = "6.12" ]; then
               echo "  kernel_version=6.12: using manual sys_read/init_rc patch (06_sys_read_hook.patch), explicitly disabling LSM auto initrc hook"
               add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK n
             else
@@ -387,10 +403,10 @@ runs:
             add_config KALLSYMS_ALL y
           fi
 
-        elif [ "${{ inputs.susfs }}" = "on" ]; then
+        elif [ "$SUSFS" = "on" ]; then
           echo "== ensuring base KSU config is enabled (SUSFS Kconfig depends on it) =="
           add_config KSU y
-          case "${{ inputs.kernel_version }}" in
+          case "$KERNEL_VERSION" in
             5.10)
               SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10"
               ;;
@@ -404,7 +420,7 @@ runs:
               SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12"
               ;;
             *)
-              echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
+              echo "::error::unsupported kernel_version for SUSFS: $KERNEL_VERSION"
               exit 1
               ;;
           esac
@@ -427,8 +443,8 @@ runs:
           else
             echo "$SUSFS_CONFIGS" | while read -r key; do
               [ -z "$key" ] && continue
-              if { [ "${{ inputs.manager }}" = "KernelSU-Next" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ]; } && [ "$key" = "KSU_SUSFS_OPEN_REDIRECT" ]; then
-                echo "skipping KSU_SUSFS_OPEN_REDIRECT for manager=${{ inputs.manager }}"
+              if { [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ]; } && [ "$key" = "KSU_SUSFS_OPEN_REDIRECT" ]; then
+                echo "skipping KSU_SUSFS_OPEN_REDIRECT for manager=$MANAGER"
                 echo "(this fork's fs/namei.c set_nameidata() lacks the 4th param OPEN_REDIRECT needs)"
                 continue
               fi
@@ -437,15 +453,15 @@ runs:
           fi
 
         else
-          echo "== manager=${{ inputs.manager }}, susfs=off: no manager-specific KSU config block matched =="
+          echo "== manager=$MANAGER, susfs=off: no manager-specific KSU config block matched =="
         fi
 
-        if [ "${{ inputs.nomount_maxsteeel }}" = "on" ]; then
+        if [ "$NOMOUNT_MAXSTEEEL" = "on" ]; then
           echo "== NoMount (maxsteeel) config =="
           add_config NOMOUNT y
         fi
 
-        if [ "${{ inputs.kpm_support }}" = "on" ]; then
+        if [ "$KPM_SUPPORT" = "on" ]; then
           if grep -qxF "CONFIG_KALLSYMS=y" private.fragment 2>/dev/null; then
             echo "  already requested: CONFIG_KALLSYMS=y"
           else
@@ -453,11 +469,11 @@ runs:
           fi
         fi
         
-        if [ "${{ inputs.baseband_guard }}" = "on" ]; then
+        if [ "$BASEBAND_GUARD" = "on" ]; then
           add_config BBG y
         fi
 
-        if [ "${{ inputs.droidspaces }}" != "off" ]; then
+        if [ "$DROIDSPACES" != "off" ]; then
           echo "== Droidspaces config: enabling container primitives =="
           for cfg in SYSVIPC POSIX_MQUEUE IPC_NS PID_NS DEVTMPFS; do
             if grep -qxF "CONFIG_${cfg}=y" private.fragment 2>/dev/null; then
@@ -468,12 +484,12 @@ runs:
           done
         fi
         
-        if [ "${{ inputs.droidspaces_ntsync }}" = "on" ]; then
+        if [ "$DROIDSPACES_NTSYNC" = "on" ]; then
           echo "== NTSync config =="
           add_config NTSYNC y
         fi
 
-        if [ "${{ inputs.container_core }}" = "on" ]; then
+        if [ "$CONTAINER_CORE" = "on" ]; then
           add_config NAMESPACES y
           add_config USER_NS y
           add_config UTS_NS y
@@ -490,7 +506,7 @@ runs:
           add_config SECCOMP_FILTER y
         fi
 
-        if [ "${{ inputs.container_ipc }}" = "on" ]; then
+        if [ "$CONTAINER_IPC" = "on" ]; then
           add_config SYSCTL y
           add_config SYSVIPC y
           add_config SYSVIPC_SYSCTL y
@@ -499,7 +515,7 @@ runs:
           add_config POSIX_MQUEUE_SYSCTL y
         fi
 
-        if [ "${{ inputs.container_networking }}" = "on" ]; then
+        if [ "$CONTAINER_NETWORKING" = "on" ]; then
           add_config TUN y
           add_config VETH y
           add_config BRIDGE y
@@ -552,13 +568,13 @@ runs:
           add_config IP6_NF_TARGET_MASQUERADE y
         fi
 
-        if [ "${{ inputs.re_kernel }}" = "on" ]; then
+        if [ "$RE_KERNEL" = "on" ]; then
           echo "== Re-Kernel config =="
           add_config REKERNEL y
           add_config REKERNEL_NETWORK y
         fi
 
-        if [ "${{ inputs.debug_features }}" = "on" ]; then
+        if [ "$DEBUG_FEATURES" = "on" ]; then
           add_config KPROBES y
           add_config KPROBE_EVENTS y
           add_config UPROBES y
@@ -567,7 +583,7 @@ runs:
           add_config DYNAMIC_FTRACE y
         fi
 
-        if [ "${{ inputs.heavy_debug_features }}" = "on" ]; then
+        if [ "$HEAVY_DEBUG_FEATURES" = "on" ]; then
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
           add_config KASAN y
@@ -575,7 +591,7 @@ runs:
           add_config BTRFS_FS y
         fi
         
-        if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+        if [ "$KERNEL_VERSION" = "6.12" ]; then
           android_kconfig="drivers/android/Kconfig"
 
           add_config ANDROID_BINDER_IPC y
