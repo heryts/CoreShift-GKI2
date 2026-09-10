@@ -342,10 +342,10 @@ runs:
 
           git apply "$XX_PATCH"
 
-          if [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+          if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
             for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
               if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-                echo "== $MANAGER: re-applying MidoriSU Manager signature after xx.patch =="
+                echo "== $MANAGER: re-applying MidoriSU Manager signature after xx.patch (dual-sign) =="
                 sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
               /return true;/a\
               \
@@ -431,6 +431,25 @@ runs:
           fi
 
           git apply "$KOW_PATCH"
+
+          for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
+            if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+              echo "== $MANAGER: re-applying MidoriSU Manager signature after kow.patch (dual-sign) =="
+              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+              /return true;/a\
+              \
+              \t// MidoriSU Manager (com.midori.supermanager)\
+              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+              \t\treturn true;
+              }' "$APK_SIGN_FILE"
+              if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+                echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after kow.patch"
+              else
+                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+              fi
+              break
+            fi
+          done
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
             echo "::error::conflict markers found after KowSU SUSFS enablement patch"
