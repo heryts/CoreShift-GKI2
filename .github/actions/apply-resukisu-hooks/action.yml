@@ -1,5 +1,5 @@
 name: Apply ReSukiSU manual hooks
-description: Apply ReSukiSU's required manual kernel hooks (stat, execve, faccessat, sys_reboot) as source patches. Kconfig flags are handled separately via private.fragment in create-config-fragment.
+description: Apply ReSukiSU's required manual kernel hooks (stat, execve, faccessat, sys_reboot; plus setuid and sys_read/init_rc for kernel_version>=6.8) as source patches. Kconfig flags are handled separately via private.fragment in create-config-fragment.
 inputs:
   kernel_version:
     required: true
@@ -52,12 +52,23 @@ runs:
         apply_patch "$PATCH_DIR/03_faccessat_hook.patch" "faccessat hook"
         apply_patch "$PATCH_DIR/04_reboot_hook.patch"    "sys_reboot hook"
 
-        for f in fs/stat.c fs/exec.c fs/open.c kernel/reboot.c; do
+        CHECK_FILES="fs/stat.c fs/exec.c fs/open.c kernel/reboot.c"
+
+        if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+          echo "== kernel_version=6.12 (>=6.8): LSM-based auto setuid/initrc hooks are unavailable =="
+          echo "(drivers/kernelsu/tools/manual_hook_check.mk enforces this); applying the manual"
+          echo "replacements instead, matching CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=n and"
+          echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=n set in create-config-fragment."
+          apply_patch "$PATCH_DIR/05_setuid_hook.patch"   "setuid hook (6.8+)"
+          apply_patch "$PATCH_DIR/06_sys_read_hook.patch" "sys_read/init_rc hook (6.8+)"
+          CHECK_FILES="$CHECK_FILES kernel/sys.c fs/read_write.c"
+        fi
+
+        for f in $CHECK_FILES; do
           if grep -qE '^(<<<<<<< |=======$|>>>>>>> )' "$f"; then
             echo "::error::conflict markers found in $f after patching"
             exit 1
           fi
         done
-
         echo "== ReSukiSU manual hook integration diff stat =="
         git diff --stat
