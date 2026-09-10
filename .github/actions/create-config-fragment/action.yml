@@ -363,7 +363,7 @@ runs:
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
 
-        elif [ "${{ inputs.manager }}" = "ResukiSU" ] || { [ "${{ inputs.manager }}" = "MidoriSU-ReSUki-Deinlined" ] && [ "${{ inputs.susfs }}" = "off" ]; }; then
+        elif [ "${{ inputs.manager }}" = "ResukiSU" ] || { [ "${{ inputs.manager }}" = "MidoriSU-ResukiSU-Deinlined" ] && [ "${{ inputs.susfs }}" = "off" ]; }; then
           add_config KSU y
           if [ "${{ inputs.manager }}" = "ResukiSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== ResukiSU: SUSFS integration mode =="
