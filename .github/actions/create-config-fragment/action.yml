@@ -327,6 +327,13 @@ runs:
                   echo "skipping KSU_SUSFS_SUS_SU for manager=$MANAGER (see note below)"
                   continue
                 fi
+                if [ "$key" = "KSU_SUSFS_TRY_UMOUNT" ]; then
+                  echo "skipping KSU_SUSFS_TRY_UMOUNT for manager=$MANAGER"
+                  echo "(new upstream xx.patch option, default n; none of our de-inlined SUSFS"
+                  echo "patches define susfs_try_umount()/susfs_add_try_umount() yet -> ld.lld"
+                  echo "undefined symbol at link time if force-enabled)"
+                  continue
+                fi
                 add_config "$key" y
               done
             fi
@@ -454,6 +461,13 @@ runs:
               if { [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ]; } && [ "$key" = "KSU_SUSFS_OPEN_REDIRECT" ]; then
                 echo "skipping KSU_SUSFS_OPEN_REDIRECT for manager=$MANAGER"
                 echo "(this fork's fs/namei.c set_nameidata() lacks the 4th param OPEN_REDIRECT needs)"
+                continue
+              fi
+              if [ "$key" = "KSU_SUSFS_TRY_UMOUNT" ]; then
+                echo "skipping KSU_SUSFS_TRY_UMOUNT for manager=$MANAGER"
+                echo "(new upstream xx.patch option, default n; none of our de-inlined SUSFS"
+                echo "patches define susfs_try_umount()/susfs_add_try_umount() yet -> ld.lld"
+                echo "undefined symbol at link time if force-enabled)"
                 continue
               fi
               add_config "$key" y
