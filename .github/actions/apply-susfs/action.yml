@@ -263,6 +263,39 @@ runs:
           fi
         fi
 
+        echo
+        echo "== check/apply try_umount SUSFS support patch (midori01/gki_ksu_workflow 55_try_umount_for_susfs.patch) =="
+        echo "midori01/KernelSU's xx.patch (and related enablement patches) now call susfs_try_umount()/"
+        echo "susfs_add_try_umount(), but the core susfs4ksu patch used here doesn't define them yet under"
+        echo "CONFIG_KSU_SUSFS_TRY_UMOUNT. Apply this add-on patch (fully #ifdef-guarded, safe even if"
+        echo "CONFIG_KSU_SUSFS_TRY_UMOUNT ends up disabled) so the symbols exist before manager enablement"
+        echo "patches are applied."
+
+        TRY_UMOUNT_PATCH_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/55_try_umount_for_susfs.patch"
+        TRY_UMOUNT_PATCH="${RUNNER_TEMP:-/tmp}/55_try_umount_for_susfs.patch"
+
+        if curl -fsSL "$TRY_UMOUNT_PATCH_URL" -o "$TRY_UMOUNT_PATCH" && [ -s "$TRY_UMOUNT_PATCH" ]; then
+          if git apply --check "$TRY_UMOUNT_PATCH" 2>/dev/null; then
+            git apply "$TRY_UMOUNT_PATCH"
+            echo "applied try_umount SUSFS support patch"
+          elif (patch --dry-run -R --fuzz=3 -p1 < "$TRY_UMOUNT_PATCH") >/tmp/try_umount_reverse.log 2>&1; then
+            echo "try_umount SUSFS support already present in this tree, skipping"
+          elif (patch --dry-run --fuzz=3 -p1 < "$TRY_UMOUNT_PATCH") >/tmp/try_umount_fuzz.log 2>&1; then
+            patch --fuzz=3 -p1 < "$TRY_UMOUNT_PATCH"
+            echo "applied try_umount SUSFS support patch via fuzzy fallback"
+          else
+            echo "::warning::55_try_umount_for_susfs.patch does not apply to fs/susfs.c / include/linux/susfs.h on this tree - CONFIG_KSU_SUSFS_TRY_UMOUNT will fail to link if it ends up enabled"
+          fi
+        else
+          echo "::warning::failed to fetch 55_try_umount_for_susfs.patch - CONFIG_KSU_SUSFS_TRY_UMOUNT will fail to link if it ends up enabled"
+        fi
+
+        if find . -name '*.rej' -print -quit | grep -q .; then
+          echo "::error::reject files found after try_umount SUSFS support patch"
+          find . -name '*.rej' -print
+          exit 1
+        fi
+
         if [ "$KERNEL_VERSION" = "6.12" ] && [ -f fs/proc/task_mmu.c ]; then
           echo
           echo "== fixup: relocate CONFIG_KSU_SUSFS_SUS_MAP hunk in fs/proc/task_mmu.c =="
