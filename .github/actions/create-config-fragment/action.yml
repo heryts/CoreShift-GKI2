@@ -317,7 +317,7 @@ runs:
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
 
-        elif [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
+        elif [ "${{ inputs.manager }}" = "MidoriSU-Manual" ] || [ "${{ inputs.manager }}" = "MidoriSU-BranchLink" ] || [ "${{ inputs.manager }}" = "MidoriSU-Syscall-Table-Tampering" ]; then
           add_config KSU y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
@@ -325,14 +325,14 @@ runs:
           add_config KSU_HOSTSREDIRECT y
 
           case "${{ inputs.manager }}" in
-            KernelSU-Midori-BranchLink)
+            MidoriSU-BranchLink)
               add_config KSU_HACK_ARM64_BRANCH_LINK y
               ;;
-            KernelSU-Midori-Tamper)
+            MidoriSU-Syscall-Table-Tampering)
               add_config KSU_TAMPER_SYSCALL_TABLE y
               ;;
-            KernelSU-Midori-Manual)
-              echo "== KernelSU-Midori-Manual: no hook Kconfig requested =="
+            MidoriSU-Manual)
+              echo "== MidoriSU-Manual: no hook Kconfig requested =="
               ;;
           esac
 
@@ -363,13 +363,13 @@ runs:
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
 
-        elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
+        elif [ "${{ inputs.manager }}" = "ResukiSU" ] || { [ "${{ inputs.manager }}" = "MidoriSU-ReSUki-Deinlined" ] && [ "${{ inputs.susfs }}" = "off" ]; }; then
           add_config KSU y
-          if [ "${{ inputs.susfs }}" = "on" ]; then
+          if [ "${{ inputs.manager }}" = "ResukiSU" ] && [ "${{ inputs.susfs }}" = "on" ]; then
             echo "== ResukiSU: SUSFS integration mode =="
             add_config KSU_SUSFS y
           else
-            echo "== ResukiSU: manual hook integration mode =="
+            echo "== ${{ inputs.manager }}: manual hook integration mode =="
             add_config KSU_MANUAL_HOOK y
             if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
               echo "  kernel_version=6.12: using manual setresuid patch (05_setuid_hook.patch), explicitly disabling LSM auto setuid hook"
@@ -427,8 +427,8 @@ runs:
           else
             echo "$SUSFS_CONFIGS" | while read -r key; do
               [ -z "$key" ] && continue
-              if [ "${{ inputs.manager }}" = "KernelSU-Next" ] && [ "$key" = "KSU_SUSFS_OPEN_REDIRECT" ]; then
-                echo "skipping KSU_SUSFS_OPEN_REDIRECT for manager=KernelSU-Next"
+              if { [ "${{ inputs.manager }}" = "KernelSU-Next" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ]; } && [ "$key" = "KSU_SUSFS_OPEN_REDIRECT" ]; then
+                echo "skipping KSU_SUSFS_OPEN_REDIRECT for manager=${{ inputs.manager }}"
                 echo "(this fork's fs/namei.c set_nameidata() lacks the 4th param OPEN_REDIRECT needs)"
                 continue
               fi
