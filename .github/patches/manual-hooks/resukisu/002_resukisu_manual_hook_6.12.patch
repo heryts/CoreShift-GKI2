@@ -1,0 +1,60 @@
+From: ReSukiSU manual hooks (combined) <bot@github.com>
+Subject: [PATCH] 002 ReSukiSU manual hooks - setuid / sys_read (kernel_version=6.12)
+
+Combines 05_setuid_hook.patch and 06_sys_read_hook.patch into a single
+multi-file patch. Applied only when kernel_version=6.12 (LSM-based auto
+setuid/initrc hooks are unavailable on that tree), matching
+CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=n and
+CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=n.
+---
+ fs/read_write.c | 10 ++++++++++
+ kernel/sys.c    |  8 ++++++++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/kernel/sys.c b/kernel/sys.c
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -679,6 +679,10 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+ }
+ 
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
++#endif
++
+ /*
+  * This function implements a generic ability to update ruid, euid,
+  * and suid.  This allows you to implement the 4.4 compatible seteuid().
+@@ -692,6 +696,10 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+ 	kuid_t kruid, keuid, ksuid;
+ 	bool ruid_new, euid_new, suid_new;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++       (void)ksu_handle_setresuid(ruid, euid, suid);
++#endif
++
+ 	kruid = make_kuid(ns, ruid);
+ 	keuid = make_kuid(ns, euid);
+ 	ksuid = make_kuid(ns, suid);
+diff --git a/fs/read_write.c b/fs/read_write.c
+--- a/fs/read_write.c
++++ b/fs/read_write.c
+@@ -718,8 +718,18 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
+ 	return ret;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern bool ksu_init_rc_hook __read_mostly;
++extern __attribute__((cold)) int ksu_handle_sys_read(unsigned int fd,
++				char __user **buf_ptr, size_t *count_ptr);
++#endif
++
+ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
+ {
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	if (unlikely(ksu_init_rc_hook)) 
++		ksu_handle_sys_read(fd, &buf, &count);
++#endif
+ 	return ksys_read(fd, buf, count);
+ }
+ 
