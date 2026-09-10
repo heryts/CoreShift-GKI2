@@ -176,7 +176,16 @@ runs:
             echo "::warning::$key missing from final config"
           fi
 
-          if ! grep -qxF "$line" "$BEST"; then
+          val="${line#*=}"
+          landed=0
+
+          if grep -qxF "$line" "$BEST"; then
+            landed=1
+          elif [ "$val" = "n" ] && grep -qxF "# ${key} is not set" "$BEST"; then
+            landed=1
+          fi
+
+          if [ "$landed" -ne 1 ]; then
             echo "::warning::$line did not land in final .config"
             warn_dependency_blockers "$BEST" "$key"
             FAIL=1
