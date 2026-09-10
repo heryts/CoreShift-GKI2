@@ -151,7 +151,7 @@ runs:
         ls -l fs/susfs.c include/linux/susfs*.h
 
         case "${{ inputs.manager }}" in
-          KernelSU-Backslashxx|KernelSU-Midori-Manual|KernelSU-Midori-BranchLink|KernelSU-Midori-Tamper|KowSU)
+          KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ReSUki-Deinlined)
             DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
             DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
@@ -267,7 +267,7 @@ runs:
           echo "aW1wb3J0IHJlCmltcG9ydCBzeXMKCnBhdGggPSAiZnMvcHJvYy90YXNrX21tdS5jIgp0ZXh0ID0gb3BlbihwYXRoLCBlbmNvZGluZz0idXRmLTgiKS5yZWFkKCkKCiMgUGF0dGVybiB0aGUgZnV6enkgcGF0Y2ggcHJvZHVjZXMgd2hlbiBpdCBtaXNwbGFjZXMgdGhlIGh1bmsgaW5zaWRlIF9fc2hvd19zbWFwKCksCiMgc3BsaXR0aW5nIHRoZSBTRVFfUFVUX0RFQygiLi4uU3dhcFBzcy4uLiIsIDxhcmc+KSBjYWxsIGluIHR3by4KYmFkX2Jsb2NrID0gKAogICAgJ1x0U0VRX1BVVF9ERUMoIiBrQlxcblN3YXBQc3M6ICAgICAgICAiLFxuJwogICAgJyNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcbicKICAgICdcdGlmICh2bWEtPnZtX2ZpbGUpIHtcbicKICAgICdcdFx0aWYgKFNVU0ZTX0lTX0lOT0RFX1NVU19NQVAoZmlsZV9pbm9kZSh2bWEtPnZtX2ZpbGUpKSlcbicKICAgICdcdFx0XHRyZXR1cm4gMDtcbicKICAgICdcdH1cbicKICAgICcjZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuJwogICAgJ1xuJwogICAgJ1x0XHRcdFx0XHRtc3MtPnN3YXBfcHNzID4+IFBTU19TSElGVCk7JwopCmdvb2RfY2FsbCA9ICgKICAgICdcdFNFUV9QVVRfREVDKCIga0JcXG5Td2FwUHNzOiAgICAgICAgIixcbicKICAgICdcdFx0XHRcdFx0bXNzLT5zd2FwX3BzcyA+PiBQU1NfU0hJRlQpOycKKQoKaWYgYmFkX2Jsb2NrIGluIHRleHQ6CiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKGJhZF9ibG9jaywgZ29vZF9jYWxsKQogICAgcHJpbnQoInJlbW92ZWQgbWlzcGxhY2VkIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUCBibG9jayBmcm9tIF9fc2hvd19zbWFwKCkiKQplbHNlOgogICAgcHJpbnQoIm1pc3BsYWNlZCBibG9jayBub3QgZm91bmQgaW4gX19zaG93X3NtYXAoKSAoYWxyZWFkeSBjbGVhbiwgb3IgdXBzdHJlYW0gcGF0Y2ggY2hhbmdlZCkgLSBza2lwcGluZyByZW1vdmFsIikKCnN1c2ZzX2Jsb2NrID0gKAogICAgJyNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcbicKICAgICdcdGlmICh2bWEtPnZtX2ZpbGUpIHtcbicKICAgICdcdFx0aWYgKFNVU0ZTX0lTX0lOT0RFX1NVU19NQVAoZmlsZV9pbm9kZSh2bWEtPnZtX2ZpbGUpKSlcbicKICAgICdcdFx0XHRyZXR1cm4gMDtcbicKICAgICdcdH1cbicKICAgICcjZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuJwopCgppZiBzdXNmc19ibG9jayBub3QgaW4gdGV4dDoKICAgIHBhdHRlcm4gPSByZS5jb21waWxlKAogICAgICAgIHInKHN0YXRpYyBpbnQgc2hvd19zbWFwXChzdHJ1Y3Qgc2VxX2ZpbGUgXCptLCB2b2lkIFwqdlwpXG4nCiAgICAgICAgcidce1xuJwogICAgICAgIHInXHRzdHJ1Y3Qgdm1fYXJlYV9zdHJ1Y3QgXCp2bWEgPSB2O1xuJwogICAgICAgIHInXHRzdHJ1Y3QgbWVtX3NpemVfc3RhdHMgbXNzID0gXHtcfTtcbiknCiAgICAgICAgcidcbj8nCiAgICAgICAgcicoXHRpZiBcKCF2bWFfKD86ZGF0YV8pP3BhZ2VzXCh2bWFcKVwpXG4pJwogICAgKQoKICAgIGRlZiBfaW5zZXJ0KG0pOgogICAgICAgIHJldHVybiBtLmdyb3VwKDEpICsgIlxuIiArIHN1c2ZzX2Jsb2NrICsgIlxuIiArIG0uZ3JvdXAoMikKCiAgICBuZXdfdGV4dCwgbiA9IHBhdHRlcm4uc3VibihfaW5zZXJ0LCB0ZXh0LCBjb3VudD0xKQogICAgaWYgbiA9PSAxOgogICAgICAgIHRleHQgPSBuZXdfdGV4dAogICAgICAgIHByaW50KCJpbnNlcnRlZCBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVAgYmxvY2sgYXQgdGhlIHN0YXJ0IG9mIHNob3dfc21hcCgpIikKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoIjo6ZXJyb3I6OmNvdWxkIG5vdCBsb2NhdGUgc2hvd19zbWFwKCkgaW5zZXJ0aW9uIHBvaW50IGZvciBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVAgZml4dXAiKQogICAgICAgIHN5cy5leGl0KDEpCmVsc2U6CiAgICBwcmludCgiQ09ORklHX0tTVV9TVVNGU19TVVNfTUFQIGJsb2NrIGFscmVhZHkgcHJlc2VudCBpbiBzaG93X3NtYXAoKSAtIHNraXBwaW5nIGluc2VydGlvbiIpCgpvcGVuKHBhdGgsICJ3IiwgZW5jb2Rpbmc9InV0Zi04Iikud3JpdGUodGV4dCkK" | base64 -d | python3 -
         fi
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
+        if [ "${{ inputs.manager }}" = "KernelSU-Next" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ]; then
           echo "== fixing set_nameidata() call-site/declaration mismatch =="
           echo "50_add_susfs_in_*.patch adds a 4th arg at call sites but this source tree's"
           echo "set_nameidata() declaration wasn't updated to accept it; strip the extra arg."
@@ -318,7 +318,7 @@ runs:
         if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
+        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "MidoriSU-Manual" ] || [ "${{ inputs.manager }}" = "MidoriSU-BranchLink" ] || [ "${{ inputs.manager }}" = "MidoriSU-Syscall-Table-Tampering" ]; then
           echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU xx.patch) =="
 
           XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
@@ -337,7 +337,7 @@ runs:
 
           git apply "$XX_PATCH"
 
-          if [ "${{ inputs.manager }}" = "KernelSU-Midori-Manual" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-BranchLink" ] || [ "${{ inputs.manager }}" = "KernelSU-Midori-Tamper" ]; then
+          if [ "${{ inputs.manager }}" = "MidoriSU-Manual" ] || [ "${{ inputs.manager }}" = "MidoriSU-BranchLink" ] || [ "${{ inputs.manager }}" = "MidoriSU-Syscall-Table-Tampering" ]; then
             for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
               if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
                 echo "== ${{ inputs.manager }}: re-applying MidoriSU Manager signature after xx.patch =="
@@ -353,6 +353,56 @@ runs:
               fi
             done
           fi
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
+            exit 1
+          fi
+        elif [ "${{ inputs.manager }}" = "MidoriSU-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-ReSUki-Deinlined" ]; then
+          case "${{ inputs.manager }}" in
+            MidoriSU-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="official.patch" ;;
+            MidoriSU-Next-Deinlined)   MIDORISU_ENABLE_PATCH_NAME="next.patch" ;;
+            MidoriSU-ReSUki-Deinlined) MIDORISU_ENABLE_PATCH_NAME="resuki.patch" ;;
+          esac
+
+          echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
+
+          MIDORISU_ENABLE_PATCH_URL="https://github.com/midori01/KernelSU/commit/${MIDORISU_ENABLE_PATCH_NAME}"
+          MIDORISU_ENABLE_PATCH="${RUNNER_TEMP:-/tmp}/midorisu-susfs-${MIDORISU_ENABLE_PATCH_NAME}"
+
+          echo "fetching $MIDORISU_ENABLE_PATCH_URL"
+          if ! curl -fsSL "$MIDORISU_ENABLE_PATCH_URL" -o "$MIDORISU_ENABLE_PATCH"; then
+            echo "::error::failed to fetch $MIDORISU_ENABLE_PATCH_URL"
+            exit 1
+          fi
+
+          if ! git apply --check "$MIDORISU_ENABLE_PATCH"; then
+            echo "::error::midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME} does not apply to this ${{ inputs.manager }} tree"
+            exit 1
+          fi
+
+          git apply "$MIDORISU_ENABLE_PATCH"
+
+          for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
+            if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+              echo "== ${{ inputs.manager }}: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
+              # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
+              # in this fork's apk_sign.c, otherwise this insertion silently no-ops.
+              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+              /return true;/a\
+              \
+              \t// MidoriSU Manager (com.midori.supermanager)\
+              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+              \t\treturn true;
+              }' "$APK_SIGN_FILE"
+              if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+                echo "::warning::${{ inputs.manager }}: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after ${MIDORISU_ENABLE_PATCH_NAME}"
+              else
+                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+              fi
+              break
+            fi
+          done
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
             echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
