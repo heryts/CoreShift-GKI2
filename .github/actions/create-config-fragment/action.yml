@@ -378,7 +378,12 @@ runs:
               add_config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK y
             fi
             add_config KSU_MANUAL_HOOK_AUTO_INPUT_HOOK y
-            add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK y
+            if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
+              echo "  kernel_version=6.12: using manual sys_read/init_rc patch (06_sys_read_hook.patch), explicitly disabling LSM auto initrc hook"
+              add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK n
+            else
+              add_config KSU_MANUAL_HOOK_AUTO_INITRC_HOOK y
+            fi
             add_config KALLSYMS_ALL y
           fi
 
