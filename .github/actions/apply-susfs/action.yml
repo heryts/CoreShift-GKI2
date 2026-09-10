@@ -390,20 +390,36 @@ runs:
 
           for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-              echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
-              # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
-              # in this fork's apk_sign.c, otherwise this insertion silently no-ops.
-              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
-              /return true;/a\
-              \
-              \t// MidoriSU Manager (com.midori.supermanager)\
-              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
-              \t\treturn true;
-              }' "$APK_SIGN_FILE"
+              if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
+                # ReSukiSU-based layout (MidoriSU-ResukiSU-Deinlined): apk_sign.c keeps a flat
+                # apk_sign_key_t apk_sign_keys[] = { {size, sha256}, ... } table; check_v2_signature()
+                # takes (path, *signature_index), not (path, size, hash), and there's no per-entry
+                # `if (check_v2_signature(...)) return true;` to anchor on. '// KOWX712/KernelSU' only
+                # labels one *array entry* here, so the range-based sed below walks forward to the next
+                # unrelated `return true;` in the file (e.g. inside read_length_prefixed_end()) and
+                # injects a call into a function with no `path` in scope - compile error ("use of
+                # undeclared identifier 'path'"). Add a table entry instead, right after the array
+                # opens (unconditional, not gated behind CONFIG_KSU_MULTI_MANAGER_SUPPORT).
+                echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (apk_sign_keys[] table layout) =="
+                sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
+    { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
+              else
+                echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
+                # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
+                # in this fork's apk_sign.c, otherwise this insertion silently no-ops. ReSukiSU-based
+                # apk_sign_keys[] layouts are handled by the branch above.
+                sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+                /return true;/a\
+                \
+                \t// MidoriSU Manager (com.midori.supermanager)\
+                \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+                \t\treturn true;
+                }' "$APK_SIGN_FILE"
+              fi
               if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
                 echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after ${MIDORISU_ENABLE_PATCH_NAME}"
               else
-                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+                grep -A1 "MidoriSU Manager" "$APK_SIGN_FILE"
               fi
               break
             fi
