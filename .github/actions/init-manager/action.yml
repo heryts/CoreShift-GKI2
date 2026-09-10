@@ -283,25 +283,24 @@ runs:
         if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; then
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-              echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, on top of $MANAGER's own manager signature) =="
-              # NOTE: anchor '// KOWX712/KernelSU' matches the KOWX712/backslashxx apk_sign.c
-              # layout, which KowSU (KOWX712/KernelSU) and KernelSU-Backslashxx (fork of it)
-              # both use natively. tiann/KernelSU, KernelSU-Next and ReSukiSU forks may use a
-              # different comment/marker in their own apk_sign.c - verify this anchor against
-              # each fork's actual file for MidoriSU-Deinlined / MidoriSU-Next-Deinlined /
-              # MidoriSU-ResukiSU-Deinlined and adjust the sed pattern below if it silently
-              # doesn't match (no error is raised).
-              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
-              /return true;/a\
-              \
-              \t// MidoriSU Manager (com.midori.supermanager)\
-              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
-              \t\treturn true;
-              }' "$APK_SIGN_FILE"
+              if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
+                echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, apk_sign_keys[] table layout) =="
+                sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
+    { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
+              else
+                echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, on top of $MANAGER's own manager signature) =="
+                sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+                /return true;/a\
+                \
+                \t// MidoriSU Manager (com.midori.supermanager)\
+                \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+                \t\treturn true;
+                }' "$APK_SIGN_FILE"
+              fi
               if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
                 echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE - MidoriSU Manager signature was NOT inserted; check the anchor comment for this fork"
               else
-                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+                grep -A1 "MidoriSU Manager" "$APK_SIGN_FILE"
               fi
             fi
           done
