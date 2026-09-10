@@ -159,8 +159,31 @@ runs:
           KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ResukiSU-Deinlined)
             DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
-            DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
+            DEINLINE_SCRIPT_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/scripts/susfs_deinlined.sh"
+            DEINLINE_SCRIPT="${RUNNER_TEMP:-/tmp}/susfs_deinlined.sh"
+            STATIC_DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
             RESOLVED_DEINLINED_PATCH=""
+
+            ensure_deinline_script() {
+              if [ -f "$DEINLINE_SCRIPT" ]; then
+                return 0
+              fi
+              echo "== fetching de-inline script from midori01/gki_ksu_workflow =="
+              echo "source_script=$DEINLINE_SCRIPT_URL"
+              if curl -fsSL "$DEINLINE_SCRIPT_URL" -o "$DEINLINE_SCRIPT" && [ -s "$DEINLINE_SCRIPT" ]; then
+                chmod +x "$DEINLINE_SCRIPT"
+                return 0
+              fi
+              echo "::warning::failed to fetch $DEINLINE_SCRIPT_URL"
+              if [ -f "$STATIC_DEINLINE_SCRIPT" ]; then
+                echo "::warning::falling back to local static de-inline script: $STATIC_DEINLINE_SCRIPT"
+                cp "$STATIC_DEINLINE_SCRIPT" "$DEINLINE_SCRIPT"
+                chmod +x "$DEINLINE_SCRIPT"
+                return 0
+              fi
+              echo "::error::missing de-inline script: $DEINLINE_SCRIPT_URL (and no local fallback at $STATIC_DEINLINE_SCRIPT)"
+              exit 1
+            }
 
             if [ "$SUSFS_BRANCH" = "gki-android12-5.10" ]; then
               echo "== manager=$MANAGER, branch=$SUSFS_BRANCH: de-inlined patch is hand-maintained locally =="
@@ -189,10 +212,7 @@ runs:
               echo "source_patch=$REMOTE_INLINE_URL"
 
               if curl -fsSL "$REMOTE_INLINE_URL" -o "$REMOTE_INLINE_PATCH" && [ -s "$REMOTE_INLINE_PATCH" ]; then
-                if [ ! -f "$DEINLINE_SCRIPT" ]; then
-                  echo "::error::missing de-inline script: $DEINLINE_SCRIPT"
-                  exit 1
-                fi
+                ensure_deinline_script
 
                 GENERATED_DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/${DEINLINED_FILENAME}"
                 echo "== de-inlining fetched patch (source: midori01/gki_ksu_workflow, $REMOTE_SRC_DIR/$REMOTE_SRC_FILE) =="
@@ -218,10 +238,7 @@ runs:
               SUSFS_PATCH="$RESOLVED_DEINLINED_PATCH"
             else
               echo "== manager=$MANAGER: no de-inlined patch available, de-inlining core SUSFS patch (from susfs4ksu clone) on the fly (commit $SUSFS_COMMIT) =="
-              if [ ! -f "$DEINLINE_SCRIPT" ]; then
-                echo "::error::missing de-inline script: $DEINLINE_SCRIPT"
-                exit 1
-              fi
+              ensure_deinline_script
 
               DEINLINED_PATCH="${RUNNER_TEMP:-/tmp}/${DEINLINED_FILENAME}"
               bash "$DEINLINE_SCRIPT" "$SUSFS_PATCH" "$DEINLINED_PATCH"
