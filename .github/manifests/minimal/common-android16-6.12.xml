@@ -99,13 +99,12 @@
   <remove-project name="platform/external/zlib" path="external/zlib" />
   <remove-project name="platform/external/zopfli" path="external/zopfli" />
 
-  <!-- bzlmod/Bazel Central Registry local overrides used by
-       kernel/build's MODULE.bazel for hermetic builds. If your build
-       has internet access at build time (GitHub Actions usually
-       does), Bazel can normally resolve these from bcr.bazel.build
-       directly instead of needing the local checkout. If the Bazel
-       build starts failing to resolve one of these external repos,
-       re-comment just that line. -->
+  <!-- HIGHER RISK: these are bzlmod/Bazel Central Registry local
+       overrides used by kernel/build's MODULE.bazel for hermetic
+       builds. Uncomment and test ONE AT A TIME after everything
+       above is confirmed working - if the Bazel build starts failing
+       to resolve an external repo, re-comment the matching line(s). -->
+  <!--
   <remove-project name="platform/external/bazel-contrib-bazel_features" path="external/bazel-contrib-bazel_features" />
   <remove-project name="platform/external/bazel-skylib" path="external/bazel-skylib" />
   <remove-project name="platform/external/bazelbuild-bazel-central-registry" path="external/bazelbuild-bazel-central-registry" />
@@ -117,23 +116,5 @@
   <remove-project name="platform/external/bazelbuild-rules_rust" path="external/bazelbuild-rules_rust" />
   <remove-project name="platform/external/bazelbuild-rules_shell" path="external/bazelbuild-rules_shell" />
   <remove-project name="platform/external/python/absl-py" path="external/python/absl-py" />
-
-  <!-- NEXT TIER - test one at a time, in this order, re-running the
-       build after each: -->
-
-  <!-- Lower risk: clang-tidy/clang-format/static-analysis tools.
-       Only needed if kernel/build's Bazel rules explicitly invoke
-       clang-tidy or similar during the dist build. -->
-  <remove-project name="platform/prebuilts/clang-tools" path="prebuilts/clang-tools" />
-
-  <!-- HIGHEST RISK - test LAST: general Android platform host tools
-       (soong_zip and friends). Some Kleaf dist/packaging rules do
-       reference binaries from this prebuilt, so removing it is the
-       most likely of everything on this page to break the build.
-       Uncomment only after everything else above is confirmed
-       working, and be ready to revert if `tools/bazel build
-       //common:kernel_aarch64_dist` starts failing on a missing tool. -->
-  <!--
-  <remove-project name="platform/prebuilts/build-tools" path="prebuilts/build-tools" />
   -->
 </manifest>
