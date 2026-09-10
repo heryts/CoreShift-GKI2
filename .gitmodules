@@ -50,3 +50,11 @@
 	path = manager/MidoriSU-ResukiSU-Deinlined
 	url = https://github.com/ReSukiSU/ReSukiSU.git
 	branch = main
+[submodule "manager/MidoriSU-KOW-Deinlined"]
+	path = manager/MidoriSU-KOW-Deinlined
+	url = https://github.com/KOWX712/KernelSU.git
+	branch = master
+[submodule "manager/MidoriSU-BackslashXX-Deinlined"]
+	path = manager/MidoriSU-BackslashXX-Deinlined
+	url = https://github.com/backslashxx/KernelSU.git
+	branch = master
