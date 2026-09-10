@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest>
-  <!-- Maintained/custom builds replace kernel/common after sync. -->
-  <remove-project name="kernel/common" path="common" />
+  <!-- IMPORTANT: do NOT remove kernel/common here, even though
+       maintained/custom builds replace it right after sync. The
+       sync-kernel action checks that kernel/common's directory
+       exists *before* replace-common-source ever runs, and will
+       hard-fail with "kernel/common project source path was not
+       found" if this project is missing. Let it sync (it's cheap,
+       shallow, single repo) and let replace-common-source overwrite
+       it afterwards. -->
 
   <!-- Not required for the Kleaf common:kernel_aarch64_dist target. -->
   <remove-project
@@ -67,4 +73,48 @@
     path="prebuilts/fuchsia_sdk"
   />
   <remove-project name="platform/system/core" path="system/core" />
+
+  <!-- Extra toolchain projects: only needed if kernel/build or the
+       common-modules actually compile Rust/NDK-based components, or
+       if you build the legacy GCC-based binutils path. If your build
+       is Clang-only with no Rust kernel config enabled, these are
+       safe to drop. Test one at a time. -->
+  <remove-project name="platform/prebuilts/rust" path="prebuilts/rust" />
+  <remove-project name="toolchain/prebuilts/ndk/r26" path="prebuilts/ndk-r26" />
+  <remove-project name="platform/prebuilts/jdk/jdk11" path="prebuilts/jdk/jdk11" />
+  <remove-project
+    name="platform/prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8"
+    path="prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8"
+  />
+
+  <!-- Small utility libs, unlikely to be needed for kernel_aarch64_dist. -->
+  <remove-project name="platform/external/libcap" path="external/libcap" />
+  <remove-project name="platform/external/libcap-ng" path="external/libcap-ng" />
+
+  <!-- Only needed if you build the host toolchain from source instead
+       of using the prebuilt clang above. -->
+  <remove-project name="platform/external/lz4" path="external/lz4" />
+  <remove-project name="platform/external/pigz" path="external/pigz" />
+  <remove-project name="platform/external/toybox" path="external/toybox" />
+  <remove-project name="platform/external/zlib" path="external/zlib" />
+  <remove-project name="platform/external/zopfli" path="external/zopfli" />
+
+  <!-- HIGHER RISK: these are bzlmod/Bazel Central Registry local
+       overrides used by kernel/build's MODULE.bazel for hermetic
+       builds. Uncomment and test ONE AT A TIME after everything
+       above is confirmed working - if the Bazel build starts failing
+       to resolve an external repo, re-comment the matching line(s). -->
+  <!--
+  <remove-project name="platform/external/bazel-contrib-bazel_features" path="external/bazel-contrib-bazel_features" />
+  <remove-project name="platform/external/bazel-skylib" path="external/bazel-skylib" />
+  <remove-project name="platform/external/bazelbuild-bazel-central-registry" path="external/bazelbuild-bazel-central-registry" />
+  <remove-project name="platform/external/bazelbuild-platforms" path="external/bazelbuild-platforms" />
+  <remove-project name="platform/external/bazelbuild-rules_cc" path="external/bazelbuild-rules_cc" />
+  <remove-project name="platform/external/bazelbuild-rules_license" path="external/bazelbuild-rules_license" />
+  <remove-project name="platform/external/bazelbuild-rules_pkg" path="external/bazelbuild-rules_pkg" />
+  <remove-project name="platform/external/bazelbuild-rules_python" path="external/bazelbuild-rules_python" />
+  <remove-project name="platform/external/bazelbuild-rules_rust" path="external/bazelbuild-rules_rust" />
+  <remove-project name="platform/external/bazelbuild-rules_shell" path="external/bazelbuild-rules_shell" />
+  <remove-project name="platform/external/python/absl-py" path="external/python/absl-py" />
+  -->
 </manifest>
