@@ -19,37 +19,42 @@ runs:
   using: composite
   steps:
     - shell: bash
+      env:
+        MANAGER: ${{ inputs.manager }}
+        KERNEL_VERSION: ${{ inputs.kernel_version }}
+        SUSFS_REF: ${{ inputs.susfs_ref }}
+        SUSFS_REPO: ${{ inputs.susfs_repo }}
       run: |
         set -euo pipefail
 
-        if [ "${{ inputs.manager }}" = "Vanilla" ]; then
+        if [ "$MANAGER" = "Vanilla" ]; then
           echo "::error::SUSFS4KSU requires a KernelSU-compatible manager."
           exit 1
         fi
 
-        case "${{ inputs.kernel_version }}" in
+        case "$KERNEL_VERSION" in
           5.10) SUSFS_BRANCH="gki-android12-5.10"; SUSFS_DEFAULT_REF="fb16b41" ;;
           6.1)  SUSFS_BRANCH="gki-android14-6.1";  SUSFS_DEFAULT_REF="5727f79" ;;
           6.6)  SUSFS_BRANCH="gki-android15-6.6";  SUSFS_DEFAULT_REF="eba2a88" ;;
           6.12) SUSFS_BRANCH="gki-android16-6.12"; SUSFS_DEFAULT_REF="c7db8cb" ;;
           *)
-            echo "::error::unsupported kernel_version for SUSFS: ${{ inputs.kernel_version }}"
+            echo "::error::unsupported kernel_version for SUSFS: $KERNEL_VERSION"
             exit 1
             ;;
         esac
 
-        SUSFS_REF="${{ inputs.susfs_ref }}"
+        SUSFS_REF="$SUSFS_REF"
         if [ "$SUSFS_REF" = "d4c3914" ]; then
-          echo "== kernel_version=${{ inputs.kernel_version }}: using resolved default pin $SUSFS_DEFAULT_REF (v2.3.0) =="
+          echo "== kernel_version=$KERNEL_VERSION: using resolved default pin $SUSFS_DEFAULT_REF (v2.3.0) =="
           SUSFS_REF="$SUSFS_DEFAULT_REF"
         fi
 
-        SUSFS_REPO="${{ inputs.susfs_repo }}"
+        SUSFS_REPO="$SUSFS_REPO"
         SUSFS_CLONE_DIR="${RUNNER_TEMP:-/tmp}/susfs4ksu"
         rm -rf "$SUSFS_CLONE_DIR"
 
         SUSFS_CLONE_BRANCH="$SUSFS_BRANCH"
-        if [ "${{ inputs.kernel_version }}" = "5.10" ]; then
+        if [ "$KERNEL_VERSION" = "5.10" ]; then
           SUSFS_CLONE_BRANCH="${SUSFS_BRANCH}-dev"
           echo "== kernel_version=5.10: sourcing susfs4ksu from -dev branch =="
         fi
@@ -57,10 +62,10 @@ runs:
         echo "== cloning susfs4ksu (branch: $SUSFS_CLONE_BRANCH) from $SUSFS_REPO =="
         git clone --branch "$SUSFS_CLONE_BRANCH" "$SUSFS_REPO" "$SUSFS_CLONE_DIR"
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
+        if [ "$MANAGER" = "KernelSU-Next" ]; then
           echo "== skipping susfs_ref pin for KernelSU-Next; using branch HEAD =="
-        elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
-          case "${{ inputs.kernel_version }}" in
+        elif [ "$MANAGER" = "KernelSU" ]; then
+          case "$KERNEL_VERSION" in
             5.10) KERNELSU_SUSFS_PIN="e5b013b" ;;
             *)    KERNELSU_SUSFS_PIN="" ;;
           esac
@@ -74,7 +79,7 @@ runs:
             git -C "$SUSFS_CLONE_DIR" fetch origin "${SUSFS_BRANCH}-dev"
             git -C "$SUSFS_CLONE_DIR" checkout "$KERNELSU_SUSFS_PIN"
           else
-            echo "::warning::no verified susfs4ksu pin for manager=KernelSU, kernel_version=${{ inputs.kernel_version }} yet;"
+            echo "::warning::no verified susfs4ksu pin for manager=KernelSU, kernel_version=$KERNEL_VERSION yet;"
             if git ls-remote --heads "$SUSFS_REPO" "${SUSFS_BRANCH}-dev" | grep -q .; then
               echo "== ${SUSFS_BRANCH}-dev exists on remote, using it =="
               git -C "$SUSFS_CLONE_DIR" fetch --depth 1 origin "${SUSFS_BRANCH}-dev"
@@ -83,7 +88,7 @@ runs:
               echo "== no -dev branch found, using $SUSFS_BRANCH HEAD =="
             fi
           fi
-        elif [ "${{ inputs.manager }}" = "ResukiSU" ]; then
+        elif [ "$MANAGER" = "ResukiSU" ]; then
           if [ -n "$SUSFS_REF" ] && [ "$SUSFS_REF" != "$SUSFS_DEFAULT_REF" ]; then
             echo "== pinning to explicitly-provided ref: $SUSFS_REF =="
             git -C "$SUSFS_CLONE_DIR" checkout "$SUSFS_REF"
@@ -101,7 +106,7 @@ runs:
         SUSFS_COMMIT_DATE="$(git -C "$SUSFS_CLONE_DIR" log -1 --date=format:'%Y-%m-%d %H:%M:%S %z' --format='%cd')"
         echo "susfs4ksu resolved commit: $SUSFS_COMMIT ($SUSFS_COMMIT_DATE) - $SUSFS_COMMIT_MSG"
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
+        if [ "$MANAGER" = "KernelSU-Next" ]; then
           echo "== applying pershoot coexistence patches (on top of unpinned HEAD) =="
 
           PERSHOOT_PATCH_BASE="https://raw.githubusercontent.com/WildKernels/kernel_patches/main/pershoot/susfs4ksu"
@@ -150,7 +155,7 @@ runs:
         cp "$SUSFS_INCLUDE_DIR"/* include/linux/
         ls -l fs/susfs.c include/linux/susfs*.h
 
-        case "${{ inputs.manager }}" in
+        case "$MANAGER" in
           KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ResukiSU-Deinlined)
             DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
@@ -158,7 +163,7 @@ runs:
             RESOLVED_DEINLINED_PATCH=""
 
             if [ "$SUSFS_BRANCH" = "gki-android12-5.10" ]; then
-              echo "== manager=${{ inputs.manager }}, branch=$SUSFS_BRANCH: de-inlined patch is hand-maintained locally =="
+              echo "== manager=$MANAGER, branch=$SUSFS_BRANCH: de-inlined patch is hand-maintained locally =="
               if [ -f "$STATIC_DEINLINED_PATCH" ]; then
                 echo "static_patch=$STATIC_DEINLINED_PATCH"
                 RESOLVED_DEINLINED_PATCH="$STATIC_DEINLINED_PATCH"
@@ -180,7 +185,7 @@ runs:
               REMOTE_INLINE_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/${REMOTE_SRC_DIR}/${REMOTE_SRC_FILE}"
               REMOTE_INLINE_PATCH="${RUNNER_TEMP:-/tmp}/${REMOTE_SRC_FILE}"
 
-              echo "== manager=${{ inputs.manager }}, branch=$SUSFS_BRANCH: fetching original SUSFS patch from midori01/gki_ksu_workflow =="
+              echo "== manager=$MANAGER, branch=$SUSFS_BRANCH: fetching original SUSFS patch from midori01/gki_ksu_workflow =="
               echo "source_patch=$REMOTE_INLINE_URL"
 
               if curl -fsSL "$REMOTE_INLINE_URL" -o "$REMOTE_INLINE_PATCH" && [ -s "$REMOTE_INLINE_PATCH" ]; then
@@ -209,10 +214,10 @@ runs:
             fi
 
             if [ -n "$RESOLVED_DEINLINED_PATCH" ]; then
-              echo "== manager=${{ inputs.manager }}: using de-inlined core SUSFS patch =="
+              echo "== manager=$MANAGER: using de-inlined core SUSFS patch =="
               SUSFS_PATCH="$RESOLVED_DEINLINED_PATCH"
             else
-              echo "== manager=${{ inputs.manager }}: no de-inlined patch available, de-inlining core SUSFS patch (from susfs4ksu clone) on the fly (commit $SUSFS_COMMIT) =="
+              echo "== manager=$MANAGER: no de-inlined patch available, de-inlining core SUSFS patch (from susfs4ksu clone) on the fly (commit $SUSFS_COMMIT) =="
               if [ ! -f "$DEINLINE_SCRIPT" ]; then
                 echo "::error::missing de-inline script: $DEINLINE_SCRIPT"
                 exit 1
@@ -243,7 +248,7 @@ runs:
             echo "== core SUSFS patch applied via fuzzy fallback =="
           else
             echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree, even with fuzz=3"
-            echo "== dumping reject hunks for diagnosis (manager=${{ inputs.manager }}) =="
+            echo "== dumping reject hunks for diagnosis (manager=$MANAGER) =="
             find . -name '*.rej' -delete
             git apply --reject "$SUSFS_PATCH" 2>/tmp/susfs_reject.log || true
             cat /tmp/susfs_reject.log || true
@@ -258,7 +263,7 @@ runs:
           fi
         fi
 
-        if [ "${{ inputs.kernel_version }}" = "6.12" ] && [ -f fs/proc/task_mmu.c ]; then
+        if [ "$KERNEL_VERSION" = "6.12" ] && [ -f fs/proc/task_mmu.c ]; then
           echo
           echo "== fixup: relocate CONFIG_KSU_SUSFS_SUS_MAP hunk in fs/proc/task_mmu.c =="
           echo "This tree renames vma_pages() -> vma_data_pages(), so the core SUSFS patch's"
@@ -267,7 +272,7 @@ runs:
           echo "aW1wb3J0IHJlCmltcG9ydCBzeXMKCnBhdGggPSAiZnMvcHJvYy90YXNrX21tdS5jIgp0ZXh0ID0gb3BlbihwYXRoLCBlbmNvZGluZz0idXRmLTgiKS5yZWFkKCkKCiMgUGF0dGVybiB0aGUgZnV6enkgcGF0Y2ggcHJvZHVjZXMgd2hlbiBpdCBtaXNwbGFjZXMgdGhlIGh1bmsgaW5zaWRlIF9fc2hvd19zbWFwKCksCiMgc3BsaXR0aW5nIHRoZSBTRVFfUFVUX0RFQygiLi4uU3dhcFBzcy4uLiIsIDxhcmc+KSBjYWxsIGluIHR3by4KYmFkX2Jsb2NrID0gKAogICAgJ1x0U0VRX1BVVF9ERUMoIiBrQlxcblN3YXBQc3M6ICAgICAgICAiLFxuJwogICAgJyNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcbicKICAgICdcdGlmICh2bWEtPnZtX2ZpbGUpIHtcbicKICAgICdcdFx0aWYgKFNVU0ZTX0lTX0lOT0RFX1NVU19NQVAoZmlsZV9pbm9kZSh2bWEtPnZtX2ZpbGUpKSlcbicKICAgICdcdFx0XHRyZXR1cm4gMDtcbicKICAgICdcdH1cbicKICAgICcjZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuJwogICAgJ1xuJwogICAgJ1x0XHRcdFx0XHRtc3MtPnN3YXBfcHNzID4+IFBTU19TSElGVCk7JwopCmdvb2RfY2FsbCA9ICgKICAgICdcdFNFUV9QVVRfREVDKCIga0JcXG5Td2FwUHNzOiAgICAgICAgIixcbicKICAgICdcdFx0XHRcdFx0bXNzLT5zd2FwX3BzcyA+PiBQU1NfU0hJRlQpOycKKQoKaWYgYmFkX2Jsb2NrIGluIHRleHQ6CiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKGJhZF9ibG9jaywgZ29vZF9jYWxsKQogICAgcHJpbnQoInJlbW92ZWQgbWlzcGxhY2VkIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUCBibG9jayBmcm9tIF9fc2hvd19zbWFwKCkiKQplbHNlOgogICAgcHJpbnQoIm1pc3BsYWNlZCBibG9jayBub3QgZm91bmQgaW4gX19zaG93X3NtYXAoKSAoYWxyZWFkeSBjbGVhbiwgb3IgdXBzdHJlYW0gcGF0Y2ggY2hhbmdlZCkgLSBza2lwcGluZyByZW1vdmFsIikKCnN1c2ZzX2Jsb2NrID0gKAogICAgJyNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcbicKICAgICdcdGlmICh2bWEtPnZtX2ZpbGUpIHtcbicKICAgICdcdFx0aWYgKFNVU0ZTX0lTX0lOT0RFX1NVU19NQVAoZmlsZV9pbm9kZSh2bWEtPnZtX2ZpbGUpKSlcbicKICAgICdcdFx0XHRyZXR1cm4gMDtcbicKICAgICdcdH1cbicKICAgICcjZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuJwopCgppZiBzdXNmc19ibG9jayBub3QgaW4gdGV4dDoKICAgIHBhdHRlcm4gPSByZS5jb21waWxlKAogICAgICAgIHInKHN0YXRpYyBpbnQgc2hvd19zbWFwXChzdHJ1Y3Qgc2VxX2ZpbGUgXCptLCB2b2lkIFwqdlwpXG4nCiAgICAgICAgcidce1xuJwogICAgICAgIHInXHRzdHJ1Y3Qgdm1fYXJlYV9zdHJ1Y3QgXCp2bWEgPSB2O1xuJwogICAgICAgIHInXHRzdHJ1Y3QgbWVtX3NpemVfc3RhdHMgbXNzID0gXHtcfTtcbiknCiAgICAgICAgcidcbj8nCiAgICAgICAgcicoXHRpZiBcKCF2bWFfKD86ZGF0YV8pP3BhZ2VzXCh2bWFcKVwpXG4pJwogICAgKQoKICAgIGRlZiBfaW5zZXJ0KG0pOgogICAgICAgIHJldHVybiBtLmdyb3VwKDEpICsgIlxuIiArIHN1c2ZzX2Jsb2NrICsgIlxuIiArIG0uZ3JvdXAoMikKCiAgICBuZXdfdGV4dCwgbiA9IHBhdHRlcm4uc3VibihfaW5zZXJ0LCB0ZXh0LCBjb3VudD0xKQogICAgaWYgbiA9PSAxOgogICAgICAgIHRleHQgPSBuZXdfdGV4dAogICAgICAgIHByaW50KCJpbnNlcnRlZCBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVAgYmxvY2sgYXQgdGhlIHN0YXJ0IG9mIHNob3dfc21hcCgpIikKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoIjo6ZXJyb3I6OmNvdWxkIG5vdCBsb2NhdGUgc2hvd19zbWFwKCkgaW5zZXJ0aW9uIHBvaW50IGZvciBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVAgZml4dXAiKQogICAgICAgIHN5cy5leGl0KDEpCmVsc2U6CiAgICBwcmludCgiQ09ORklHX0tTVV9TVVNGU19TVVNfTUFQIGJsb2NrIGFscmVhZHkgcHJlc2VudCBpbiBzaG93X3NtYXAoKSAtIHNraXBwaW5nIGluc2VydGlvbiIpCgpvcGVuKHBhdGgsICJ3IiwgZW5jb2Rpbmc9InV0Zi04Iikud3JpdGUodGV4dCkK" | base64 -d | python3 -
         fi
 
-        if [ "${{ inputs.manager }}" = "KernelSU-Next" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ]; then
+        if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ]; then
           echo "== fixing set_nameidata() call-site/declaration mismatch =="
           echo "50_add_susfs_in_*.patch adds a 4th arg at call sites but this source tree's"
           echo "set_nameidata() declaration wasn't updated to accept it; strip the extra arg."
@@ -302,7 +307,7 @@ runs:
         )"
 
         if [ -z "$KSU_MARKERS" ]; then
-          echo "::error::No integrated KernelSU root found for manager '${{ inputs.manager }}'. Expected a file matching */kernel/include/ksu.h under $COMMON_DIR."
+          echo "::error::No integrated KernelSU root found for manager '$MANAGER'. Expected a file matching */kernel/include/ksu.h under $COMMON_DIR."
           exit 1
         fi
 
@@ -315,11 +320,11 @@ runs:
         cd "$KSU_ROOT"
 
         echo
-        if [ "${{ inputs.manager }}" = "ResukiSU" ] || [ "${{ inputs.manager }}" = "KernelSU-Next" ]; then
+        if [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
-          echo "manager=${{ inputs.manager }} has its own SUSFS wiring built into its source."
-        elif [ "${{ inputs.manager }}" = "KernelSU-Backslashxx" ] || [ "${{ inputs.manager }}" = "MidoriSU-Manual" ] || [ "${{ inputs.manager }}" = "MidoriSU-BranchLink" ] || [ "${{ inputs.manager }}" = "MidoriSU-Syscall-Table-Tampering" ]; then
-          echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU xx.patch) =="
+          echo "manager=$MANAGER has its own SUSFS wiring built into its source."
+        elif [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+          echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU xx.patch) =="
 
           XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
           XX_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx.patch"
@@ -337,10 +342,10 @@ runs:
 
           git apply "$XX_PATCH"
 
-          if [ "${{ inputs.manager }}" = "MidoriSU-Manual" ] || [ "${{ inputs.manager }}" = "MidoriSU-BranchLink" ] || [ "${{ inputs.manager }}" = "MidoriSU-Syscall-Table-Tampering" ]; then
+          if [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
             for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
               if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-                echo "== ${{ inputs.manager }}: re-applying MidoriSU Manager signature after xx.patch =="
+                echo "== $MANAGER: re-applying MidoriSU Manager signature after xx.patch =="
                 sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
               /return true;/a\
               \
@@ -355,17 +360,17 @@ runs:
           fi
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
-            echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
+            echo "::error::conflict markers found after $MANAGER SUSFS enablement patch"
             exit 1
           fi
-        elif [ "${{ inputs.manager }}" = "MidoriSU-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-ResukiSU-Deinlined" ]; then
-          case "${{ inputs.manager }}" in
+        elif [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; then
+          case "$MANAGER" in
             MidoriSU-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="official.patch" ;;
             MidoriSU-Next-Deinlined)   MIDORISU_ENABLE_PATCH_NAME="next.patch" ;;
             MidoriSU-ResukiSU-Deinlined) MIDORISU_ENABLE_PATCH_NAME="resuki.patch" ;;
           esac
 
-          echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
+          echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
 
           MIDORISU_ENABLE_PATCH_URL="https://github.com/midori01/KernelSU/commit/${MIDORISU_ENABLE_PATCH_NAME}"
           MIDORISU_ENABLE_PATCH="${RUNNER_TEMP:-/tmp}/midorisu-susfs-${MIDORISU_ENABLE_PATCH_NAME}"
@@ -377,7 +382,7 @@ runs:
           fi
 
           if ! git apply --check "$MIDORISU_ENABLE_PATCH"; then
-            echo "::error::midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME} does not apply to this ${{ inputs.manager }} tree"
+            echo "::error::midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME} does not apply to this $MANAGER tree"
             exit 1
           fi
 
@@ -385,7 +390,7 @@ runs:
 
           for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-              echo "== ${{ inputs.manager }}: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
+              echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
               # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
               # in this fork's apk_sign.c, otherwise this insertion silently no-ops.
               sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
@@ -396,7 +401,7 @@ runs:
               \t\treturn true;
               }' "$APK_SIGN_FILE"
               if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-                echo "::warning::${{ inputs.manager }}: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after ${MIDORISU_ENABLE_PATCH_NAME}"
+                echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after ${MIDORISU_ENABLE_PATCH_NAME}"
               else
                 grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
               fi
@@ -405,10 +410,10 @@ runs:
           done
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
-            echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
+            echo "::error::conflict markers found after $MANAGER SUSFS enablement patch"
             exit 1
           fi
-        elif [ "${{ inputs.manager }}" = "KowSU" ]; then
+        elif [ "$MANAGER" = "KowSU" ]; then
           echo "== check/apply KowSU SUSFS enablement patch (midori01/KernelSU kow.patch) =="
 
           KOW_PATCH_URL="https://github.com/midori01/KernelSU/commit/kow.patch"
@@ -431,7 +436,7 @@ runs:
             echo "::error::conflict markers found after KowSU SUSFS enablement patch"
             exit 1
           fi
-        elif [ "${{ inputs.manager }}" = "KernelSU" ]; then
+        elif [ "$MANAGER" = "KernelSU" ]; then
           echo "== check/apply KernelSU SUSFS patch from KSU_ROOT (safe mode) =="
           if (patch --dry-run --fuzz=3 -p1 < "$KSU_PATCH") >/tmp/ksu-patch-dry-run.log 2>&1; then
             patch --fuzz=3 -p1 < "$KSU_PATCH"
@@ -503,4 +508,4 @@ runs:
 
         echo
         echo "== SUSFS KernelSU git diff stat =="
-        git -C "$KSU_ROOT" diff --stat 2>/dev/null || echo "(no separate KSU_ROOT diff for manager=${{ inputs.manager }})"
+        git -C "$KSU_ROOT" diff --stat 2>/dev/null || echo "(no separate KSU_ROOT diff for manager=$MANAGER)"
