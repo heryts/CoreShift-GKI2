@@ -22,14 +22,6 @@
 	path = manager/ResukiSU
 	url = https://github.com/ReSukiSU/ReSukiSU.git
 	branch = main
-[submodule "manager/Wild_KSU"]
-	path = manager/Wild_KSU
-	url = https://github.com/WildKernels/Wild_KSU.git
-	branch = dev
-[submodule "manager/Rissu"]
-	path = manager/Rissu
-	url = https://github.com/rsuntk/KernelSU.git
-	branch = main
 [submodule "manager/KernelSU-Backslashxx-Tinyfs"]
 	path = manager/KernelSU-Backslashxx-Tinyfs
 	url = https://github.com/backslashxx/KernelSU.git
@@ -54,7 +46,7 @@
 	path = manager/MidoriSU-Next-Deinlined
 	url = https://github.com/KernelSU-Next/KernelSU-Next
 	branch = dev
-[submodule "manager/MidoriSU-ReSUki-Deinlined"]
-	path = manager/MidoriSU-ReSUki-Deinlined
+[submodule "manager/MidoriSU-ResukiSU-Deinlined"]
+	path = manager/MidoriSU-ResukiSU-Deinlined
 	url = https://github.com/ReSukiSU/ReSukiSU.git
 	branch = main

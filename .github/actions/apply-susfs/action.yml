@@ -151,7 +151,7 @@ runs:
         ls -l fs/susfs.c include/linux/susfs*.h
 
         case "${{ inputs.manager }}" in
-          KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ReSUki-Deinlined)
+          KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ResukiSU-Deinlined)
             DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
             DEINLINE_SCRIPT="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/susfs_deinlined.sh"
@@ -358,11 +358,11 @@ runs:
             echo "::error::conflict markers found after ${{ inputs.manager }} SUSFS enablement patch"
             exit 1
           fi
-        elif [ "${{ inputs.manager }}" = "MidoriSU-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-ReSUki-Deinlined" ]; then
+        elif [ "${{ inputs.manager }}" = "MidoriSU-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-Next-Deinlined" ] || [ "${{ inputs.manager }}" = "MidoriSU-ResukiSU-Deinlined" ]; then
           case "${{ inputs.manager }}" in
             MidoriSU-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="official.patch" ;;
             MidoriSU-Next-Deinlined)   MIDORISU_ENABLE_PATCH_NAME="next.patch" ;;
-            MidoriSU-ReSUki-Deinlined) MIDORISU_ENABLE_PATCH_NAME="resuki.patch" ;;
+            MidoriSU-ResukiSU-Deinlined) MIDORISU_ENABLE_PATCH_NAME="resuki.patch" ;;
           esac
 
           echo "== check/apply ${{ inputs.manager }} SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
