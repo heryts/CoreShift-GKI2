@@ -418,11 +418,14 @@ runs:
             MidoriSU-Deinlined)          MIDORISU_ENABLE_PATCH_NAME="official.patch" ;;
             MidoriSU-Next-Deinlined)     MIDORISU_ENABLE_PATCH_NAME="next.patch" ;;
             MidoriSU-ResukiSU-Deinlined) MIDORISU_ENABLE_PATCH_NAME="resuki.patch" ;;
-            MidoriSU-KOW-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="kow-deinlined.patch" ;;
-            MidoriSU-BackslashXX-Deinlined) MIDORISU_ENABLE_PATCH_NAME="xx-deinlined.patch" ;;
+            MidoriSU-KOW-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="kow.patch" ;;
+            MidoriSU-BackslashXX-Deinlined) MIDORISU_ENABLE_PATCH_NAME="xx.patch" ;;
           esac
 
           echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
+          echo "(kow.patch/xx.patch are applied as-is here, same as official/next/resuki - matching"
+          echo "midori01/gki_ksu_workflow's own build-kernel.yml. The 'De-inlined' SUSFS hook type"
+          echo "comes from the core SUSFS patch step above, not from transforming this patch.)"
 
           MIDORISU_ENABLE_PATCH_URL="https://github.com/midori01/KernelSU/commit/${MIDORISU_ENABLE_PATCH_NAME}"
           MIDORISU_ENABLE_PATCH="${RUNNER_TEMP:-/tmp}/midorisu-susfs-${MIDORISU_ENABLE_PATCH_NAME}"
