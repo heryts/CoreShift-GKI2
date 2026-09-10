@@ -402,7 +402,7 @@ runs:
                 # opens (unconditional, not gated behind CONFIG_KSU_MULTI_MANAGER_SUPPORT).
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (apk_sign_keys[] table layout) =="
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
-    { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
+                  { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
               else
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
                 # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
