@@ -103,8 +103,8 @@ runs:
             'KernelSU-Next 6.12 (pinned via .gitmodules branch)' \
             'MidoriSU-Deinlined / MidoriSU-Next-Deinlined / MidoriSU-ResukiSU-Deinlined' \
             '                  *  (no static pin; live submodule HEAD, probed against official.patch/next.patch/resuki.patch)' \
-            'MidoriSU-KOW-Deinlined *  (no static pin; live submodule HEAD, probed against kow-deinlined.patch)' \
-            'MidoriSU-BackslashXX-Deinlined *  (no static pin; live submodule HEAD, probed against xx-deinlined.patch)'
+            'MidoriSU-KOW-Deinlined *  (no static pin; live submodule HEAD, probed against kow.patch)' \
+            'MidoriSU-BackslashXX-Deinlined *  (no static pin; live submodule HEAD, probed against xx.patch)'
 
           probe_midori01_patch() {
             local patch_name="$1"
@@ -198,12 +198,12 @@ runs:
               probe_midori01_patch "resuki.patch"
               ;;
             MidoriSU-KOW-Deinlined:5.10|MidoriSU-KOW-Deinlined:6.1|MidoriSU-KOW-Deinlined:6.6|MidoriSU-KOW-Deinlined:6.12)
-              echo "== ${MANAGER}: probing kow-deinlined.patch against live submodule HEAD before pinning =="
-              probe_midori01_patch "kow-deinlined.patch"
+              echo "== ${MANAGER}: probing kow.patch against live submodule HEAD before pinning =="
+              probe_midori01_patch "kow.patch"
               ;;
             MidoriSU-BackslashXX-Deinlined:5.10|MidoriSU-BackslashXX-Deinlined:6.1|MidoriSU-BackslashXX-Deinlined:6.6|MidoriSU-BackslashXX-Deinlined:6.12)
-              echo "== ${MANAGER}: probing xx-deinlined.patch against live submodule HEAD before pinning =="
-              probe_midori01_patch "xx-deinlined.patch"
+              echo "== ${MANAGER}: probing xx.patch against live submodule HEAD before pinning =="
+              probe_midori01_patch "xx.patch"
               ;;
             *)
               echo "::error::No SUSFS-compatible default manager ref for manager=${MANAGER}, kernel_version=${KERNEL_VERSION}. Set manager_ref explicitly."
