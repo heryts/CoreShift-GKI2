@@ -431,6 +431,47 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
           manager: ${{ inputs.manager }}
 
+      - name: Debug dump SUSFS-patched sources
+        if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
+        working-directory: kernel/common
+        shell: bash
+        run: |
+          set +e
+          DUMP_DIR="${{ github.workspace }}/susfs-debug-dump"
+          mkdir -p "$DUMP_DIR"
+
+          echo "== copying post-patch source files =="
+          for f in fs/proc/task_mmu.c fs/exec.c fs/proc/base.c security/selinux/hooks.c; do
+            if [ -f "$f" ]; then
+              mkdir -p "$DUMP_DIR/post-patch/$(dirname "$f")"
+              cp "$f" "$DUMP_DIR/post-patch/$f"
+            else
+              echo "missing: $f" >> "$DUMP_DIR/post-patch-missing.txt"
+            fi
+          done
+
+          echo "== copying original (un-patched) susfs4ksu source patch, if still on disk =="
+          SUSFS_TMP_DIR="${RUNNER_TEMP:-/tmp}/susfs4ksu"
+          if [ -d "$SUSFS_TMP_DIR" ]; then
+            mkdir -p "$DUMP_DIR/susfs4ksu-source"
+            cp -a "$SUSFS_TMP_DIR/kernel_patches"/*.patch "$DUMP_DIR/susfs4ksu-source/" 2>/dev/null
+          fi
+
+          echo "== git diff for the flagged files (context around fuzzy hunks) =="
+          git diff -- fs/proc/task_mmu.c fs/exec.c fs/proc/base.c security/selinux/hooks.c \
+            > "$DUMP_DIR/post-patch-diff.txt" 2>&1
+
+          exit 0
+
+      - name: Upload SUSFS debug dump
+        if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
+        uses: actions/upload-artifact@v6
+        with:
+          name: susfs-debug-dump-${{ inputs.kernel_version }}-${{ inputs.manager }}
+          path: susfs-debug-dump/**
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Apply NoMount support (maxsteeel)
         if: inputs.nomount_maxsteeel == 'on'
         uses: ./.github/actions/apply-nomount
