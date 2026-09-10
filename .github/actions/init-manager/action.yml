@@ -431,7 +431,7 @@ runs:
           }
 
           cd "$COMMON_DIR"
-          apply_resukisu_patch "$RESUKISU_PATCH_DIR/001_resuki_manual_hook.patch" "manual hooks (stat, execve, faccessat, sys_reboot)"
+          apply_resukisu_patch "$RESUKISU_PATCH_DIR/001_resukisu_manual_hook.patch" "manual hooks (stat, execve, faccessat, sys_reboot)"
 
           RESUKISU_CHECK_FILES="fs/stat.c fs/exec.c fs/open.c kernel/reboot.c"
 
@@ -440,7 +440,7 @@ runs:
             echo "(drivers/kernelsu/tools/manual_hook_check.mk enforces this); applying the manual"
             echo "replacements instead, matching CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=n and"
             echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=n set in create-config-fragment."
-            apply_resukisu_patch "$RESUKISU_PATCH_DIR/002_resuki_manual_hook_6.12.patch" "manual hooks (setuid, sys_read/init_rc, 6.8+)"
+            apply_resukisu_patch "$RESUKISU_PATCH_DIR/002_resukisu_manual_hook_6.12.patch" "manual hooks (setuid, sys_read/init_rc, 6.8+)"
             RESUKISU_CHECK_FILES="$RESUKISU_CHECK_FILES kernel/sys.c fs/read_write.c"
           fi
 
