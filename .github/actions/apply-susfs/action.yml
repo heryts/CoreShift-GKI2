@@ -458,11 +458,31 @@ runs:
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (apk_sign_keys[] table layout) =="
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                   { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
+              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)' "$APK_SIGN_FILE"; then
+                # post-multi-manager upstream layout (tiann/KernelSU "Enable multi manager
+                # support", now also seen downstream e.g. in backslashxx/KernelSU): no
+                # "// KOWX712/KernelSU" anchor and no apk_sign_keys[] table anymore;
+                # is_manager_apk() gates on KSU_MANAGER_PACKAGE (if set) then does
+                # check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH).
+                echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (EXPECTED_SIZE/EXPECTED_HASH layout) =="
+                if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
+                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
+                  # package name) gets rejected before the signature is ever checked.
+                  sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
+                fi
+                sed -i '/if (check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {/,/^    }$/{
+                /^    }$/a\
+                \
+                \t// MidoriSU Manager (com.midori.supermanager)\
+                \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+                \t\treturn true;
+                }' "$APK_SIGN_FILE"
               else
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
                 # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
                 # in this fork's apk_sign.c, otherwise this insertion silently no-ops. ReSukiSU-based
-                # apk_sign_keys[] layouts are handled by the branch above.
+                # apk_sign_keys[] layouts and the EXPECTED_SIZE/EXPECTED_HASH layout are handled by
+                # the branches above.
                 sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
                 /return true;/a\
                 \
@@ -473,6 +493,7 @@ runs:
               fi
               if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
                 echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after ${MIDORISU_ENABLE_PATCH_NAME}"
+                grep -n -B3 -A12 "check_v2_signature\|apk_sign_key_t\|is_manager_apk" "$APK_SIGN_FILE" | head -80
               else
                 grep -A1 "MidoriSU Manager" "$APK_SIGN_FILE"
               fi
