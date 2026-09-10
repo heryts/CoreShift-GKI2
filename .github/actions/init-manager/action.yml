@@ -465,21 +465,6 @@ runs:
       shell: bash
       run: |
         set -e
-        # Root cause: Bazel's common_kernel_sources filegroup globs "**" with
-        # exclude = [".git/**", ...]. Bazel's glob() also never matches any
-        # hidden path (dot-prefixed) regardless of the exclude list, at any
-        # depth. So KernelSU/.git (the submodule ReSukiSU/Kbuild reads via
-        # `test -e $(KSU_SRC)/../.git`, and via live `git` shell-outs for the
-        # version banner) never gets materialized into the sandboxed source
-        # tree that the kernel_aarch64 kernel_build() action actually sees.
-        # Outside the sandbox the submodule is 100% valid (git rev-parse HEAD
-        # resolves fine) - it's purely a "Kbuild expects a live .git inside a
-        # tree Bazel deliberately strips it from" mismatch.
-        #
-        # Fix: resolve everything Kbuild would normally ask `git` for RIGHT
-        # NOW (while .git is still reachable), then bake those as literal
-        # values into Kbuild itself, so no git/.git lookup is needed once
-        # Bazel sandboxes the build.
         python3 - <<'PYEOF'
         import pathlib, subprocess, sys
 
@@ -538,8 +523,6 @@ runs:
                   "Re-run the debug dump and update this patch step.")
             for m in missing:
                 print("  MISSING:", m)
-            # Don't hard-fail the job over this - fall through so the real
-            # Bazel error (if any) still surfaces with full context.
             sys.exit(0)
         print("Kbuild patched OK - no live .git lookup needed anymore.")
         PYEOF
