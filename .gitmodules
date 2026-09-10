@@ -34,15 +34,27 @@
 	path = manager/KernelSU-Backslashxx-Tinyfs
 	url = https://github.com/backslashxx/KernelSU.git
 	branch = master
-[submodule "manager/KernelSU-Midori-Manual"]
-	path = manager/KernelSU-Midori-Manual
+[submodule "manager/MidoriSU-Manual"]
+	path = manager/MidoriSU-Manual
 	url = https://github.com/backslashxx/KernelSU.git
 	branch = master
-[submodule "manager/KernelSU-Midori-BranchLink"]
-	path = manager/KernelSU-Midori-BranchLink
+[submodule "manager/MidoriSU-BranchLink"]
+	path = manager/MidoriSU-BranchLink
 	url = https://github.com/backslashxx/KernelSU.git
 	branch = master
-[submodule "manager/KernelSU-Midori-Tamper"]
-	path = manager/KernelSU-Midori-Tamper
+[submodule "manager/MidoriSU-Syscall-Table-Tampering"]
+	path = manager/MidoriSU-Syscall-Table-Tampering
 	url = https://github.com/backslashxx/KernelSU.git
 	branch = master
+[submodule "manager/MidoriSU-Deinlined"]
+	path = manager/MidoriSU-Deinlined
+	url = https://github.com/tiann/KernelSU.git
+	branch = main
+[submodule "manager/MidoriSU-Next-Deinlined"]
+	path = manager/MidoriSU-Next-Deinlined
+	url = https://github.com/KernelSU-Next/KernelSU-Next
+	branch = dev
+[submodule "manager/MidoriSU-ReSUki-Deinlined"]
+	path = manager/MidoriSU-ReSUki-Deinlined
+	url = https://github.com/ReSukiSU/ReSukiSU.git
+	branch = main
