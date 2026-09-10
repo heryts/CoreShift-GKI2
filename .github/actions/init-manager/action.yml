@@ -280,15 +280,17 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; then
+        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; then
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-              echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature =="
-              # NOTE: anchor '// KOWX712/KernelSU' matches the backslashxx/KOWX712 apk_sign.c
-              # layout. tiann/KernelSU, KernelSU-Next and ReSukiSU forks may use a different
-              # comment/marker in their own apk_sign.c - verify this anchor against each fork's
-              # actual file for MidoriSU-Deinlined / MidoriSU-Next-Deinlined / MidoriSU-ResukiSU-Deinlined
-              # and adjust the sed pattern below if it silently doesn't match (no error is raised).
+              echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, on top of $MANAGER's own manager signature) =="
+              # NOTE: anchor '// KOWX712/KernelSU' matches the KOWX712/backslashxx apk_sign.c
+              # layout, which KowSU (KOWX712/KernelSU) and KernelSU-Backslashxx (fork of it)
+              # both use natively. tiann/KernelSU, KernelSU-Next and ReSukiSU forks may use a
+              # different comment/marker in their own apk_sign.c - verify this anchor against
+              # each fork's actual file for MidoriSU-Deinlined / MidoriSU-Next-Deinlined /
+              # MidoriSU-ResukiSU-Deinlined and adjust the sed pattern below if it silently
+              # doesn't match (no error is raised).
               sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
               /return true;/a\
               \
