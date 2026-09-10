@@ -156,7 +156,7 @@ runs:
         ls -l fs/susfs.c include/linux/susfs*.h
 
         case "$MANAGER" in
-          KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ResukiSU-Deinlined)
+          KernelSU-Backslashxx|MidoriSU-Manual|MidoriSU-BranchLink|MidoriSU-Syscall-Table-Tampering|KowSU|MidoriSU-Deinlined|MidoriSU-Next-Deinlined|MidoriSU-ResukiSU-Deinlined|MidoriSU-KOW-Deinlined|MidoriSU-BackslashXX-Deinlined)
             DEINLINED_FILENAME="50_add_susfs_in_${SUSFS_BRANCH}-deinlined.patch"
             STATIC_DEINLINED_PATCH="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/${DEINLINED_FILENAME}"
             DEINLINE_SCRIPT_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/scripts/susfs_deinlined.sh"
@@ -413,11 +413,13 @@ runs:
             echo "::error::conflict markers found after $MANAGER SUSFS enablement patch"
             exit 1
           fi
-        elif [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; then
+        elif [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
           case "$MANAGER" in
-            MidoriSU-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="official.patch" ;;
-            MidoriSU-Next-Deinlined)   MIDORISU_ENABLE_PATCH_NAME="next.patch" ;;
+            MidoriSU-Deinlined)          MIDORISU_ENABLE_PATCH_NAME="official.patch" ;;
+            MidoriSU-Next-Deinlined)     MIDORISU_ENABLE_PATCH_NAME="next.patch" ;;
             MidoriSU-ResukiSU-Deinlined) MIDORISU_ENABLE_PATCH_NAME="resuki.patch" ;;
+            MidoriSU-KOW-Deinlined)        MIDORISU_ENABLE_PATCH_NAME="kow-deinlined.patch" ;;
+            MidoriSU-BackslashXX-Deinlined) MIDORISU_ENABLE_PATCH_NAME="xx-deinlined.patch" ;;
           esac
 
           echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
