@@ -286,27 +286,35 @@ runs:
 
           if [ "$SUSFS" = "on" ]; then
             echo "== $MANAGER: SUSFS integration mode (custom enablement patch) =="
-            case "$KERNEL_VERSION" in
-              5.10) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10" ;;
-              6.1)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android14-6.1" ;;
-              6.6)  SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android15-6.6" ;;
-              6.12) SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12" ;;
-              *)
-                echo "::error::unsupported kernel_version for SUSFS: $KERNEL_VERSION"
-                exit 1
-                ;;
-            esac
 
-            echo "== SUSFS config scan: $SUSFS_PATCH_DIR =="
+            echo "== locate integrated KernelSU root (for SUSFS config scan) =="
+            KSU_MARKERS="$(
+              find -L "$COMMON_DIR" \
+                -type f \
+                \( -path "*/kernel/include/ksu.h" -o -path "*/kernel/ksu.h" \) \
+                -print
+            )"
 
-            if [ ! -d "$SUSFS_PATCH_DIR" ]; then
-              echo "::error::missing SUSFS patch directory: $SUSFS_PATCH_DIR"
+            if [ -z "$KSU_MARKERS" ]; then
+              echo "::error::No integrated KernelSU root found under $COMMON_DIR for SUSFS config scan"
+              exit 1
+            fi
+
+            KSU_MARKER="$(printf '%s\n' "$KSU_MARKERS" | sort | head -n 1)"
+            KSU_ROOT="${KSU_MARKER%/kernel/include/ksu.h}"
+            KSU_ROOT="${KSU_ROOT%/kernel/ksu.h}"
+            SUSFS_KCONFIG="$KSU_ROOT/kernel/Kconfig"
+
+            echo "== SUSFS config scan: $SUSFS_KCONFIG =="
+
+            if [ ! -f "$SUSFS_KCONFIG" ]; then
+              echo "::error::missing KernelSU Kconfig (expected SUSFS options here): $SUSFS_KCONFIG"
               exit 1
             fi
 
             SUSFS_CONFIGS="$(
-              { grep -RhoE '^\+[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_PATCH_DIR" 2>/dev/null || true; } |
-              sed -E 's/^\+[[:space:]]*config[[:space:]]+//' |
+              grep -hoE '^[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_KCONFIG" 2>/dev/null |
+              sed -E 's/^[[:space:]]*config[[:space:]]+//' |
               sort -u
             )"
 
@@ -406,35 +414,35 @@ runs:
         elif [ "$SUSFS" = "on" ]; then
           echo "== ensuring base KSU config is enabled (SUSFS Kconfig depends on it) =="
           add_config KSU y
-          case "$KERNEL_VERSION" in
-            5.10)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android12-5.10"
-              ;;
-            6.1)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android14-6.1"
-              ;;
-            6.6)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android15-6.6"
-              ;;
-            6.12)
-              SUSFS_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/susfs4ksu/gki-android16-6.12"
-              ;;
-            *)
-              echo "::error::unsupported kernel_version for SUSFS: $KERNEL_VERSION"
-              exit 1
-              ;;
-          esac
 
-          echo "== SUSFS config scan: $SUSFS_PATCH_DIR =="
+          echo "== locate integrated KernelSU root (for SUSFS config scan) =="
+          KSU_MARKERS="$(
+            find -L "$COMMON_DIR" \
+              -type f \
+              \( -path "*/kernel/include/ksu.h" -o -path "*/kernel/ksu.h" \) \
+              -print
+          )"
 
-          if [ ! -d "$SUSFS_PATCH_DIR" ]; then
-            echo "::error::missing SUSFS patch directory: $SUSFS_PATCH_DIR"
+          if [ -z "$KSU_MARKERS" ]; then
+            echo "::error::No integrated KernelSU root found under $COMMON_DIR for SUSFS config scan"
+            exit 1
+          fi
+
+          KSU_MARKER="$(printf '%s\n' "$KSU_MARKERS" | sort | head -n 1)"
+          KSU_ROOT="${KSU_MARKER%/kernel/include/ksu.h}"
+          KSU_ROOT="${KSU_ROOT%/kernel/ksu.h}"
+          SUSFS_KCONFIG="$KSU_ROOT/kernel/Kconfig"
+
+          echo "== SUSFS config scan: $SUSFS_KCONFIG =="
+
+          if [ ! -f "$SUSFS_KCONFIG" ]; then
+            echo "::error::missing KernelSU Kconfig (expected SUSFS options here): $SUSFS_KCONFIG"
             exit 1
           fi
 
           SUSFS_CONFIGS="$(
-            { grep -RhoE '^\+[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_PATCH_DIR" 2>/dev/null || true; } |
-            sed -E 's/^\+[[:space:]]*config[[:space:]]+//' |
+            grep -hoE '^[[:space:]]*config[[:space:]]+KSU_SUSFS[A-Z0-9_]*' "$SUSFS_KCONFIG" 2>/dev/null |
+            sed -E 's/^[[:space:]]*config[[:space:]]+//' |
             sort -u
           )"
 
