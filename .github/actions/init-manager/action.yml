@@ -20,14 +20,18 @@ runs:
   using: composite
   steps:
     - shell: bash
+      env:
+        MANAGER: ${{ inputs.manager }}
+        MANAGER_REF: ${{ inputs.manager_ref }}
+        SUSFS: ${{ inputs.susfs }}
+        KERNEL_VERSION: ${{ inputs.kernel_version }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         
         git config --global user.email "bot@github.com"
         git config --global user.name "Workflow Bot"
 
-        MANAGER="${{ inputs.manager }}"
-        KERNEL_VERSION="${{ inputs.kernel_version }}"
         MANAGER_DIR="${GITHUB_WORKSPACE}/manager/${MANAGER}"
         COMMON_DIR="${KERNEL_COMMON_DIR:-${GITHUB_WORKSPACE}/kernel/common}"
 
@@ -42,7 +46,7 @@ runs:
 
         git submodule update --init --remote --depth 1 --single-branch "manager/${MANAGER}"
 
-        if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+        if [ "$MANAGER" = "KernelSU-Next" ] && [ "$SUSFS" = "on" ]; then
           echo "== KernelSU-Next + SUSFS: switching to pershoot/KernelSU-Next dev-susfs branch =="
           rm -rf "manager/${MANAGER}"
           git clone --branch "dev-susfs" --depth 1 "https://github.com/pershoot/KernelSU-Next.git" "manager/${MANAGER}"
@@ -57,7 +61,7 @@ runs:
           echo "== $MANAGER: plain backslashxx/KernelSU (submodule default), hook mode is a config-only choice =="
         fi
 
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "$SUSFS" = "on" ]; then
           echo "== KernelSU-Backslashxx + SUSFS: staying on backslashxx/KernelSU (submodule default) =="
         fi
 
@@ -79,10 +83,10 @@ runs:
           fi
         fi
 
-        if [ -n "${{ inputs.manager_ref }}" ]; then
-          SELECTED_MANAGER_REF="${{ inputs.manager_ref }}"
+        if [ -n "$MANAGER_REF" ]; then
+          SELECTED_MANAGER_REF="$MANAGER_REF"
           MANAGER_REF_SOURCE="explicit"
-        elif [ "${{ inputs.susfs }}" = "on" ]; then
+        elif [ "$SUSFS" = "on" ]; then
           echo "== SUSFS manager compatibility table =="
           printf '%s\n' \
             'manager   kernel  ref' \
@@ -254,7 +258,7 @@ runs:
           echo "linked $COMMON_DIR/KernelSU-Next -> $MANAGER_DIR"
         fi
 
-        if [ "$MANAGER" = "KernelSU-Next" ] && [ "${{ inputs.susfs }}" = "on" ]; then
+        if [ "$MANAGER" = "KernelSU-Next" ] && [ "$SUSFS" = "on" ]; then
           echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "dev-susfs"
         elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; }; then
@@ -363,7 +367,7 @@ runs:
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
-          GH_API_TOKEN="${{ github.token }}"
+          GH_API_TOKEN="$GH_TOKEN"
 
           echo "-- GitHub API rate-limit check (confirms whether the token is actually being used) --"
           RATE_HEADERS="$(
@@ -443,7 +447,7 @@ runs:
           echo "manual hooks patch applied"
         fi
 
-        if { [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; } && [ "${{ inputs.susfs }}" = "off" ]; then
+        if { [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; } && [ "$SUSFS" = "off" ]; then
           echo "== $MANAGER: applying manual hooks (source patches only) =="
           echo "Kconfig flags (CONFIG_KSU_MANUAL_HOOK, AUTO_SETUID_HOOK, etc.)"
           echo "are applied later via private.fragment in create-config-fragment,"
@@ -504,7 +508,7 @@ runs:
 
         cd "$COMMON_DIR"
         git add . 2>/dev/null
-        git commit -m "Integrate ${{ inputs.manager }} and remove dirty tag" || true
+        git commit -m "Integrate $MANAGER and remove dirty tag" || true
 
     - name: Patch ReSukiSU Kbuild for Kleaf/Bazel sandbox compatibility
       if: inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-ResukiSU-Deinlined'
