@@ -255,11 +255,29 @@ runs:
 
         if [ "$MANAGER" = "ResukiSU" ] && [ "$KERNEL_VERSION" = "6.1" ] && [ -f fs/namespace.c ]; then
           echo
-          echo "== fixup: normalize fs/namespace.c header for CONFIG_KSU_SUSFS_SUS_MOUNT (manager=ResukiSU) =="
-          echo "ResukiSU's fs/namespace.c already diverges from stock GKI in the header region, so hunk #1"
-          echo "of the core SUSFS patch never context-matches (even with fuzz=3). Insert the same content"
-          echo "idempotently first, so the fuzzy patch fallback below can skip it as already-applied."
-          echo "aW1wb3J0IHJlCgpwYXRoID0gImZzL25hbWVzcGFjZS5jIgp0ZXh0ID0gb3BlbihwYXRoLCBlbmNvZGluZz0idXRmLTgiKS5yZWFkKCkKCmluY2x1ZGVfYmxvY2sgPSAoCiAgICAnI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01PVU5UXG4nCiAgICAnI2luY2x1ZGUgPGxpbnV4L3N1c2ZzX2RlZi5oPlxuJwogICAgJyNlbmRpZiAvLyAjaWZkZWYgQ09ORklHX0tTVV9TVVNGU19TVVNfTU9VTlRcbicKKQpleHRlcm5fYmxvY2sgPSAoCiAgICAnI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01PVU5UXG4nCiAgICAnZXh0ZXJuIGJvb2wgc3VzZnNfaXNfY3VycmVudF9rc3VfZG9tYWluKHZvaWQpO1xuJwogICAgJ2V4dGVybiBzdHJ1Y3Qgc3RhdGljX2tleV90cnVlIHN1c2ZzX2lzX3NkY2FyZF9hbmRyb2lkX2RhdGFfbm90X2RlY3J5cHRlZDtcblxuJwogICAgJyNkZWZpbmUgQ0xfQ09QWV9NTlRfTlMgQklUKDI1KSAvKiB1c2VkIGJ5IGNvcHlfbW50X25zKCkgKi9cblxuJwogICAgJyNlbmRpZiAvLyAjaWZkZWYgQ09ORklHX0tTVV9TVVNGU19TVVNfTU9VTlRcbicKKQoKY2hhbmdlZCA9IEZhbHNlCgppZiAnc3VzZnNfZGVmLmgnIG5vdCBpbiB0ZXh0OgogICAgdGV4dCwgbiA9IHJlLnN1Ym4ocicoI2luY2x1ZGUgPGxpbnV4L21udF9pZG1hcHBpbmdcLmg+XG4pJywgcidcMScgKyBpbmNsdWRlX2Jsb2NrLCB0ZXh0LCBjb3VudD0xKQogICAgaWYgbjoKICAgICAgICBjaGFuZ2VkID0gVHJ1ZQogICAgZWxzZToKICAgICAgICBwcmludCgiOjp3YXJuaW5nOjptbnRfaWRtYXBwaW5nLmggaW5jbHVkZSBhbmNob3Igbm90IGZvdW5kIC0gc3VzZnNfZGVmLmggaW5jbHVkZSBub3QgaW5zZXJ0ZWQiKQoKaWYgJ3N1c2ZzX2lzX2N1cnJlbnRfa3N1X2RvbWFpbicgbm90IGluIHRleHQ6CiAgICB0ZXh0LCBuID0gcmUuc3VibihyJygjaW5jbHVkZSAiaW50ZXJuYWxcLmgiXG4pJywgcidcMVxuJyArIGV4dGVybl9ibG9jaywgdGV4dCwgY291bnQ9MSkKICAgIGlmIG46CiAgICAgICAgY2hhbmdlZCA9IFRydWUKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoIjo6d2FybmluZzo6aW50ZXJuYWwuaCBpbmNsdWRlIGFuY2hvciBub3QgZm91bmQgLSBTVVNfTU9VTlQgZXh0ZXJucyBub3QgaW5zZXJ0ZWQiKQoKaWYgY2hhbmdlZDoKICAgIG9wZW4ocGF0aCwgInciLCBlbmNvZGluZz0idXRmLTgiKS53cml0ZSh0ZXh0KQogICAgcHJpbnQoIm5vcm1hbGl6ZWQgZnMvbmFtZXNwYWNlLmMgaGVhZGVyIGJsb2NrIikKZWxzZToKICAgIHByaW50KCJmcy9uYW1lc3BhY2UuYyBoZWFkZXIgYmxvY2sgYWxyZWFkeSBwcmVzZW50IChvciBhbmNob3JzIG1pc3NpbmcpIC0gbm8gY2hhbmdlcyBtYWRlIikK" | base64 -d | python3 -
+          echo "== fixup: relocate stray '#include <trace/hooks/blk.h>' in fs/namespace.c (manager=ResukiSU) =="
+          echo "ResukiSU's fs/namespace.c already carries a vendor hook include directly after"
+          echo "#include \"internal.h\", which upstream GKI does not have there. That extra line sits"
+          echo "inside the core SUSFS patch's hunk #1 context window, so 'git apply' rejects the hunk"
+          echo "outright on a genuine context mismatch (fuzz can only misplace things, it can't fix a"
+          echo "line that is really not supposed to be there). Move the include earlier in the file,"
+          echo "outside the hunk's context range, so the patch applies cleanly via plain 'git apply'"
+          echo "with no fuzz and no offset-guessing involved."
+          echo "cGF0aCA9ICJmcy9uYW1lc3BhY2UuYyIKdGV4dCA9IG9wZW4ocGF0aCwgZW5jb2Rpbmc9InV0Zi04IikucmVhZCgpCgpsaW5lID0gIiNpbmNsdWRlIDx0cmFjZS9ob29rcy9ibGsuaD5cbiIKYnJlYWtpbmcgPSAnI2luY2x1ZGUgImludGVybmFsLmgiXG4nICsgbGluZQphbmNob3IgPSAiI2luY2x1ZGUgPGxpbnV4L3N5c2NhbGxzLmg+XG4iCgppZiAic3VzZnNfZGVmLmgiIGluIHRleHQ6CiAgICBwcmludCgiZnMvbmFtZXNwYWNlLmM6IFNVU0ZTIGhlYWRlciBibG9jayBhbHJlYWR5IHByZXNlbnQgLSBubyBjaGFuZ2VzIG1hZGUiKQplbGlmIGJyZWFraW5nIG5vdCBpbiB0ZXh0OgogICAgcHJpbnQoImZzL25hbWVzcGFjZS5jOiB0cmFjZS9ob29rcy9ibGsuaCBub3QgaW4gdGhlIGJyZWFraW5nIHBvc2l0aW9uIChvciBhbHJlYWR5IHJlbG9jYXRlZCkgLSBubyBjaGFuZ2VzIG1hZGUiKQplbGlmIGFuY2hvciBub3QgaW4gdGV4dDoKICAgIHByaW50KCI6Ondhcm5pbmc6OmZzL25hbWVzcGFjZS5jOiBzeXNjYWxscy5oIGFuY2hvciBub3QgZm91bmQgLSB0cmFjZS9ob29rcy9ibGsuaCBub3QgcmVsb2NhdGVkIikKZWxzZToKICAgIHRleHQgPSB0ZXh0LnJlcGxhY2UobGluZSwgIiIsIDEpCiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKGFuY2hvciwgYW5jaG9yICsgbGluZSwgMSkKICAgIG9wZW4ocGF0aCwgInciLCBlbmNvZGluZz0idXRmLTgiKS53cml0ZSh0ZXh0KQogICAgcHJpbnQoInJlbG9jYXRlZCB0cmFjZS9ob29rcy9ibGsuaCBpbmNsdWRlIGFoZWFkIG9mIHRoZSBTVVNGUyBwYXRjaCdzIGNvbnRleHQgd2luZG93IikK" | base64 -d | python3 -
+        fi
+
+        NEEDS_VMA_DATA_PAGES_RESTORE=0
+        if [ -f fs/proc/task_mmu.c ] && grep -qF 'if (!vma_data_pages(vma))' fs/proc/task_mmu.c; then
+          echo
+          echo "== fixup: alias renamed vma_data_pages() back to vma_pages() in fs/proc/task_mmu.c for patching =="
+          echo "This tree renames vma_pages() -> vma_data_pages(). The core SUSFS patch's show_smap()"
+          echo "hunk carries 'if (!vma_pages(vma))' as trailing (unchanged) context, so 'git apply' rejects"
+          echo "the whole hunk on a strict context mismatch, and 'patch --fuzz=3' can misplace the added"
+          echo "block mid-argument inside __show_smap()'s SEQ_PUT_DEC(...) call instead of fixing it."
+          echo "Temporarily restore the old name at this one call site so the hunk context matches"
+          echo "exactly, then rename it back once the patch has landed."
+          sed -i 's/if (!vma_data_pages(vma))/if (!vma_pages(vma))/' fs/proc/task_mmu.c
+          NEEDS_VMA_DATA_PAGES_RESTORE=1
         fi
 
         echo
@@ -287,6 +305,11 @@ runs:
             find . -name '*.rej' -delete 2>/dev/null || true
             exit 1
           fi
+        fi
+
+        if [ "$NEEDS_VMA_DATA_PAGES_RESTORE" = "1" ] && [ -f fs/proc/task_mmu.c ]; then
+          sed -i 's/if (!vma_pages(vma))/if (!vma_data_pages(vma))/' fs/proc/task_mmu.c
+          echo "restored vma_data_pages() naming in fs/proc/task_mmu.c after patching"
         fi
 
         echo
