@@ -403,7 +403,12 @@ runs:
               \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
               \t\treturn true;
               }' "$APK_SIGN_FILE"
-                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+                if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+                  echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after xx.patch - MidoriSU Manager signature was NOT inserted; check the anchor comment for this fork"
+                  grep -n -B3 -A12 "check_v2_signature\|apk_sign_key_t\|is_manager_apk" "$APK_SIGN_FILE" | head -80
+                else
+                  grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+                fi
                 break
               fi
             done
@@ -458,7 +463,7 @@ runs:
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (apk_sign_keys[] table layout) =="
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                   { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
-              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)' "$APK_SIGN_FILE"; then
+              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
                 # post-multi-manager upstream layout (tiann/KernelSU "Enable multi manager
                 # support", now also seen downstream e.g. in backslashxx/KernelSU): no
                 # "// KOWX712/KernelSU" anchor and no apk_sign_keys[] table anymore;
@@ -530,7 +535,7 @@ runs:
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after kow.patch (apk_sign_keys[] table layout) =="
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                 { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
-              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)' "$APK_SIGN_FILE"; then
+              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
                 # post-multi-manager upstream layout (KOWX712/KernelSU "Enable multi manager
                 # support"): no "// KOWX712/KernelSU" anchor and no apk_sign_keys[] table anymore;
                 # is_manager_apk() gates on KSU_MANAGER_PACKAGE (if set) then does
