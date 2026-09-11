@@ -414,7 +414,7 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
           GH_API_TOKEN="$GH_TOKEN"
