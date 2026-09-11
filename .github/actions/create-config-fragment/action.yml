@@ -418,7 +418,15 @@ runs:
 
           if [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
             echo "== $MANAGER: backslashxx/KernelSU source needs an explicit hook mode =="
-            add_config KSU_HACK_ARM64_BRANCH_LINK y
+            echo "== $MANAGER: using manual hook mode (not branch-link) so MidoriSU Manager"
+            echo "reports 'De-inlined SUSFS' as Hook type instead of 'Branch Link N/N' - the"
+            echo "app's branch-link/syscall-table-tamper hook label takes priority over the"
+            echo "SUSFS de-inline label whenever KSU_HACK_ARM64_BRANCH_LINK is set, matching"
+            echo "midori01/gki_ksu_workflow's MidoriSU-XX 'manual' hook_mode Kconfig =="
+            add_config KSU_THRONE_TRACKER_ALWAYS_THREADED y
+            add_config KSU_HOSTSREDIRECT y
+            # CONFIG_KSU_HACK_ARM64_BRANCH_LINK intentionally not set (manual hook mode)
+            # CONFIG_KSU_TAMPER_SYSCALL_TABLE intentionally not set (manual hook mode)
           fi
 
           if [ "$SUSFS" = "on" ]; then
