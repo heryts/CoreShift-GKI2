@@ -253,15 +253,24 @@ runs:
             ;;
         esac
 
+        if [ "$MANAGER" = "ResukiSU" ] && [ "$KERNEL_VERSION" = "6.1" ] && [ -f fs/namespace.c ]; then
+          echo
+          echo "== fixup: normalize fs/namespace.c header for CONFIG_KSU_SUSFS_SUS_MOUNT (manager=ResukiSU) =="
+          echo "ResukiSU's fs/namespace.c already diverges from stock GKI in the header region, so hunk #1"
+          echo "of the core SUSFS patch never context-matches (even with fuzz=3). Insert the same content"
+          echo "idempotently first, so the fuzzy patch fallback below can skip it as already-applied."
+          echo "aW1wb3J0IHJlCgpwYXRoID0gImZzL25hbWVzcGFjZS5jIgp0ZXh0ID0gb3BlbihwYXRoLCBlbmNvZGluZz0idXRmLTgiKS5yZWFkKCkKCmluY2x1ZGVfYmxvY2sgPSAoCiAgICAnI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01PVU5UXG4nCiAgICAnI2luY2x1ZGUgPGxpbnV4L3N1c2ZzX2RlZi5oPlxuJwogICAgJyNlbmRpZiAvLyAjaWZkZWYgQ09ORklHX0tTVV9TVVNGU19TVVNfTU9VTlRcbicKKQpleHRlcm5fYmxvY2sgPSAoCiAgICAnI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01PVU5UXG4nCiAgICAnZXh0ZXJuIGJvb2wgc3VzZnNfaXNfY3VycmVudF9rc3VfZG9tYWluKHZvaWQpO1xuJwogICAgJ2V4dGVybiBzdHJ1Y3Qgc3RhdGljX2tleV90cnVlIHN1c2ZzX2lzX3NkY2FyZF9hbmRyb2lkX2RhdGFfbm90X2RlY3J5cHRlZDtcblxuJwogICAgJyNkZWZpbmUgQ0xfQ09QWV9NTlRfTlMgQklUKDI1KSAvKiB1c2VkIGJ5IGNvcHlfbW50X25zKCkgKi9cblxuJwogICAgJyNlbmRpZiAvLyAjaWZkZWYgQ09ORklHX0tTVV9TVVNGU19TVVNfTU9VTlRcbicKKQoKY2hhbmdlZCA9IEZhbHNlCgppZiAnc3VzZnNfZGVmLmgnIG5vdCBpbiB0ZXh0OgogICAgdGV4dCwgbiA9IHJlLnN1Ym4ocicoI2luY2x1ZGUgPGxpbnV4L21udF9pZG1hcHBpbmdcLmg+XG4pJywgcidcMScgKyBpbmNsdWRlX2Jsb2NrLCB0ZXh0LCBjb3VudD0xKQogICAgaWYgbjoKICAgICAgICBjaGFuZ2VkID0gVHJ1ZQogICAgZWxzZToKICAgICAgICBwcmludCgiOjp3YXJuaW5nOjptbnRfaWRtYXBwaW5nLmggaW5jbHVkZSBhbmNob3Igbm90IGZvdW5kIC0gc3VzZnNfZGVmLmggaW5jbHVkZSBub3QgaW5zZXJ0ZWQiKQoKaWYgJ3N1c2ZzX2lzX2N1cnJlbnRfa3N1X2RvbWFpbicgbm90IGluIHRleHQ6CiAgICB0ZXh0LCBuID0gcmUuc3VibihyJygjaW5jbHVkZSAiaW50ZXJuYWxcLmgiXG4pJywgcidcMVxuJyArIGV4dGVybl9ibG9jaywgdGV4dCwgY291bnQ9MSkKICAgIGlmIG46CiAgICAgICAgY2hhbmdlZCA9IFRydWUKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoIjo6d2FybmluZzo6aW50ZXJuYWwuaCBpbmNsdWRlIGFuY2hvciBub3QgZm91bmQgLSBTVVNfTU9VTlQgZXh0ZXJucyBub3QgaW5zZXJ0ZWQiKQoKaWYgY2hhbmdlZDoKICAgIG9wZW4ocGF0aCwgInciLCBlbmNvZGluZz0idXRmLTgiKS53cml0ZSh0ZXh0KQogICAgcHJpbnQoIm5vcm1hbGl6ZWQgZnMvbmFtZXNwYWNlLmMgaGVhZGVyIGJsb2NrIikKZWxzZToKICAgIHByaW50KCJmcy9uYW1lc3BhY2UuYyBoZWFkZXIgYmxvY2sgYWxyZWFkeSBwcmVzZW50IChvciBhbmNob3JzIG1pc3NpbmcpIC0gbm8gY2hhbmdlcyBtYWRlIikK" | base64 -d | python3 -
+        fi
+
         echo
         echo "== check/apply core SUSFS patch =="
         if git apply --check "$SUSFS_PATCH"; then
           git apply "$SUSFS_PATCH"
         else
           echo "::warning::core SUSFS patch (commit $SUSFS_COMMIT) does not apply cleanly via 'git apply' (strict context match)"
-          echo "== retrying with 'patch --fuzz=3' (tolerates minor upstream GKI header drift) =="
-          if (patch --dry-run --fuzz=3 -p1 < "$SUSFS_PATCH") >/tmp/susfs_fuzz_dry_run.log 2>&1; then
-            patch --fuzz=3 -p1 < "$SUSFS_PATCH"
+          echo "== retrying with 'patch --fuzz=3 -N' (tolerates minor upstream GKI header drift, skips already-applied hunks) =="
+          if (patch --dry-run --fuzz=3 -N -p1 < "$SUSFS_PATCH") >/tmp/susfs_fuzz_dry_run.log 2>&1; then
+            patch --fuzz=3 -N -p1 < "$SUSFS_PATCH"
             echo "== core SUSFS patch applied via fuzzy fallback =="
           else
             echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree, even with fuzz=3"
