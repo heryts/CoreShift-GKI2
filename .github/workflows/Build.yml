@@ -10,7 +10,7 @@ on:
       manager:
         type: choice
         required: true
-        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Backslashxx-Tinyfs", "KernelSU-Midori-Manual", "KernelSU-Midori-BranchLink", "KernelSU-Midori-Tamper", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "Rissu", "Wild_KSU"]
+        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KernelSU-Backslashxx-Tinyfs", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "MidoriSU-Manual", "MidoriSU-BranchLink", "MidoriSU-Syscall-Table-Tampering", "MidoriSU-Deinlined", "MidoriSU-KOW-Deinlined", "MidoriSU-BackslashXX-Deinlined", "MidoriSU-Next-Deinlined", "MidoriSU-ResukiSU-Deinlined"]
         default: "Vanilla"
       manager_ref:
         description: "Optional manager git ref/commit/tag"
@@ -106,7 +106,7 @@ on:
 
 jobs:
   build:
-    name: ${{ inputs.kernel_version }} / ${{ inputs.manager }} / SUSFS ${{ inputs.susfs }} / BBG ${{ inputs.baseband_guard }} / KPM ${{ inputs.kpm_support }}
+    name: ${{ inputs.kernel_version }} / ${{ inputs.manager }} / SUSFS ${{ inputs.susfs }} / KPM ${{ inputs.kpm_support }} / BBG ${{ inputs.baseband_guard }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -470,9 +470,10 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply source fixes for unbuilt drivers
-        uses: ./.github/actions/apply-fixes-for-kernel-6.12
+        uses: ./.github/actions/apply-source-fixes
         with:
           kernel_version: ${{ inputs.kernel_version }}
+          mode: unbuilt-drivers
           
       - name: Install legacy CoreShift build config
         if: inputs.kernel_version == '5.10'
@@ -502,7 +503,7 @@ jobs:
 
       - name: Commit kernel changes
         uses: ./.github/actions/commit-kernel-changes
-
+        
       - name: Build kernel
         uses: ./.github/actions/build-kernel
         with:
