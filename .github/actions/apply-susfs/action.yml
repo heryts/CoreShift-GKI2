@@ -280,6 +280,19 @@ runs:
           NEEDS_VMA_DATA_PAGES_RESTORE=1
         fi
 
+        if grep -Eq '^\+[[:space:]]+$' "$SUSFS_PATCH"; then
+          echo
+          echo "== fixup: strip trailing whitespace from blank added lines in the core SUSFS patch =="
+          echo "Some hunks in the susfs4ksu patch (e.g. mm/memory.c's CONFIG_KSU_SUSFS_SUS_MAP block)"
+          echo "add a blank line that is actually just tabs with no real content. 'git apply' still"
+          echo "applies these fine, but flags them as a whitespace error on every single run. Clean the"
+          echo "added line itself (never a context or removed line, so hunk matching is untouched) so"
+          echo "the patch applies with zero whitespace warnings and the merged source has no stray tabs."
+          CLEAN_SUSFS_PATCH="${RUNNER_TEMP:-/tmp}/$(basename "$SUSFS_PATCH").whitespace-clean"
+          sed -E 's/^\+[[:space:]]+$/+/' "$SUSFS_PATCH" > "$CLEAN_SUSFS_PATCH"
+          SUSFS_PATCH="$CLEAN_SUSFS_PATCH"
+        fi
+
         echo
         echo "== check/apply core SUSFS patch =="
         if git apply --check "$SUSFS_PATCH"; then
