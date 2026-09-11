@@ -334,14 +334,7 @@ runs:
             echo "== $MANAGER: KSU_SUSFS_SUS_SU not applicable =="
           fi
 
-        elif [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
-          add_config KSU y
-          add_config KSU_TINYFS_SUCOMPAT y
-          add_config KSU_FEATURE_ADBROOT n
-          add_config KALLSYMS y
-          add_config KALLSYMS_ALL y
-
-        elif [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+        elif [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           add_config KSU y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
@@ -352,11 +345,11 @@ runs:
             MidoriSU-BranchLink)
               add_config KSU_HACK_ARM64_BRANCH_LINK y
               ;;
-            MidoriSU-Syscall-Table-Tampering)
+            MidoriSU-Syscall-Table-Tamper)
               add_config KSU_TAMPER_SYSCALL_TABLE y
               ;;
-            MidoriSU-Manual)
-              echo "== MidoriSU-Manual: no hook Kconfig requested =="
+            MidoriSU-XX-Manual-Deinlined)
+              echo "== MidoriSU-XX-Manual-Deinlined: no hook Kconfig requested =="
               ;;
           esac
 
@@ -387,7 +380,7 @@ runs:
             add_config KSU_HACK_ARM64_BRANCH_LINK y
           fi
 
-        elif [ "$MANAGER" = "ResukiSU" ] || { [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] && [ "$SUSFS" = "off" ]; }; then
+        elif [ "$MANAGER" = "ResukiSU" ] || { [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] && [ "$SUSFS" = "off" ]; }; then
           add_config KSU y
           if [ "$MANAGER" = "ResukiSU" ] && [ "$SUSFS" = "on" ]; then
             echo "== ResukiSU: SUSFS integration mode =="
@@ -411,23 +404,10 @@ runs:
             add_config KALLSYMS_ALL y
           fi
 
-        elif [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+        elif [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
           add_config KSU y
           add_config KALLSYMS y
           add_config KALLSYMS_ALL y
-
-          if [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
-            echo "== $MANAGER: backslashxx/KernelSU source needs an explicit hook mode =="
-            echo "== $MANAGER: using manual hook mode (not branch-link) so MidoriSU Manager"
-            echo "reports 'De-inlined SUSFS' as Hook type instead of 'Branch Link N/N' - the"
-            echo "app's branch-link/syscall-table-tamper hook label takes priority over the"
-            echo "SUSFS de-inline label whenever KSU_HACK_ARM64_BRANCH_LINK is set, matching"
-            echo "midori01/gki_ksu_workflow's MidoriSU-XX 'manual' hook_mode Kconfig =="
-            add_config KSU_THRONE_TRACKER_ALWAYS_THREADED y
-            add_config KSU_HOSTSREDIRECT y
-            # CONFIG_KSU_HACK_ARM64_BRANCH_LINK intentionally not set (manual hook mode)
-            # CONFIG_KSU_TAMPER_SYSCALL_TABLE intentionally not set (manual hook mode)
-          fi
 
           if [ "$SUSFS" = "on" ]; then
             echo "== $MANAGER: SUSFS integration mode (deinlined enablement patch) =="
