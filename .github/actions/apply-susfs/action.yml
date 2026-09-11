@@ -374,6 +374,29 @@ runs:
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=$MANAGER has its own SUSFS wiring built into its source."
         elif [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+          echo "== $MANAGER: applying prerequisite commit patch xx~1.patch before xx.patch =="
+          echo "(midori01/gki_ksu_workflow applies this in its separate 'Setup Extra Features and"
+          echo "Fixes' step, before 'Setup SUSFS'; xx.patch alone is only the diff of the final"
+          echo "commit and assumes xx~1's changes are already present in the tree.)"
+
+          XX1_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx~1.patch"
+          XX1_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx~1.patch"
+
+          echo "fetching $XX1_PATCH_URL"
+          if ! curl -fsSL "$XX1_PATCH_URL" -o "$XX1_PATCH"; then
+            echo "::error::failed to fetch $XX1_PATCH_URL"
+            exit 1
+          fi
+
+          if git apply --check "$XX1_PATCH" 2>/dev/null; then
+            git apply "$XX1_PATCH"
+            echo "applied xx~1.patch"
+          elif (patch --dry-run -R --fuzz=3 -p1 < "$XX1_PATCH") >/tmp/xx1_reverse.log 2>&1; then
+            echo "xx~1.patch already present in this tree, skipping"
+          else
+            echo "::warning::xx~1.patch does not apply to this backslashxx/KernelSU tree - MidoriSU Manager wiring from this prerequisite commit may be missing/incomplete; continuing with xx.patch only"
+          fi
+
           echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU xx.patch) =="
 
           XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
@@ -541,6 +564,28 @@ runs:
             exit 1
           fi
         elif [ "$MANAGER" = "KowSU" ]; then
+          echo "== $MANAGER: applying prerequisite commit patches kow~2.patch, kow~1.patch before kow.patch =="
+          echo "(midori01/gki_ksu_workflow applies these in its separate 'Setup Extra Features and"
+          echo "Fixes' step, before 'Setup SUSFS'; kow.patch alone is only the diff of the final"
+          echo "commit and assumes kow~2/kow~1's changes are already present in the tree.)"
+          for PREREQ_NAME in kow~2.patch kow~1.patch; do
+            PREREQ_URL="https://github.com/midori01/KernelSU/commit/${PREREQ_NAME}"
+            PREREQ_PATCH="${RUNNER_TEMP:-/tmp}/kowsu-prereq-${PREREQ_NAME}"
+            echo "fetching $PREREQ_URL"
+            if ! curl -fsSL "$PREREQ_URL" -o "$PREREQ_PATCH"; then
+              echo "::error::failed to fetch $PREREQ_URL"
+              exit 1
+            fi
+            if git apply --check "$PREREQ_PATCH" 2>/dev/null; then
+              git apply "$PREREQ_PATCH"
+              echo "applied $PREREQ_NAME"
+            elif (patch --dry-run -R --fuzz=3 -p1 < "$PREREQ_PATCH") >/tmp/kow_prereq_reverse.log 2>&1; then
+              echo "$PREREQ_NAME already present in this tree, skipping"
+            else
+              echo "::warning::$PREREQ_NAME does not apply to this KOWX712/KernelSU tree - MidoriSU Manager wiring from this prerequisite commit may be missing/incomplete; continuing with kow.patch only"
+            fi
+          done
+
           echo "== check/apply KowSU SUSFS enablement patch (midori01/KernelSU kow.patch) =="
 
           KOW_PATCH_URL="https://github.com/midori01/KernelSU/commit/kow.patch"
