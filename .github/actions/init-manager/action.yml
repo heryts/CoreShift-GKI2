@@ -578,7 +578,7 @@ runs:
       # Temporarily scoped to kernel_version=6.12 only - testing whether 6.1/6.6
       # need this patch too, or whether ResukiSU's Kbuild only hits the live-git
       # issue on 6.12. Remove the kernel_version check once that's confirmed.
-      if: (inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-ResukiSU-Deinlined') && inputs.kernel_version == '6.12'
+      if: (inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-ResukiSU-Deinlined') && env.BUILD_ENGINE == 'kleaf'
       working-directory: kernel/common
       shell: bash
       run: |
