@@ -19,7 +19,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - shell: bash
+    - id: init
+      shell: bash
       env:
         MANAGER: ${{ inputs.manager }}
         MANAGER_REF: ${{ inputs.manager_ref }}
@@ -393,6 +394,7 @@ runs:
         KSU_ROOT="${KSU_MARKER%/kernel/include/ksu.h}"
 
         echo "integrated KSU_ROOT=$KSU_ROOT"
+        echo "ksu_root=$KSU_ROOT" >> "$GITHUB_OUTPUT"
 
         if git -C "$KSU_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
           INTEGRATED_KSU_HEAD="$(git -C "$KSU_ROOT" rev-parse HEAD)"
@@ -640,4 +642,67 @@ runs:
                 print("  MISSING:", m)
             sys.exit(0)
         print("Kbuild patched OK - no live .git lookup needed anymore.")
+        PYEOF
+
+    - name: Apply GKID dev patches (all managers)
+      shell: bash
+      env:
+        MANAGER: ${{ inputs.manager }}
+        KSU_ROOT: ${{ steps.init.outputs.ksu_root }}
+      run: |
+        set -euo pipefail
+
+        # Applied unconditionally, on top of whichever manager was integrated above -
+        # unlike the manual-hook / apk_sign patches earlier in this file, these are not
+        # gated on $MANAGER. Layout differs between forks (kernel/manager/apk_sign.c,
+        # kernel/policy/allowlist.c, kernel/supercall/dispatch.c, kernel/hook/*,
+        # kernel/manager/throne_tracker.c, kernel/selinux/rules.c, kernel/Kconfig,
+        # kernel/Kbuild, uapi/feature.h), so a patch that doesn't apply to a given
+        # manager's tree is reported and skipped rather than failing the whole build.
+
+        GKID_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/gkid"
+
+        if [ ! -d "$GKID_PATCH_DIR" ]; then
+          echo "::error::missing $GKID_PATCH_DIR - place the GKID-Kernels dev patches there first"
+          exit 1
+        fi
+
+        if [ -z "$KSU_ROOT" ] || [ ! -d "$KSU_ROOT" ]; then
+          echo "::error::KSU_ROOT is empty or missing (got '$KSU_ROOT') - init step output not available"
+          exit 1
+        fi
+
+        cd "$KSU_ROOT"
+
+        echo "== applying GKID dev patches to $MANAGER at $KSU_ROOT =="
+
+        applied=0
+        skipped=0
+        failed=0
+
+        for patch_file in "$GKID_PATCH_DIR"/*.patch; do
+          [ -e "$patch_file" ] || continue
+          patch_name="$(basename "$patch_file")"
+
+          if git apply --check "$patch_file" 2>/tmp/gkid_patch_err; then
+            git apply "$patch_file"
+            echo "applied: $patch_name"
+            applied=$((applied + 1))
+          else
+            echo "::warning::$MANAGER: $patch_name did not apply cleanly, skipping"
+            sed -n '1,20p' /tmp/gkid_patch_err
+            skipped=$((skipped + 1))
+          fi
+        done
+
+        if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' . 2>/dev/null | grep -q .; then
+          echo "::error::conflict markers found after applying GKID dev patches"
+          failed=1
+        fi
+
+        echo "== GKID dev patches summary for $MANAGER: applied=$applied skipped=$skipped =="
+
+        if [ "$failed" = "1" ]; then
+          exit 1
+        fi
         PYEOF
