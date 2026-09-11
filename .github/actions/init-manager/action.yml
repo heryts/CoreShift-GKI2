@@ -297,7 +297,7 @@ runs:
                 echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, apk_sign_keys[] table layout) =="
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                   { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
-              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)' "$APK_SIGN_FILE"; then
+              elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
                 # post-multi-manager upstream layout (e.g. KOWX712/KernelSU after
                 # "kernel,CI(ddk): Enable multi manager support"): is_manager_apk() no longer
                 # has a "// KOWX712/KernelSU" anchor or an apk_sign_keys[] table; it does a
