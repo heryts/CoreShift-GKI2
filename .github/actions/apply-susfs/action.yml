@@ -373,7 +373,51 @@ runs:
         if [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "KernelSU-Next" ]; then
           echo "== skipping generic KernelSU SUSFS enablement patch =="
           echo "manager=$MANAGER has its own SUSFS wiring built into its source."
-        elif [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+        elif [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
+          echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU xx.patch) =="
+
+          XX_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx.patch"
+          XX_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx.patch"
+
+          echo "fetching $XX_PATCH_URL"
+          if ! curl -fsSL "$XX_PATCH_URL" -o "$XX_PATCH"; then
+            echo "::error::failed to fetch $XX_PATCH_URL"
+            exit 1
+          fi
+
+          if ! git apply --check "$XX_PATCH"; then
+            echo "::error::midori01/KernelSU xx.patch does not apply to this backslashxx/KernelSU tree"
+            exit 1
+          fi
+
+          git apply "$XX_PATCH"
+
+          for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
+            if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+              echo "== $MANAGER: re-applying MidoriSU Manager signature after xx.patch (dual-sign) =="
+              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+              /return true;/a\
+              \
+              \t// MidoriSU Manager (com.midori.supermanager)\
+              \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
+              \t\treturn true;
+              }' "$APK_SIGN_FILE"
+              if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+                echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after xx.patch - MidoriSU Manager signature was NOT inserted; check the anchor comment for this fork"
+                grep -n -B3 -A12 "check_v2_signature\|apk_sign_key_t\|is_manager_apk" "$APK_SIGN_FILE" | head -80
+              else
+                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
+              fi
+              break
+            fi
+          done
+
+          if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
+            echo "::error::conflict markers found after $MANAGER SUSFS enablement patch"
+            exit 1
+          fi
+
+        elif [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
           echo "== $MANAGER: applying prerequisite commit patch xx~1.patch before xx.patch =="
           echo "(midori01/gki_ksu_workflow applies this in its separate 'Setup Extra Features and"
           echo "Fixes' step, before 'Setup SUSFS'; xx.patch alone is only the diff of the final"
@@ -415,27 +459,25 @@ runs:
 
           git apply "$XX_PATCH"
 
-          if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
-            for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
-              if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-                echo "== $MANAGER: re-applying MidoriSU Manager signature after xx.patch (dual-sign) =="
-                sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
+          for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
+            if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+              echo "== $MANAGER: re-applying MidoriSU Manager signature after xx.patch (dual-sign) =="
+              sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
               /return true;/a\
               \
               \t// MidoriSU Manager (com.midori.supermanager)\
               \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
               \t\treturn true;
               }' "$APK_SIGN_FILE"
-                if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
-                  echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after xx.patch - MidoriSU Manager signature was NOT inserted; check the anchor comment for this fork"
-                  grep -n -B3 -A12 "check_v2_signature\|apk_sign_key_t\|is_manager_apk" "$APK_SIGN_FILE" | head -80
-                else
-                  grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
-                fi
-                break
+              if ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
+                echo "::warning::$MANAGER: apk_sign.c anchor pattern did not match in $APK_SIGN_FILE after xx.patch - MidoriSU Manager signature was NOT inserted; check the anchor comment for this fork"
+                grep -n -B3 -A12 "check_v2_signature\|apk_sign_key_t\|is_manager_apk" "$APK_SIGN_FILE" | head -80
+              else
+                grep -A3 "MidoriSU Manager" "$APK_SIGN_FILE"
               fi
-            done
-          fi
+              break
+            fi
+          done
 
           if grep -RInE '^(<<<<<<< .+|=======$|>>>>>>> .+)$' kernel; then
             echo "::error::conflict markers found after $MANAGER SUSFS enablement patch"
@@ -564,28 +606,6 @@ runs:
             exit 1
           fi
         elif [ "$MANAGER" = "KowSU" ]; then
-          echo "== $MANAGER: applying prerequisite commit patches kow~2.patch, kow~1.patch before kow.patch =="
-          echo "(midori01/gki_ksu_workflow applies these in its separate 'Setup Extra Features and"
-          echo "Fixes' step, before 'Setup SUSFS'; kow.patch alone is only the diff of the final"
-          echo "commit and assumes kow~2/kow~1's changes are already present in the tree.)"
-          for PREREQ_NAME in kow~2.patch kow~1.patch; do
-            PREREQ_URL="https://github.com/midori01/KernelSU/commit/${PREREQ_NAME}"
-            PREREQ_PATCH="${RUNNER_TEMP:-/tmp}/kowsu-prereq-${PREREQ_NAME}"
-            echo "fetching $PREREQ_URL"
-            if ! curl -fsSL "$PREREQ_URL" -o "$PREREQ_PATCH"; then
-              echo "::error::failed to fetch $PREREQ_URL"
-              exit 1
-            fi
-            if git apply --check "$PREREQ_PATCH" 2>/dev/null; then
-              git apply "$PREREQ_PATCH"
-              echo "applied $PREREQ_NAME"
-            elif (patch --dry-run -R --fuzz=3 -p1 < "$PREREQ_PATCH") >/tmp/kow_prereq_reverse.log 2>&1; then
-              echo "$PREREQ_NAME already present in this tree, skipping"
-            else
-              echo "::warning::$PREREQ_NAME does not apply to this KOWX712/KernelSU tree - MidoriSU Manager wiring from this prerequisite commit may be missing/incomplete; continuing with kow.patch only"
-            fi
-          done
-
           echo "== check/apply KowSU SUSFS enablement patch (midori01/KernelSU kow.patch) =="
 
           KOW_PATCH_URL="https://github.com/midori01/KernelSU/commit/kow.patch"
