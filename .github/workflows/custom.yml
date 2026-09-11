@@ -10,7 +10,7 @@ on:
       manager:
         type: choice
         required: true
-        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "MidoriSU-XX-Manual-Deinlined", "MidoriSU-BranchLink", "MidoriSU-Syscall-Table-Tamper", "MidoriSU-Deinlined", "MidoriSU-KOW-Deinlined", "MidoriSU-Next-Deinlined", "MidoriSU-Resuki-Deinlined"]
+        options: ["Vanilla", "KernelSU", "KernelSU-Backslashxx", "KowSU", "KernelSU-Next", "KSUN-Susfs-Hookless", "ResukiSU", "MidoriSU-BranchLink", "MidoriSU-Syscall-Table-Tamper", "MidoriSU-XX-Manual-Deinlined", "MidoriSU-Deinlined", "MidoriSU-KOW-Deinlined", "MidoriSU-Next-Deinlined", "MidoriSU-Resuki-Deinlined"]
         default: "Vanilla"
       manager_ref:
         description: "Optional manager git ref/commit/tag"
