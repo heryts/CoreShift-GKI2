@@ -427,6 +427,36 @@ runs:
             MidoriSU-BackslashXX-Deinlined) MIDORISU_ENABLE_PATCH_NAME="xx.patch" ;;
           esac
 
+          case "$MANAGER" in
+            MidoriSU-Deinlined)          MIDORISU_PREREQ_PATCHES="official~2.patch official~1.patch" ;;
+            MidoriSU-Next-Deinlined)     MIDORISU_PREREQ_PATCHES="next~2.patch next~1.patch" ;;
+            MidoriSU-ResukiSU-Deinlined) MIDORISU_PREREQ_PATCHES="resuki~1.patch" ;;
+            MidoriSU-KOW-Deinlined)        MIDORISU_PREREQ_PATCHES="kow~2.patch kow~1.patch" ;;
+            MidoriSU-BackslashXX-Deinlined) MIDORISU_PREREQ_PATCHES="xx~1.patch" ;;
+          esac
+
+          echo "== $MANAGER: applying prerequisite commit patch(es) before ${MIDORISU_ENABLE_PATCH_NAME} =="
+          echo "(midori01/gki_ksu_workflow applies these in its separate 'Setup Extra Features and"
+          echo "Fixes' step, before 'Setup SUSFS'; the final commit patch alone assumes these"
+          echo "prerequisite commits' changes are already present in the tree.)"
+          for PREREQ_NAME in $MIDORISU_PREREQ_PATCHES; do
+            PREREQ_URL="https://github.com/midori01/KernelSU/commit/${PREREQ_NAME}"
+            PREREQ_PATCH="${RUNNER_TEMP:-/tmp}/midorisu-prereq-${PREREQ_NAME}"
+            echo "fetching $PREREQ_URL"
+            if ! curl -fsSL "$PREREQ_URL" -o "$PREREQ_PATCH"; then
+              echo "::error::failed to fetch $PREREQ_URL"
+              exit 1
+            fi
+            if git apply --check "$PREREQ_PATCH" 2>/dev/null; then
+              git apply "$PREREQ_PATCH"
+              echo "applied $PREREQ_NAME"
+            elif (patch --dry-run -R --fuzz=3 -p1 < "$PREREQ_PATCH") >/tmp/prereq_reverse.log 2>&1; then
+              echo "$PREREQ_NAME already present in this tree, skipping"
+            else
+              echo "::warning::$PREREQ_NAME does not apply to this $MANAGER tree - MidoriSU Manager wiring from this prerequisite commit may be missing/incomplete; continuing with ${MIDORISU_ENABLE_PATCH_NAME} only"
+            fi
+          done
+
           echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
           echo "(kow.patch/xx.patch are applied as-is here, same as official/next/resuki - matching"
           echo "midori01/gki_ksu_workflow's own build-kernel.yml. The 'De-inlined' SUSFS hook type"
