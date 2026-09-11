@@ -424,6 +424,57 @@ jobs:
         with:
           kernel_version: ${{ inputs.kernel_version }}
 
+      - name: Dump pre-SUSFS source files
+        id: susfs-dump
+        if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dump_dir="susfs-source-dump"
+          mkdir -p "$dump_dir"
+
+          # File-file yang isinya dipatch oleh susfs4ksu (50_add_susfs_in_<branch>.patch)
+          # dan sering mismatch context antar fork/branch kernel/common.
+          targets=(
+            "fs/namespace.c"
+            "fs/proc/task_mmu.c"
+          )
+
+          found_any="false"
+          for rel in "${targets[@]}"; do
+            # Cari file tsb di seluruh workspace, apapun struktur direktori source-nya
+            match="$(find "$GITHUB_WORKSPACE" -type f -path "*/${rel}" 2>/dev/null | head -n1 || true)"
+            if [ -n "$match" ]; then
+              dest="${dump_dir}/${rel}"
+              mkdir -p "$(dirname "$dest")"
+              cp "$match" "$dest"
+              echo "Dumped: $match -> $dest"
+              found_any="true"
+            else
+              echo "::warning::Source file not found before SUSFS patch: ${rel}"
+            fi
+          done
+
+          {
+            echo "kernel_version=${{ inputs.kernel_version }}"
+            echo "manager=${{ inputs.manager }}"
+            echo "source_mode=${{ inputs.source_mode }}"
+            echo "source_repo=${{ steps.source-repo.outputs.source_repo }}"
+            echo "source_ref=${{ steps.source-repo.outputs.source_ref }}"
+            echo "dumped_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "${dump_dir}/DUMP_INFO.txt"
+
+          echo "dump_found=${found_any}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload pre-SUSFS source dump
+        if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless' && steps.susfs-dump.outputs.dump_found == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: susfs-source-dump-${{ inputs.kernel_version }}-${{ inputs.manager }}-${{ steps.build-name.outputs.date }}
+          path: susfs-source-dump/**
+          if-no-files-found: warn
+
       - name: Apply SUSFS4KSU patches
         if: inputs.susfs == 'on' && inputs.manager != 'KSUN-Susfs-Hookless'
         uses: ./.github/actions/apply-susfs
