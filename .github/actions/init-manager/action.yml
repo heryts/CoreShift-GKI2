@@ -57,19 +57,12 @@ runs:
           echo "== KSUN-Susfs-Hookless: using MirahSyakilla/KSUN fork (pinned via .gitmodules) =="
         fi
 
-        if [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== $MANAGER: plain backslashxx/KernelSU (submodule default), hook mode is a config-only choice =="
         fi
 
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] && [ "$SUSFS" = "on" ]; then
           echo "== KernelSU-Backslashxx + SUSFS: staying on backslashxx/KernelSU (submodule default) =="
-        fi
-
-        if [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ]; then
-          echo "== KernelSU-Backslashxx-Tinyfs: switching to backslashxx/KernelSU tinyfs branch =="
-          rm -rf "manager/${MANAGER}"
-          git clone --branch "tinyfs" --depth 1 "https://github.com/backslashxx/KernelSU.git" "manager/${MANAGER}"
-          echo "cloned backslashxx/KernelSU @ tinyfs"
         fi
 
         if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KSUN-Susfs-Hookless" ]; then
@@ -101,10 +94,9 @@ runs:
             'KernelSU-Next 6.1  (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.6  (pinned via .gitmodules branch)' \
             'KernelSU-Next 6.12 (pinned via .gitmodules branch)' \
-            'MidoriSU-Deinlined / MidoriSU-Next-Deinlined / MidoriSU-ResukiSU-Deinlined' \
+            'MidoriSU-Deinlined / MidoriSU-Next-Deinlined / MidoriSU-Resuki-Deinlined' \
             '                  *  (no static pin; live submodule HEAD, probed against official.patch/next.patch/resuki.patch)' \
-            'MidoriSU-KOW-Deinlined *  (no static pin; live submodule HEAD, probed against kow.patch)' \
-            'MidoriSU-BackslashXX-Deinlined *  (no static pin; live submodule HEAD, probed against xx.patch)'
+            'MidoriSU-KOW-Deinlined *  (no static pin; live submodule HEAD, probed against kow.patch)'
 
           probe_midori01_patch() {
             local patch_name="$1"
@@ -160,7 +152,7 @@ runs:
               SELECTED_MANAGER_REF=""
               MANAGER_REF_SOURCE="susfs-default (KSUN susfs+nomount-hookless branch)"
               ;;
-            KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12|MidoriSU-Manual:5.10|MidoriSU-Manual:6.1|MidoriSU-Manual:6.6|MidoriSU-Manual:6.12|MidoriSU-BranchLink:5.10|MidoriSU-BranchLink:6.1|MidoriSU-BranchLink:6.6|MidoriSU-BranchLink:6.12|MidoriSU-Syscall-Table-Tampering:5.10|MidoriSU-Syscall-Table-Tampering:6.1|MidoriSU-Syscall-Table-Tampering:6.6|MidoriSU-Syscall-Table-Tampering:6.12)
+            KernelSU-Backslashxx:5.10|KernelSU-Backslashxx:6.1|KernelSU-Backslashxx:6.6|KernelSU-Backslashxx:6.12|MidoriSU-XX-Manual-Deinlined:5.10|MidoriSU-XX-Manual-Deinlined:6.1|MidoriSU-XX-Manual-Deinlined:6.6|MidoriSU-XX-Manual-Deinlined:6.12|MidoriSU-BranchLink:5.10|MidoriSU-BranchLink:6.1|MidoriSU-BranchLink:6.6|MidoriSU-BranchLink:6.12|MidoriSU-Syscall-Table-Tamper:5.10|MidoriSU-Syscall-Table-Tamper:6.1|MidoriSU-Syscall-Table-Tamper:6.6|MidoriSU-Syscall-Table-Tamper:6.12)
               echo "== ${MANAGER}: probing xx.patch against live submodule HEAD before pinning =="
               LIVE_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
               XX_PROBE_PATCH="${RUNNER_TEMP:-/tmp}/xx-probe.patch"
@@ -193,17 +185,13 @@ runs:
               echo "== ${MANAGER}: probing next.patch against live submodule HEAD before pinning =="
               probe_midori01_patch "next.patch"
               ;;
-            MidoriSU-ResukiSU-Deinlined:5.10|MidoriSU-ResukiSU-Deinlined:6.1|MidoriSU-ResukiSU-Deinlined:6.6|MidoriSU-ResukiSU-Deinlined:6.12)
+            MidoriSU-Resuki-Deinlined:5.10|MidoriSU-Resuki-Deinlined:6.1|MidoriSU-Resuki-Deinlined:6.6|MidoriSU-Resuki-Deinlined:6.12)
               echo "== ${MANAGER}: probing resuki.patch against live submodule HEAD before pinning =="
               probe_midori01_patch "resuki.patch"
               ;;
             MidoriSU-KOW-Deinlined:5.10|MidoriSU-KOW-Deinlined:6.1|MidoriSU-KOW-Deinlined:6.6|MidoriSU-KOW-Deinlined:6.12)
               echo "== ${MANAGER}: probing kow.patch against live submodule HEAD before pinning =="
               probe_midori01_patch "kow.patch"
-              ;;
-            MidoriSU-BackslashXX-Deinlined:5.10|MidoriSU-BackslashXX-Deinlined:6.1|MidoriSU-BackslashXX-Deinlined:6.6|MidoriSU-BackslashXX-Deinlined:6.12)
-              echo "== ${MANAGER}: probing xx.patch against live submodule HEAD before pinning =="
-              probe_midori01_patch "xx.patch"
               ;;
             *)
               echo "::error::No SUSFS-compatible default manager ref for manager=${MANAGER}, kernel_version=${KERNEL_VERSION}. Set manager_ref explicitly."
@@ -234,7 +222,7 @@ runs:
 
         PRE_SETUP_MANAGER_HEAD="$MANAGER_HEAD"
 
-        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; }; then
+        if [ -z "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; }; then
           SELECTED_MANAGER_REF="$MANAGER_HEAD"
           MANAGER_REF_SOURCE="submodule-head"
           echo "using submodule HEAD as setup ref: $SELECTED_MANAGER_REF"
@@ -271,14 +259,14 @@ runs:
         if [ "$MANAGER" = "KernelSU-Next" ] && [ "$SUSFS" = "on" ]; then
           echo "== calling setup.sh with dev-susfs explicitly to prevent it from switching to latest tag =="
           bash "$SETUP_SCRIPT" "dev-susfs"
-        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; }; then
+        elif [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; }; then
           echo "== calling setup.sh with explicit ref to prevent it from switching to latest tag (FIX: de-inlined managers now included) =="
           bash "$SETUP_SCRIPT" "$SELECTED_MANAGER_REF"
         else
           bash "$SETUP_SCRIPT"
         fi
 
-        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; then
+        if [ "$MANAGER" = "KSUN-Susfs-Hookless" ] || [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== restore pinned submodule commit after setup.sh =="
           git -C "$MANAGER_DIR" checkout -f "$PRE_SETUP_MANAGER_HEAD"
           RESTORED_HEAD="$(git -C "$MANAGER_DIR" rev-parse HEAD)"
@@ -290,7 +278,7 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
               if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
@@ -402,7 +390,7 @@ runs:
           echo "integrated KSU describe: $INTEGRATED_KSU_DESCRIBE"
           git -C "$KSU_ROOT" remote -v || true
 
-          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ]; }; then
+          if [ -n "$SELECTED_MANAGER_REF" ] && { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; }; then
             if [ "$INTEGRATED_KSU_HEAD" != "$SELECTED_MANAGER_REF" ]; then
               echo "::error::Integrated KernelSU HEAD does not match selected manager ref"
               echo "::error::expected=$SELECTED_MANAGER_REF"
@@ -414,7 +402,7 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "KernelSU-Backslashxx-Tinyfs" ] || [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tampering" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
           GH_API_TOKEN="$GH_TOKEN"
@@ -473,18 +461,7 @@ runs:
           fi
         fi
 
-        if [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
-          # NOTE: for MidoriSU-BackslashXX-Deinlined, this patch is what actually makes
-          # "manual hook mode" a real hook. The Kconfig block for this manager (see
-          # config.yml) deliberately leaves both KSU_HACK_ARM64_BRANCH_LINK and
-          # KSU_TAMPER_SYSCALL_TABLE unset so the app's hook-type label stays "De-inlined
-          # SUSFS" instead of "Branch Link N/N" - but backslashxx/KernelSU's source has no
-          # working hook of its own when neither Kconfig is set. Without this patch, that
-          # combination silently builds a kernel with NO functioning hook at all: the
-          # manager still shows "Working" (it only checks the version banner) but
-          # `ksud debug su` fails with "could not retrieve kernelsu driver fd" and root
-          # grant never succeeds. Applying the same patch used by MidoriSU-Manual here
-          # gives this manager an actual manual-hook implementation to match its Kconfig.
+        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ]; then
           echo "== $MANAGER: applying scope-min-manual-hooks-v2.3.patch to kernel tree =="
 
           MANUAL_HOOKS_PATCH="${GITHUB_WORKSPACE}/.github/patches/manual-hooks/kernelsu/scope-min-manual-hooks-v2.3.patch"
@@ -497,9 +474,6 @@ runs:
           cd "$COMMON_DIR"
           if ! git apply --check "$MANUAL_HOOKS_PATCH"; then
             echo "::error::scope-min-manual-hooks-v2.3.patch does not apply to this kernel tree"
-            if [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
-              echo "::error::this patch was written/tested against the plain manual-hook source tree used by MidoriSU-Manual - it may need adjusting for backslashxx/KernelSU's own file layout"
-            fi
             exit 1
           fi
           git apply "$MANUAL_HOOKS_PATCH"
@@ -511,7 +485,7 @@ runs:
           echo "manual hooks patch applied"
         fi
 
-        if { [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "MidoriSU-ResukiSU-Deinlined" ]; } && [ "$SUSFS" = "off" ]; then
+        if { [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ]; } && [ "$SUSFS" = "off" ]; then
           echo "== $MANAGER: applying manual hooks (source patches only) =="
           echo "Kconfig flags (CONFIG_KSU_MANUAL_HOOK, AUTO_SETUID_HOOK, etc.)"
           echo "are applied later via private.fragment in create-config-fragment,"
@@ -578,7 +552,7 @@ runs:
       # Temporarily scoped to kernel_version=6.12 only - testing whether 6.1/6.6
       # need this patch too, or whether ResukiSU's Kbuild only hits the live-git
       # issue on 6.12. Remove the kernel_version check once that's confirmed.
-      if: (inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-ResukiSU-Deinlined') && env.BUILD_ENGINE == 'kleaf'
+      if: (inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-Resuki-Deinlined') && env.BUILD_ENGINE == 'kleaf'
       working-directory: kernel/common
       shell: bash
       run: |
