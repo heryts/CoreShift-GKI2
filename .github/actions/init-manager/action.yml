@@ -473,8 +473,19 @@ runs:
           fi
         fi
 
-        if [ "$MANAGER" = "MidoriSU-Manual" ]; then
-          echo "== MidoriSU-Manual: applying scope-min-manual-hooks-v2.3.patch to kernel tree =="
+        if [ "$MANAGER" = "MidoriSU-Manual" ] || [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+          # NOTE: for MidoriSU-BackslashXX-Deinlined, this patch is what actually makes
+          # "manual hook mode" a real hook. The Kconfig block for this manager (see
+          # config.yml) deliberately leaves both KSU_HACK_ARM64_BRANCH_LINK and
+          # KSU_TAMPER_SYSCALL_TABLE unset so the app's hook-type label stays "De-inlined
+          # SUSFS" instead of "Branch Link N/N" - but backslashxx/KernelSU's source has no
+          # working hook of its own when neither Kconfig is set. Without this patch, that
+          # combination silently builds a kernel with NO functioning hook at all: the
+          # manager still shows "Working" (it only checks the version banner) but
+          # `ksud debug su` fails with "could not retrieve kernelsu driver fd" and root
+          # grant never succeeds. Applying the same patch used by MidoriSU-Manual here
+          # gives this manager an actual manual-hook implementation to match its Kconfig.
+          echo "== $MANAGER: applying scope-min-manual-hooks-v2.3.patch to kernel tree =="
 
           MANUAL_HOOKS_PATCH="${GITHUB_WORKSPACE}/.github/patches/manual-hooks/kernelsu/scope-min-manual-hooks-v2.3.patch"
 
@@ -486,6 +497,9 @@ runs:
           cd "$COMMON_DIR"
           if ! git apply --check "$MANUAL_HOOKS_PATCH"; then
             echo "::error::scope-min-manual-hooks-v2.3.patch does not apply to this kernel tree"
+            if [ "$MANAGER" = "MidoriSU-BackslashXX-Deinlined" ]; then
+              echo "::error::this patch was written/tested against the plain manual-hook source tree used by MidoriSU-Manual - it may need adjusting for backslashxx/KernelSU's own file layout"
+            fi
             exit 1
           fi
           git apply "$MANUAL_HOOKS_PATCH"
