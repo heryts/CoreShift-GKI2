@@ -1,16 +1,16 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 
-# CoreShift-GKI
+# CoreShift-GKI2
 
-CoreShift-GKI is a GitHub Actions-based Android GKI LTS kernel builder.
+CoreShift-GKI2 is a GitHub Actions-based Android GKI kernel builder, forked and extended from [CoreShift-GKI](https://github.com/CoreShiftD/CoreShift-GKI) with a much wider set of root manager integrations (KernelSU forks, MidoriSU hook variants, SUSFS4KSU) and additional zram compressor/backend support.
 
 It helps you build flashable custom GKI kernels without setting up a full Android kernel build environment locally. You choose a kernel family, root manager, and optional features in GitHub Actions, then download the generated output.
 
 > Custom kernels can bootloop your device. Use this only if you know how to recover with recovery or fastboot.
 
-## What CoreShift-GKI Builds
+## What CoreShift-GKI2 Builds
 
-CoreShift-GKI can build Android GKI LTS kernels for supported Android kernel families and package them into flashable AnyKernel zip files.
+CoreShift-GKI2 can build Android GKI kernels for supported Android kernel families and package them into flashable AnyKernel zip files.
 
 It is designed for:
 
@@ -29,22 +29,28 @@ It is not a universal compatibility layer. A build that boots on one device, ROM
 | Android 12 GKI | `5.10` |
 | Android 14 GKI | `6.1` |
 | Android 15 GKI | `6.6` |
+| Android 16 GKI | `6.12` |
 
-Your selected GKI version must match your device and ROM.
-
-Android 16 `6.12` support is temporarily disabled while Android 16/Kleaf module and KMI issues are being cleaned up.
+Your selected GKI version must match your device and ROM. `6.12` is newer and less battle-tested than `5.10`/`6.1`/`6.6` — expect rougher edges around some optional features.
 
 ## Supported Root Manager Choices
 
 | Choice | Meaning |
 | --- | --- |
 | `Vanilla` | No root manager |
-| `KernelSU` | KernelSU support |
-| `KernelSU-Next` | KernelSU-Next support |
-| `KowSU` | KowSU support |
-| `ResukiSU` | ResukiSU support |
-| `Rissu` | Rissu support |
-| `Wild_KSU` | Wild_KSU support |
+| `KernelSU` | Official KernelSU |
+| `KernelSU-Backslashxx` | backslashxx/KernelSU fork |
+| `KernelSU-Next` | KernelSU-Next (official upstream) |
+| `KSUN-Susfs-Hookless` | KernelSU-Next hookless-SUSFS fork (MirahSyakilla) |
+| `KowSU` | KowSU |
+| `ResukiSU` | ReSukiSU |
+| `MidoriSU-BranchLink` | MidoriSU Manager, branch-link hijacking hook mode |
+| `MidoriSU-Syscall-Table-Tamper` | MidoriSU Manager, syscall-table tampering hook mode |
+| `MidoriSU-XX-Manual-Deinlined` | MidoriSU Manager, manual hook mode, de-inlined SUSFS |
+| `MidoriSU-Deinlined` | MidoriSU Manager, de-inlined SUSFS (staged/prerequisite patch chain) |
+| `MidoriSU-KOW-Deinlined` | MidoriSU Manager on KowSU, de-inlined SUSFS |
+| `MidoriSU-Next-Deinlined` | MidoriSU Manager on KernelSU-Next, de-inlined SUSFS |
+| `MidoriSU-Resuki-Deinlined` | MidoriSU Manager on ReSukiSU, de-inlined SUSFS |
 
 For your first root build, choose one manager and keep advanced features off. Confirm the kernel boots before enabling SUSFS or other extra features.
 
