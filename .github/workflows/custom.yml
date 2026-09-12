@@ -268,11 +268,55 @@ jobs:
           BUILD_DATE=""
           declare -a WARNINGS=()
 
+          # Collapse any markdown-style links (a common artifact of copying
+          # a message from Telegram/Discord/Slack, which auto-linkifies
+          # times/dates as "[09:13:52](https://...)") down to just the
+          # visible text, and drop any bare URLs left dangling. Do this
+          # FIRST so it never interferes with the date/name detection below.
+          if [[ "$RAW" == *"]("* ]]; then
+            CLEANED_RAW="$(sed -E 's/\[([^][]*)\]\(([^()]*)\)/\1/g; s#https?://[^]() 	]*##g' <<< "$RAW")"
+            if [ "$CLEANED_RAW" != "$RAW" ]; then
+              WARNINGS+=("build_stamp contained a markdown-style link (likely from copy-pasting a chat message); stripped it down to the plain text ('${CLEANED_RAW}').")
+              RAW="$CLEANED_RAW"
+            fi
+          fi
+
           # A build-date banner always looks like: Www Mon DD HH:MM:SS TZ YYYY
           DATE_RE='^[A-Za-z]{3}[[:space:]]+[A-Za-z]{3}[[:space:]]+[0-9]{1,2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]+[A-Za-z]{2,5}[[:space:]]+[0-9]{4}$'
           DATE_SCAN_RE='[A-Za-z]{3}[[:space:]]+[A-Za-z]{3}[[:space:]]+[0-9]{1,2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]+[A-Za-z]{2,5}[[:space:]]+[0-9]{4}'
+          WEEKDAY_RE='\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b'
+          MONTH_RE='\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b'
 
           trim() { sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<< "$1"; }
+
+          # General fallback for a date banner that got broken up by *any*
+          # kind of junk between its pieces (not just markdown links) — a
+          # stray emoji, HTML entity, double space, OCR artifact, etc.
+          # Instead of matching one contiguous pattern, find each component
+          # (weekday name, month name, day, time, timezone, year) wherever
+          # it appears in the string and rebuild a clean banner from them.
+          extract_date_banner() {
+            local s="$1" weekday month day time tz year rest
+            weekday="$(grep -oE "$WEEKDAY_RE" <<< "$s" | head -n1)"
+            month="$(grep -oE "$MONTH_RE" <<< "$s" | head -n1)"
+            time="$(grep -oE '[0-9]{2}:[0-9]{2}:[0-9]{2}' <<< "$s" | head -n1)"
+            year="$(grep -oE '\b(19|20)[0-9]{2}\b' <<< "$s" | head -n1)"
+            [ -z "$weekday" ] && return 1
+            [ -z "$month" ] && return 1
+            [ -z "$time" ] && return 1
+            [ -z "$year" ] && return 1
+            # Day: the first 1-2 digit number after the month name, so a
+            # digit from an unrelated URL/id elsewhere doesn't get picked.
+            rest="${s#*"$month"}"
+            day="$(grep -oE '[0-9]{1,2}' <<< "$rest" | head -n1)"
+            [ -z "$day" ] && return 1
+            # Timezone: first all-caps 2-5 letter word after the time
+            # (weekday/month are title-case, so they never match this).
+            rest="${s#*"$time"}"
+            tz="$(grep -oE '\b[A-Z]{2,5}\b' <<< "$rest" | head -n1)"
+            [ -z "$tz" ] && tz="UTC"
+            echo "${weekday} ${month} ${day} ${time} ${tz} ${year}"
+          }
 
           # Clean up whatever separator/junk is left dangling on the name
           # side once the date has been cut out: a trailing '|', ',', ';',
@@ -298,6 +342,15 @@ jobs:
               if [[ "$RAW" != *"|"* ]]; then
                 WARNINGS+=("build_stamp had no (or a broken) '|' separator; auto-detected the date banner ('${BUILD_DATE}') and derived the name ('${BUILD_NAME}') from the rest. Use 'name|date' for a guaranteed-clean split.")
               fi
+            elif RECONSTRUCTED_DATE="$(extract_date_banner "$RAW")"; then
+              # The date's individual pieces (weekday/month/day/time/tz/year)
+              # are all present but scattered/interrupted by something other
+              # than a clean contiguous run — reassemble them into a proper
+              # banner instead of giving up and defaulting.
+              BUILD_DATE="$RECONSTRUCTED_DATE"
+              WEEKDAY_TOKEN="${RECONSTRUCTED_DATE%% *}"
+              BUILD_NAME="$(strip_trailing_junk "${RAW%%"$WEEKDAY_TOKEN"*}")"
+              WARNINGS+=("build_stamp's date banner was broken up by extra characters (a stray symbol, leftover link fragment, double space, etc.); reconstructed it from its individual pieces as '${BUILD_DATE}'.")
             elif [[ "$RAW" == *"|"* ]]; then
               # Explicit '|' given but nothing date-shaped on the other side
               # (e.g. only a name was filled in, with a trailing '|').
@@ -329,6 +382,19 @@ jobs:
           if [[ -n "$BUILD_NAME" && "$BUILD_NAME" == *[[:space:]]* ]]; then
             WARNINGS+=("custom build name ('${BUILD_NAME}') still contained whitespace after parsing; collapsing spaces to '-' to keep KERNELRELEASE safe.")
             BUILD_NAME="$(tr -s '[:space:]' '-' <<< "$BUILD_NAME")"
+          fi
+
+          # Validate the name itself: a kernel version/suffix should only
+          # ever contain letters, digits, dots, dashes, underscores, and
+          # plus signs (the normal git-describe/localversion charset). If
+          # anything else survived cleanup (emoji, stray punctuation,
+          # leftover junk that wasn't a date or a known separator), the
+          # input was too broken to trust — drop it and let build-kernel
+          # use the actual synced source version instead of a garbage name.
+          NAME_ALLOWED_RE='^[A-Za-z0-9._+-]+$'
+          if [[ -n "$BUILD_NAME" ]] && ! [[ "$BUILD_NAME" =~ $NAME_ALLOWED_RE ]]; then
+            WARNINGS+=("custom build name ('${BUILD_NAME}') still contains characters that don't belong in a kernel version/suffix after cleanup; ignoring it — build-kernel will use the actual synced source version instead.")
+            BUILD_NAME=""
           fi
 
           # Validate the date banner shape; if malformed, drop it and let
