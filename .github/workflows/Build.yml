@@ -100,7 +100,7 @@ on:
         options: ["release", "artifact", "both"]
         default: "artifact"
       build_stamp:
-        description: "Custom kernel version + date. Recommended: 'NAME|DATE' (e.g. 5.10.237-abc123|Wed Sep 17 09:13:52 UTC 2025). Leave empty to keep default."
+        description: "Custom kernel version + date. Format: 'NAME|DATE' (e.g. 5.10.237-abc123|Wed Sep 17 09:13:52 UTC 2025). Leave empty to keep default."
         required: false
         default: ""
 
