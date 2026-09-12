@@ -266,48 +266,12 @@ jobs:
           RAW="${{ inputs.build_stamp }}"
           BUILD_NAME=""
           BUILD_DATE=""
-          declare -a WARNINGS=()
-
-          # A build-date banner always looks like: Www Mon DD HH:MM:SS TZ YYYY
-          DATE_RE='^[A-Za-z]{3}[[:space:]]+[A-Za-z]{3}[[:space:]]+[0-9]{1,2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]+[A-Za-z]{2,5}[[:space:]]+[0-9]{4}$'
-          DATE_SCAN_RE='[A-Za-z]{3}[[:space:]]+[A-Za-z]{3}[[:space:]]+[0-9]{1,2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]+[A-Za-z]{2,5}[[:space:]]+[0-9]{4}'
-
-          trim() { sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<< "$1"; }
 
           if [ -n "$RAW" ]; then
-            if [[ "$RAW" == *"|"* ]]; then
-              # Explicit "name|date" separator given — trust it, just trim whitespace.
-              BUILD_NAME="$(trim "${RAW%%|*}")"
-              BUILD_DATE="$(trim "${RAW#*|}")"
-            elif [[ "$RAW" =~ $DATE_SCAN_RE ]]; then
-              # No '|' — but a date-shaped banner is embedded in the string
-              # (e.g. someone pasted "5.10.269-#1 SMP PREEMPT Wed Sep 17
-              # 09:13:52 UTC 2025" as one field). Auto-split it out so the
-              # date never ends up glued onto the build name/suffix.
-              BUILD_DATE="${BASH_REMATCH[0]}"
-              BUILD_NAME="$(trim "${RAW%%"$BUILD_DATE"*}")"
-              WARNINGS+=("build_stamp had no '|' separator; auto-detected an embedded date banner ('${BUILD_DATE}') and split it from the name ('${BUILD_NAME}'). Use 'name|date' next time to avoid ambiguity.")
-            else
-              # No '|' and nothing date-shaped — treat the whole thing as the name.
-              BUILD_NAME="$(trim "$RAW")"
+            BUILD_NAME="${RAW%%|*}"
+            if [ "$RAW" != "${RAW#*|}" ]; then
+              BUILD_DATE="${RAW#*|}"
             fi
-          fi
-
-          # Defense-in-depth: a build name/suffix must never contain
-          # whitespace, or it corrupts KERNELRELEASE downstream and breaks
-          # the kernel's modules_install step. Collapse instead of failing
-          # the build outright.
-          if [[ -n "$BUILD_NAME" && "$BUILD_NAME" == *[[:space:]]* ]]; then
-            WARNINGS+=("custom build name ('${BUILD_NAME}') contained whitespace; collapsing spaces to '-' to keep KERNELRELEASE safe.")
-            BUILD_NAME="$(tr -s '[:space:]' '-' <<< "$BUILD_NAME")"
-          fi
-
-          # Validate the date banner shape; if malformed, drop it and let
-          # build-kernel default to the current UTC time instead of baking
-          # in garbage.
-          if [[ -n "$BUILD_DATE" ]] && ! [[ "$BUILD_DATE" =~ $DATE_RE ]]; then
-            WARNINGS+=("custom build date ('${BUILD_DATE}') doesn't match 'Www Mon DD HH:MM:SS TZ YYYY'; ignoring it — build-kernel will default to the current UTC time.")
-            BUILD_DATE=""
           fi
 
           echo "custom_build_name=${BUILD_NAME}" >> "$GITHUB_OUTPUT"
@@ -316,9 +280,6 @@ jobs:
           if [ -n "$BUILD_NAME" ] || [ -n "$BUILD_DATE" ]; then
             echo "Custom build stamp requested -> name='${BUILD_NAME}' date='${BUILD_DATE}'"
           fi
-          for w in "${WARNINGS[@]:-}"; do
-            [ -n "$w" ] && echo "::warning::$w"
-          done
 
       - name: Install host tools
         uses: ./.github/actions/install-host-tools
