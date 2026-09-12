@@ -100,7 +100,7 @@ on:
         options: ["release", "artifact", "both"]
         default: "artifact"
       build_stamp:
-        description: "Custom kernel version + date. Recommended: 'NAME|DATE' (e.g. 5.10.237-abc123|Wed Sep 17 09:13:52 UTC 2025) — but the parser auto-detects the date even if '|' is missing/wrong. Leave empty to keep default."
+        description: "Custom kernel version + date. Recommended: 'NAME|DATE' (e.g. 5.10.237-abc123|Wed Sep 17 09:13:52 UTC 2025). Leave empty to keep default."
         required: false
         default: ""
 
@@ -304,9 +304,20 @@ jobs:
           # (in any combination someone might have typed/pasted).
           strip_trailing_junk() {
             local s="$1"
-            s="$(sed -E 's/[[:space:]]*[|,;@][[:space:]]*$//' <<< "$s")"
+            # Peel off a "#<num> SMP PREEMPT" banner remnant first — its
+            # letters are otherwise "valid" name characters, so the generic
+            # pass below wouldn't remove them on its own.
             s="$(sed -E 's/[[:space:]]*#[0-9]*[[:space:]]*(SMP)?[[:space:]]*(PREEMPT)?[[:space:]]*$//I' <<< "$s")"
-            s="$(sed -E 's/[[:space:]]*[|,;@][[:space:]]*$//' <<< "$s")"
+            # Then strip ANY trailing run of characters that don't belong
+            # in a kernel version/suffix — not just a fixed separator list.
+            # Covers '|', ',', ';', '@', and also stray quotes/parens/
+            # brackets left over from pasting a quoted chat message like
+            # "...name|('Wed Sep 17 ...')".
+            s="$(sed -E "s/[^A-Za-z0-9._+-]+\$//" <<< "$s")"
+            # Run the banner-remnant pass once more in case punctuation was
+            # hiding it (e.g. "...-#1' SMP PREEMPT'").
+            s="$(sed -E 's/[[:space:]]*#[0-9]*[[:space:]]*(SMP)?[[:space:]]*(PREEMPT)?[[:space:]]*$//I' <<< "$s")"
+            s="$(sed -E "s/[^A-Za-z0-9._+-]+\$//" <<< "$s")"
             trim "$s"
           }
 
@@ -360,8 +371,8 @@ jobs:
           # the kernel's modules_install step. Collapse instead of failing
           # the build outright.
           if [[ -n "$BUILD_NAME" && "$BUILD_NAME" == *[[:space:]]* ]]; then
-            WARNINGS+=("custom build name ('${BUILD_NAME}') still contained whitespace after parsing; collapsing spaces to '-' to keep KERNELRELEASE safe.")
-            BUILD_NAME="$(tr -s '[:space:]' '-' <<< "$BUILD_NAME")"
+            WARNINGS+=("custom build name ('${BUILD_NAME}') still contained whitespace after parsing; removing the spaces (instead of dashing them) to keep KERNELRELEASE safe.")
+            BUILD_NAME="$(tr -d '[:space:]' <<< "$BUILD_NAME")"
           fi
 
           # Validate the name itself: a kernel version/suffix should only
