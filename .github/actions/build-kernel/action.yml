@@ -115,11 +115,11 @@ runs:
           # setlocalversion. If it ever contains whitespace (e.g. a raw
           # uname/date banner slipped through upstream parsing), the kernel's
           # stock scripts/Makefile.modinst word-splits it during
-          # modules_install and fails with "ln: ... File exists". Collapse
-          # instead of letting that happen silently.
+          # modules_install and fails with "ln: ... File exists". Strip the
+          # whitespace out entirely instead of letting that happen silently.
           if [[ "$BUILD_SUFFIX" == *[[:space:]]* ]]; then
-            echo "::warning::custom_build_name suffix ('$BUILD_SUFFIX') contains whitespace; collapsing to '-' so it cannot corrupt KERNELRELEASE."
-            BUILD_SUFFIX="$(tr -s '[:space:]' '-' <<< "$BUILD_SUFFIX")"
+            echo "::warning::custom_build_name suffix ('$BUILD_SUFFIX') contains whitespace; removing the spaces so it cannot corrupt KERNELRELEASE."
+            BUILD_SUFFIX="$(tr -d '[:space:]' <<< "$BUILD_SUFFIX")"
           fi
 
           # Defense-in-depth: the kernel enforces a hard 64-character limit
