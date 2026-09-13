@@ -278,7 +278,7 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
+        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
               if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
@@ -302,6 +302,8 @@ runs:
               elif grep -q 'return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);' "$APK_SIGN_FILE"; then
                 echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, EXPECTED_MANAGER_SIZE/EXPECTED_MANAGER_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
+                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
+                  # package name) gets rejected before the signature is ever checked.
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
                 fi
                 sed -i '/return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);/i\
@@ -309,7 +311,7 @@ runs:
                   \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
                   \t\treturn true;' "$APK_SIGN_FILE"
               else
-                echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, backslashxx/KowSU-lineage apk_sign.c layout) =="
+                echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, on top of $MANAGER's own manager signature) =="
                 sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
                   /return true;/a\
                   \
@@ -387,7 +389,11 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
-        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ]; then
+        if [ "$MANAGER" = "KernelSU-Backslashxx" ]; then
+          echo "== $MANAGER: KSU_VERSION commit-count sync with midori01/KernelSU disabled (kernel_version stays source default); this manager tracks backslashxx/KernelSU, not midori01 =="
+        fi
+
+        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
           GH_API_TOKEN="$GH_TOKEN"
