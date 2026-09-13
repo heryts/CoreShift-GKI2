@@ -402,22 +402,6 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
-        echo "== apply mount-hide patch (JingMatrix/KernelSU@80a3ab3) to all managers =="
-        MOUNT_HIDE_PATCH="${RUNNER_TEMP:-/tmp}/mount-hide-80a3ab3.patch"
-        MOUNT_HIDE_LOG="${RUNNER_TEMP:-/tmp}/mount-hide-80a3ab3.log"
-
-        if curl -fsSL "https://github.com/JingMatrix/KernelSU/commit/80a3ab31eb108a5515ecaea0f4799a035b7d1ce1.patch" -o "$MOUNT_HIDE_PATCH"; then
-          if git -C "$KSU_ROOT" apply --check "$MOUNT_HIDE_PATCH" >"$MOUNT_HIDE_LOG" 2>&1; then
-            git -C "$KSU_ROOT" apply "$MOUNT_HIDE_PATCH"
-            echo "mount-hide patch (80a3ab3) applied to $MANAGER at $KSU_ROOT"
-          else
-            echo "::warning::mount-hide patch (80a3ab3) does not apply cleanly to $MANAGER's integrated source ($KSU_ROOT); skipping for this manager"
-            sed -n '1,40p' "$MOUNT_HIDE_LOG"
-          fi
-        else
-          echo "::warning::failed to fetch mount-hide patch (80a3ab3) from JingMatrix/KernelSU; skipping for $MANAGER"
-        fi
-
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
@@ -558,6 +542,37 @@ runs:
 
           echo "== ReSukiSU manual hook integration diff stat =="
           git diff --stat
+        fi
+
+        echo "== harden: setgroups gid-3009 protection must never be unhooked (all managers) =="
+
+        SETGROUPS_HDR="$(find -L "$KSU_ROOT" -type f -name temp_patch_setgroups.h 2>/dev/null | head -n 1 || true)"
+
+        if [ -z "$SETGROUPS_HDR" ]; then
+          echo "== $MANAGER: no kernel/downstream/temp_patch_setgroups.h in this source tree, nothing to harden =="
+        else
+          echo "== $MANAGER: found $SETGROUPS_HDR =="
+
+          SETGROUPS_PATCH="${GITHUB_WORKSPACE}/.github/patches/downstream/temp-patch-setgroups-permanent.patch"
+          SETGROUPS_HDR_ROOT="$(dirname "$(dirname "$SETGROUPS_HDR")")" # .../kernel/downstream -> ..
+
+          if [ -f "$SETGROUPS_PATCH" ] && (cd "$SETGROUPS_HDR_ROOT" && git apply --check "$SETGROUPS_PATCH" 2>/dev/null); then
+            (cd "$SETGROUPS_HDR_ROOT" && git apply "$SETGROUPS_PATCH")
+            echo "== $MANAGER: applied temp-patch-setgroups-permanent.patch (compiled out ksu_unhook_setgroups) =="
+          else
+            echo "== $MANAGER: hardening patch text doesn't match this fork's copy of the file verbatim; relying on the call-site guard below =="
+          fi
+
+          # Belt-and-braces: regardless of whether the patch applied above, fail the
+          # build if *anything* in this manager's source actually calls the unhook.
+          # This is what actually guarantees the gid-3009 protection can't be removed
+          # after boot, independent of how any given fork's file happens to be shaped.
+          if grep -RIn 'ksu_unhook_setgroups();' "$KSU_ROOT" 2>/dev/null; then
+            echo "::error::${MANAGER}: ksu_unhook_setgroups() is called somewhere in this source tree."
+            echo "::error::That removes the gid-3009 setgroups protection after boot and must not ship."
+            exit 1
+          fi
+          echo "== $MANAGER: confirmed ksu_unhook_setgroups() is never called - protection stays permanent =="
         fi
 
         cd "$COMMON_DIR"
