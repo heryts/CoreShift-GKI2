@@ -564,15 +564,26 @@ runs:
           fi
 
           # Belt-and-braces: regardless of whether the patch applied above, fail the
-          # build if *anything* in this manager's source actually calls the unhook.
-          # This is what actually guarantees the gid-3009 protection can't be removed
-          # after boot, independent of how any given fork's file happens to be shaped.
-          if grep -RIn 'ksu_unhook_setgroups();' "$KSU_ROOT" 2>/dev/null; then
-            echo "::error::${MANAGER}: ksu_unhook_setgroups() is called somewhere in this source tree."
+          # build if *anything* in this manager's source references the unhook
+          # symbol outside its own definition - whether as a direct call
+          # (`ksu_unhook_setgroups();`) or handed off as a function pointer/thread
+          # entry point (e.g. `kthread_run(ksu_unhook_setgroups, ...)`, as the real
+          # backslashxx/KernelSU@cff5578 "unhook at boot complete" commit does).
+          # This is what actually guarantees the gid-3009 protection can't be
+          # removed after boot, independent of how any given fork wires it up.
+          UNHOOK_REFS="$(
+            grep -RIn 'ksu_unhook_setgroups' "$KSU_ROOT" 2>/dev/null \
+              | grep -vE '(static[[:space:]]+(int|void)[[:space:]]+ksu_unhook_setgroups[[:space:]]*\()' \
+              || true
+          )"
+
+          if [ -n "$UNHOOK_REFS" ]; then
+            echo "::error::${MANAGER}: ksu_unhook_setgroups is referenced outside its own definition:"
+            printf '%s\n' "$UNHOOK_REFS"
             echo "::error::That removes the gid-3009 setgroups protection after boot and must not ship."
             exit 1
           fi
-          echo "== $MANAGER: confirmed ksu_unhook_setgroups() is never called - protection stays permanent =="
+          echo "== $MANAGER: confirmed ksu_unhook_setgroups is never referenced/called - protection stays permanent =="
         fi
 
         cd "$COMMON_DIR"
