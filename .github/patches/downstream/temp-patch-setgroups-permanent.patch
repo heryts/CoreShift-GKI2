@@ -1,0 +1,34 @@
+--- a/kernel/downstream/temp_patch_setgroups.h	2026-08-22 15:21:16.000000000 +0000
++++ b/kernel/downstream/temp_patch_setgroups.h	2026-09-13 13:29:12.115625266 +0000
+@@ -154,6 +154,23 @@
+ #endif  /* < 4.19 */
+ #endif // ARM
+ 
++/*
++ * SECURITY NOTE: intentionally never called.
++ *
++ * ksu_modify_setgroups() strips gid 3009 from any setgroups() request
++ * (other than adbd's), and that protection must stay installed for the
++ * lifetime of the kernel, not just "until boot completes". A process
++ * that keeps or later reacquires gid 3009 keeps whatever access that
++ * group grants for as long as it runs, so unhooking this after boot
++ * (the historical `on_boot_completed()` -> ksu_unhook_setgroups() wiring
++ * some forks used) reopens exactly the exposure this patch exists to
++ * close. Do not wire this back into on_boot_completed(), the boot-
++ * completed supercall handler, or any other lifecycle callback.
++ *
++ * Left here (compiled out) for reference only, in case the restore
++ * logic itself needs auditing/updating alongside read_and_replace_syscall().
++ */
++#if 0
+ static int ksu_unhook_setgroups()
+ {
+ #ifdef CONFIG_ARM64
+@@ -168,6 +185,7 @@
+ 	
+ 	return 0;
+ }
++#endif
+ 
+ static void ksu_init_setgroups_patch()
+ {
