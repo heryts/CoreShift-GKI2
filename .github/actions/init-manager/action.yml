@@ -553,19 +553,8 @@ runs:
         else
           echo "== $MANAGER: found $SETGROUPS_HDR =="
 
-          SETGROUPS_PATCH="${GITHUB_WORKSPACE}/.github/patches/downstream/temp-patch-setgroups-permanent.patch"
-          SETGROUPS_HDR_ROOT="$(dirname "$(dirname "$SETGROUPS_HDR")")" # .../kernel/downstream -> ..
-
-          if [ -f "$SETGROUPS_PATCH" ] && (cd "$SETGROUPS_HDR_ROOT" && git apply --check "$SETGROUPS_PATCH" 2>/dev/null); then
-            (cd "$SETGROUPS_HDR_ROOT" && git apply "$SETGROUPS_PATCH")
-            echo "== $MANAGER: applied temp-patch-setgroups-permanent.patch (compiled out ksu_unhook_setgroups) =="
-          else
-            echo "== $MANAGER: hardening patch text doesn't match this fork's copy of the file verbatim; relying on the call-site guard below =="
-          fi
-
-          # Belt-and-braces: regardless of whether the patch applied above, fail the
-          # build if *anything* in this manager's source references the unhook
-          # symbol outside its own definition - whether as a direct call
+          # Fail the build if *anything* in this manager's source references the
+          # unhook symbol outside its own definition - whether as a direct call
           # (`ksu_unhook_setgroups();`) or handed off as a function pointer/thread
           # entry point (e.g. `kthread_run(ksu_unhook_setgroups, ...)`, as the real
           # backslashxx/KernelSU@cff5578 "unhook at boot complete" commit does).
