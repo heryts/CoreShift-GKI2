@@ -278,7 +278,11 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
+        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
+          # NOTE: KowSU and KernelSU-Backslashxx are intentionally excluded here.
+          # Even when SUSFS=on routes them through the deinlined kernel source patches
+          # (xx.patch / kow.patch), they keep using their own manager app's signature only ---
+          # the MidoriSU apk_sign dual-sign patch applies solely to actual MidoriSU-* manager builds.
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
               if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
@@ -311,7 +315,13 @@ runs:
                   \tif (check_v2_signature(path, 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42"))\
                   \t\treturn true;' "$APK_SIGN_FILE"
               else
-                echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, on top of $MANAGER's own manager signature) =="
+                # Fallback layout: apk_sign.c inherited from the backslashxx/KowSU lineage
+                # (anchor comment "// KOWX712/KernelSU"). Still hit by MidoriSU-KOW-Deinlined,
+                # MidoriSU-XX-Manual-Deinlined, MidoriSU-BranchLink, and
+                # MidoriSU-Syscall-Table-Tamper, since their apk_sign.c keeps this upstream
+                # layout even after being deinlined. Do not remove as "dead code" --
+                # only KowSU/KernelSU-Backslashxx themselves were excluded above, not this layout.
+                echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, backslashxx/KowSU-lineage apk_sign.c layout) =="
                 sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
                   /return true;/a\
                   \
@@ -389,7 +399,12 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
-        if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
+        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
+          # NOTE: KowSU and KernelSU-Backslashxx are intentionally excluded here too.
+          # The 30999+commit_count formula tracks midori01/KernelSU's manager app versioning,
+          # which is far ahead of KowSU's/backslashxx's own manager version numbering ---
+          # syncing it in would report a KSU_VERSION the real manager app can't match
+          # (uapi/version mismatch warnings in the manager app).
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
           GH_API_TOKEN="$GH_TOKEN"
