@@ -402,6 +402,22 @@ runs:
           echo "::warning::Integrated KSU root is not a git repository; cannot verify exact HEAD"
         fi
 
+        echo "== apply mount-hide patch (JingMatrix/KernelSU@80a3ab3) to all managers =="
+        MOUNT_HIDE_PATCH="${RUNNER_TEMP:-/tmp}/mount-hide-80a3ab3.patch"
+        MOUNT_HIDE_LOG="${RUNNER_TEMP:-/tmp}/mount-hide-80a3ab3.log"
+
+        if curl -fsSL "https://github.com/JingMatrix/KernelSU/commit/80a3ab31eb108a5515ecaea0f4799a035b7d1ce1.patch" -o "$MOUNT_HIDE_PATCH"; then
+          if git -C "$KSU_ROOT" apply --check "$MOUNT_HIDE_PATCH" >"$MOUNT_HIDE_LOG" 2>&1; then
+            git -C "$KSU_ROOT" apply "$MOUNT_HIDE_PATCH"
+            echo "mount-hide patch (80a3ab3) applied to $MANAGER at $KSU_ROOT"
+          else
+            echo "::warning::mount-hide patch (80a3ab3) does not apply cleanly to $MANAGER's integrated source ($KSU_ROOT); skipping for this manager"
+            sed -n '1,40p' "$MOUNT_HIDE_LOG"
+          fi
+        else
+          echo "::warning::failed to fetch mount-hide patch (80a3ab3) from JingMatrix/KernelSU; skipping for $MANAGER"
+        fi
+
         if [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
