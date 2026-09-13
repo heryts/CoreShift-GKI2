@@ -288,8 +288,6 @@ runs:
               elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
                 echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, EXPECTED_SIZE/EXPECTED_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
-                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
-                  # package name) gets rejected before the signature is ever checked.
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
                 fi
                 sed -i '/if (check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {/,/^    }$/{
@@ -302,8 +300,6 @@ runs:
               elif grep -q 'return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);' "$APK_SIGN_FILE"; then
                 echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, EXPECTED_MANAGER_SIZE/EXPECTED_MANAGER_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
-                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
-                  # package name) gets rejected before the signature is ever checked.
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
                 fi
                 sed -i '/return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);/i\
@@ -393,7 +389,7 @@ runs:
           echo "== $MANAGER: KSU_VERSION commit-count sync with midori01/KernelSU disabled (kernel_version stays source default); this manager tracks backslashxx/KernelSU, not midori01 =="
         fi
 
-        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
+        if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ]; then
           echo "== sync KSU_VERSION with midori01/KernelSU commit count (matches manager app versioning) =="
 
           GH_API_TOKEN="$GH_TOKEN"
@@ -431,20 +427,28 @@ runs:
             KSU_MAKEFILE="$KSU_ROOT/kernel/Makefile"
             KSU_KBUILD="$KSU_ROOT/kernel/Kbuild"
 
-            if [ -f "$KSU_MAKEFILE" ]; then
-              sed -i "s|^CFLAGS_ksu\.o += -DKSU_VERSION=.*|CFLAGS_ksu.o += -DKSU_VERSION=${SYNCED_KSU_VERSION}|" "$KSU_MAKEFILE"
-              if grep -q -- "-DKSU_VERSION=${SYNCED_KSU_VERSION}" "$KSU_MAKEFILE"; then
-                echo "patched $KSU_MAKEFILE -> KSU_VERSION=$SYNCED_KSU_VERSION"
+            if [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
+              if [ -f "$KSU_MAKEFILE" ]; then
+                sed -i "s|^CFLAGS_ksu\.o += -DKSU_VERSION=.*|CFLAGS_ksu.o += -DKSU_VERSION=${SYNCED_KSU_VERSION}|" "$KSU_MAKEFILE"
+                if grep -q -- "-DKSU_VERSION=${SYNCED_KSU_VERSION}" "$KSU_MAKEFILE"; then
+                  echo "patched $KSU_MAKEFILE -> KSU_VERSION=$SYNCED_KSU_VERSION"
+                else
+                  echo "::warning::-DKSU_VERSION pattern not found/replaced in $KSU_MAKEFILE; source default kept"
+                fi
               else
-                echo "::warning::-DKSU_VERSION pattern not found/replaced in $KSU_MAKEFILE; source default kept"
+                echo "::warning::$KSU_MAKEFILE not found, skipping Makefile patch"
               fi
             else
-              echo "::warning::$KSU_MAKEFILE not found, skipping Makefile patch"
+              echo "== $MANAGER: skipping Makefile-level patch (this lineage defines KSU_VERSION in Kbuild, not Makefile) =="
             fi
 
             if [ -f "$KSU_KBUILD" ]; then
               sed -i "s|^ccflags-y += -DKSU_VERSION=.*|ccflags-y += -DKSU_VERSION=${SYNCED_KSU_VERSION}|" "$KSU_KBUILD"
-              echo "also patched $KSU_KBUILD (if pattern existed)"
+              if grep -q -- "-DKSU_VERSION=${SYNCED_KSU_VERSION}" "$KSU_KBUILD"; then
+                echo "patched $KSU_KBUILD -> KSU_VERSION=$SYNCED_KSU_VERSION"
+              else
+                echo "::warning::-DKSU_VERSION pattern not found/replaced in $KSU_KBUILD either; source default kept"
+              fi
             fi
 
             mkdir -p "${GITHUB_WORKSPACE}/commit_info"
