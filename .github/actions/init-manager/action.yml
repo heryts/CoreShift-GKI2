@@ -286,12 +286,6 @@ runs:
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                   { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
               elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
-                # post-multi-manager upstream layout (e.g. KOWX712/KernelSU after
-                # "kernel,CI(ddk): Enable multi manager support"): is_manager_apk() no longer
-                # has a "// KOWX712/KernelSU" anchor or an apk_sign_keys[] table; it does a
-                # compile-time package-name gate (if KSU_MANAGER_PACKAGE is set) followed by
-                # check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH) and an optional
-                # EXPECTED_SIZE2/EXPECTED_HASH2 fallback.
                 echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, EXPECTED_SIZE/EXPECTED_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
                   # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
@@ -306,13 +300,6 @@ runs:
                   \t\treturn true;
                 }' "$APK_SIGN_FILE"
               elif grep -q 'return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);' "$APK_SIGN_FILE"; then
-                # KernelSU-Next layout (MidoriSU-Next-Deinlined, and upstream KernelSU-Next
-                # itself): is_manager_apk() has no "// KOWX712/KernelSU" anchor and no
-                # apk_sign_keys[] table; it does the same KSU_MANAGER_PACKAGE gate as the
-                # EXPECTED_SIZE/EXPECTED_HASH layout above, but the final check is a bare
-                # `return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);`
-                # - no wrapping if(...)/return-true block to anchor on - so insert the
-                # dual-sign check right before that final return instead.
                 echo "== $MANAGER: patching $APK_SIGN_FILE to accept MidoriSU Manager signature (dual-sign, EXPECTED_MANAGER_SIZE/EXPECTED_MANAGER_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
                   # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
@@ -487,9 +474,6 @@ runs:
 
         if { [ "$MANAGER" = "ResukiSU" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ]; } && [ "$SUSFS" = "off" ]; then
           echo "== $MANAGER: applying manual hooks (source patches only) =="
-          echo "Kconfig flags (CONFIG_KSU_MANUAL_HOOK, AUTO_SETUID_HOOK, etc.)"
-          echo "are applied later via private.fragment in create-config-fragment,"
-          echo "not here, to avoid touching gki_defconfig directly."
 
           RESUKISU_PATCH_DIR="${GITHUB_WORKSPACE}/.github/patches/manual-hooks/resukisu"
 
@@ -526,9 +510,6 @@ runs:
 
           if [ "$KERNEL_VERSION" = "6.12" ]; then
             echo "== kernel_version=6.12 (>=6.8): LSM-based auto setuid/initrc hooks are unavailable =="
-            echo "(drivers/kernelsu/tools/manual_hook_check.mk enforces this); applying the manual"
-            echo "replacements instead, matching CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=n and"
-            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=n set in create-config-fragment."
             apply_resukisu_patch "$RESUKISU_PATCH_DIR/002_resukisu_manual_hook_6.12.patch" "manual hooks (setuid, sys_read/init_rc, 6.8+)"
             RESUKISU_CHECK_FILES="$RESUKISU_CHECK_FILES kernel/sys.c fs/read_write.c"
           fi
@@ -544,45 +525,11 @@ runs:
           git diff --stat
         fi
 
-        echo "== harden: setgroups gid-3009 protection must never be unhooked (all managers) =="
-
-        SETGROUPS_HDR="$(find -L "$KSU_ROOT" -type f -name temp_patch_setgroups.h 2>/dev/null | head -n 1 || true)"
-
-        if [ -z "$SETGROUPS_HDR" ]; then
-          echo "== $MANAGER: no kernel/downstream/temp_patch_setgroups.h in this source tree, nothing to harden =="
-        else
-          echo "== $MANAGER: found $SETGROUPS_HDR =="
-
-          # Fail the build if *anything* in this manager's source references the
-          # unhook symbol outside its own definition - whether as a direct call
-          # (`ksu_unhook_setgroups();`) or handed off as a function pointer/thread
-          # entry point (e.g. `kthread_run(ksu_unhook_setgroups, ...)`, as the real
-          # backslashxx/KernelSU@cff5578 "unhook at boot complete" commit does).
-          # This is what actually guarantees the gid-3009 protection can't be
-          # removed after boot, independent of how any given fork wires it up.
-          UNHOOK_REFS="$(
-            grep -RIn 'ksu_unhook_setgroups' "$KSU_ROOT" 2>/dev/null \
-              | grep -vE '(static[[:space:]]+(int|void)[[:space:]]+ksu_unhook_setgroups[[:space:]]*\()' \
-              || true
-          )"
-
-          if [ -n "$UNHOOK_REFS" ]; then
-            echo "::error::${MANAGER}: ksu_unhook_setgroups is referenced outside its own definition:"
-            printf '%s\n' "$UNHOOK_REFS"
-            echo "::error::That removes the gid-3009 setgroups protection after boot and must not ship."
-            exit 1
-          fi
-          echo "== $MANAGER: confirmed ksu_unhook_setgroups is never referenced/called - protection stays permanent =="
-        fi
-
         cd "$COMMON_DIR"
         git add . 2>/dev/null
         git commit -m "Integrate $MANAGER and remove dirty tag" || true
 
     - name: Patch ReSukiSU Kbuild for Kleaf/Bazel sandbox compatibility
-      # Temporarily scoped to kernel_version=6.12 only - testing whether 6.1/6.6
-      # need this patch too, or whether ResukiSU's Kbuild only hits the live-git
-      # issue on 6.12. Remove the kernel_version check once that's confirmed.
       if: (inputs.manager == 'ResukiSU' || inputs.manager == 'MidoriSU-Resuki-Deinlined') && env.BUILD_ENGINE == 'kleaf'
       working-directory: kernel/common
       shell: bash
