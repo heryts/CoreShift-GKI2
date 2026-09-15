@@ -278,7 +278,7 @@ runs:
           echo "restored manager HEAD: $RESTORED_HEAD"
         fi
 
-        if [ "$MANAGER" = "KowSU" ] || [ "$MANAGER" = "KernelSU-Backslashxx" ] || [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ] || [ "$MANAGER" = "MidoriSU-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ] || [ "$MANAGER" = "MidoriSU-Resuki-Deinlined" ] || [ "$MANAGER" = "MidoriSU-KOW-Deinlined" ]; then
+        {
           for APK_SIGN_FILE in "$MANAGER_DIR/kernel/manager/apk_sign.c" "$COMMON_DIR/drivers/kernelsu/manager/apk_sign.c" "$COMMON_DIR/drivers/staging/kernelsu/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
               if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
@@ -324,8 +324,8 @@ runs:
               fi
             fi
           done
-        fi
-        
+        }
+
         if { [ "$MANAGER" = "KernelSU" ] || [ "$MANAGER" = "KowSU" ]; } &&
           [ -f drivers/staging/Kconfig ] &&
           grep -q 'source "drivers/staging/kernelsu/kernel/Kconfig"' drivers/staging/Kconfig; then
