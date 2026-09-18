@@ -33,10 +33,10 @@ runs:
         fi
 
         case "$KERNEL_VERSION" in
-          5.10) SUSFS_BRANCH="gki-android12-5.10"; SUSFS_DEFAULT_REF="fb16b41" ;;
-          6.1)  SUSFS_BRANCH="gki-android14-6.1";  SUSFS_DEFAULT_REF="5727f79" ;;
-          6.6)  SUSFS_BRANCH="gki-android15-6.6";  SUSFS_DEFAULT_REF="eba2a88" ;;
-          6.12) SUSFS_BRANCH="gki-android16-6.12"; SUSFS_DEFAULT_REF="c7db8cb" ;;
+          5.10) SUSFS_BRANCH="gki-android12-5.10"; SUSFS_DEFAULT_REF="aa2d1209" ;;
+          6.1)  SUSFS_BRANCH="gki-android14-6.1";  SUSFS_DEFAULT_REF="273ae364" ;;
+          6.6)  SUSFS_BRANCH="gki-android15-6.6";  SUSFS_DEFAULT_REF="9d9464f1" ;;
+          6.12) SUSFS_BRANCH="gki-android16-6.12"; SUSFS_DEFAULT_REF="c8f64e41" ;;
           *)
             echo "::error::unsupported kernel_version for SUSFS: $KERNEL_VERSION"
             exit 1
@@ -45,7 +45,7 @@ runs:
 
         SUSFS_REF="$SUSFS_REF"
         if [ "$SUSFS_REF" = "d4c3914" ]; then
-          echo "== kernel_version=$KERNEL_VERSION: using resolved default pin $SUSFS_DEFAULT_REF (v2.3.0) =="
+          echo "== kernel_version=$KERNEL_VERSION: using resolved default pin $SUSFS_DEFAULT_REF (2026-09-17, includes SUS_KSTAT) =="
           SUSFS_REF="$SUSFS_DEFAULT_REF"
         fi
 
@@ -198,7 +198,7 @@ runs:
               case "$SUSFS_BRANCH" in
                 gki-android14-6.1)  REMOTE_SRC_DIR="android14-6.1";  REMOTE_SRC_FILE="50_add_susfs_in_gki-android14-6.1.patch" ;;
                 gki-android15-6.6)  REMOTE_SRC_DIR="android15-6.6";  REMOTE_SRC_FILE="50_add_susfs_in_gki-android15-6.6.patch" ;;
-                gki-android16-6.12) REMOTE_SRC_DIR="android16-6.12"; REMOTE_SRC_FILE="50_add_susfs_in_gki-android16-6.12.92.patch" ;;
+                gki-android16-6.12) REMOTE_SRC_DIR="android16-6.12"; REMOTE_SRC_FILE="50_add_susfs_in_gki-android16-6.12.93.patch" ;;
                 *)
                   echo "::error::no midori01/gki_ksu_workflow source mapping for branch $SUSFS_BRANCH"
                   exit 1
