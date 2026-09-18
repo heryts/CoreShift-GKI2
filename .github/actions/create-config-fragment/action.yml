@@ -552,7 +552,14 @@ runs:
           add_config CGROUP_PIDS y
           add_config CGROUP_DEVICE y
 
-          add_config DEVTMPFS y
+          # DEBUG: temporarily disabled to isolate the container_core-triggered
+          # bootloop (init: "partition(s) not found after polling timeout").
+          # CONFIG_DEVTMPFS auto-populates /dev at boot in a way that can race
+          # with ueventd's own /dev/block/*/by-name/* symlink creation, which
+          # fs_mgr polls for during early mount. Re-enable once confirmed
+          # innocent, or gate it behind its own dedicated input instead of
+          # bundling it unconditionally into container_core.
+          # add_config DEVTMPFS y
 
           add_config SECCOMP y
           add_config SECCOMP_FILTER y
