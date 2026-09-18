@@ -542,16 +542,6 @@ runs:
         fi
 
         if [ "$CONTAINER_CORE" = "on" ]; then
-          add_config NAMESPACES y
-          add_config USER_NS y
-          add_config UTS_NS y
-          add_config NET_NS y
-          add_config PID_NS y
-
-          add_config CGROUPS y
-          add_config CGROUP_PIDS y
-          add_config CGROUP_DEVICE y
-
           # DEBUG: temporarily disabled to isolate the container_core-triggered
           # bootloop (init: "partition(s) not found after polling timeout").
           # CONFIG_DEVTMPFS auto-populates /dev at boot in a way that can race
@@ -561,8 +551,37 @@ runs:
           # bundling it unconditionally into container_core.
           # add_config DEVTMPFS y
 
-          add_config SECCOMP y
-          add_config SECCOMP_FILTER y
+          # DEBUG: bisecting the container-mode bootloop, round 4.
+          # Round 3: CONTAINER_IPC off + CONTAINER_NETWORKING off + DEVTMPFS off
+          # -> still bootlooped, but this time it's a HANG (no panic captured),
+          # reaching second-stage init/ueventd/SELinux load fine, then never
+          # starting vold/apexd/servicemanager/zygote. Narrowing inside
+          # CONTAINER_CORE itself now: namespaces vs cgroups vs seccomp,
+          # tested one block at a time. Flip exactly ONE of the three
+          # "&& true" below to "&& false" per test run (or flip two off to
+          # test a single block alone), keep the others "&& true".
+
+          if true; then
+            echo "  [container_core] namespaces block: NAMESPACES/USER_NS/UTS_NS/NET_NS/PID_NS"
+            add_config NAMESPACES y
+            add_config USER_NS y
+            add_config UTS_NS y
+            add_config NET_NS y
+            add_config PID_NS y
+          fi
+
+          if true; then
+            echo "  [container_core] cgroups block: CGROUPS/CGROUP_PIDS/CGROUP_DEVICE"
+            add_config CGROUPS y
+            add_config CGROUP_PIDS y
+            add_config CGROUP_DEVICE y
+          fi
+
+          if true; then
+            echo "  [container_core] seccomp block: SECCOMP/SECCOMP_FILTER"
+            add_config SECCOMP y
+            add_config SECCOMP_FILTER y
+          fi
         fi
 
         # DEBUG: bisecting the container-mode bootloop, round 3.
