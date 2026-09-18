@@ -542,60 +542,23 @@ runs:
         fi
 
         if [ "$CONTAINER_CORE" = "on" ]; then
-          # DEBUG: temporarily disabled to isolate the container_core-triggered
-          # bootloop (init: "partition(s) not found after polling timeout").
-          # CONFIG_DEVTMPFS auto-populates /dev at boot in a way that can race
-          # with ueventd's own /dev/block/*/by-name/* symlink creation, which
-          # fs_mgr polls for during early mount. Re-enable once confirmed
-          # innocent, or gate it behind its own dedicated input instead of
-          # bundling it unconditionally into container_core.
-          # add_config DEVTMPFS y
+          add_config NAMESPACES y
+          add_config USER_NS y
+          add_config UTS_NS y
+          add_config NET_NS y
+          add_config PID_NS y
 
-          # DEBUG: bisecting the container-mode bootloop, round 4.
-          # Round 3: CONTAINER_IPC off + CONTAINER_NETWORKING off + DEVTMPFS off
-          # -> still bootlooped, but this time it's a HANG (no panic captured),
-          # reaching second-stage init/ueventd/SELinux load fine, then never
-          # starting vold/apexd/servicemanager/zygote. Narrowing inside
-          # CONTAINER_CORE itself now: namespaces vs cgroups vs seccomp,
-          # tested one block at a time. Flip exactly ONE of the three
-          # "&& true" below to "&& false" per test run (or flip two off to
-          # test a single block alone), keep the others "&& true".
+          add_config CGROUPS y
+          add_config CGROUP_PIDS y
+          add_config CGROUP_DEVICE y
 
-          if true; then
-            echo "  [container_core] namespaces block: NAMESPACES/USER_NS/UTS_NS/NET_NS/PID_NS"
-            add_config NAMESPACES y
-            add_config USER_NS y
-            add_config UTS_NS y
-            add_config NET_NS y
-            add_config PID_NS y
-          fi
+          add_config DEVTMPFS y
 
-          if true; then
-            echo "  [container_core] cgroups block: CGROUPS/CGROUP_PIDS/CGROUP_DEVICE"
-            add_config CGROUPS y
-            add_config CGROUP_PIDS y
-            add_config CGROUP_DEVICE y
-          fi
-
-          if true; then
-            echo "  [container_core] seccomp block: SECCOMP/SECCOMP_FILTER"
-            add_config SECCOMP y
-            add_config SECCOMP_FILTER y
-          fi
+          add_config SECCOMP y
+          add_config SECCOMP_FILTER y
         fi
 
-        # DEBUG: bisecting the container-mode bootloop, round 3.
-        # Round 1: DEVTMPFS alone off -> still bootlooped.
-        # Round 2: CONTAINER_NETWORKING also off -> still bootlooped
-        # (confirmed independent of re_kernel too).
-        # Forcing CONTAINER_IPC off now to test CONTAINER_CORE
-        # (namespaces/cgroups/seccomp, minus DEVTMPFS) completely alone.
-        # If this boots: SYSVIPC/POSIX_MQUEUE/IPC_NS (and by extension the
-        # original IPC KABI patch suspicion) is the real trigger.
-        # If this still bootloops: narrow inside CONTAINER_CORE next
-        # (namespaces vs cgroups vs seccomp).
-        # Remove "&& false" once this round is resolved.
-        if [ "$CONTAINER_IPC" = "on" ] && false; then
+        if [ "$CONTAINER_IPC" = "on" ]; then
           add_config SYSCTL y
           add_config SYSVIPC y
           add_config SYSVIPC_SYSCTL y
@@ -604,15 +567,7 @@ runs:
           add_config POSIX_MQUEUE_SYSCTL y
         fi
 
-        # DEBUG: bisecting the container-mode bootloop, round 2.
-        # DEVTMPFS alone (round 1) was NOT the cause - still bootlooped,
-        # and this time with no ramoops captured at all (different/earlier
-        # failure than the round-1 "partition(s) not found" panic).
-        # Forcing this whole block off regardless of the container_networking
-        # input to test CONTAINER_CORE(-DEVTMPFS)+CONTAINER_IPC alone,
-        # without the ~25 TUN/VETH/BRIDGE/NETFILTER/IP_SET configs.
-        # Remove "&& false" once this round is resolved.
-        if [ "$CONTAINER_NETWORKING" = "on" ] && false; then
+        if [ "$CONTAINER_NETWORKING" = "on" ]; then
           add_config TUN y
           add_config VETH y
           add_config BRIDGE y
