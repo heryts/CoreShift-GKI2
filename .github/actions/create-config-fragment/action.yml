@@ -574,7 +574,15 @@ runs:
           add_config POSIX_MQUEUE_SYSCTL y
         fi
 
-        if [ "$CONTAINER_NETWORKING" = "on" ]; then
+        # DEBUG: bisecting the container-mode bootloop, round 2.
+        # DEVTMPFS alone (round 1) was NOT the cause - still bootlooped,
+        # and this time with no ramoops captured at all (different/earlier
+        # failure than the round-1 "partition(s) not found" panic).
+        # Forcing this whole block off regardless of the container_networking
+        # input to test CONTAINER_CORE(-DEVTMPFS)+CONTAINER_IPC alone,
+        # without the ~25 TUN/VETH/BRIDGE/NETFILTER/IP_SET configs.
+        # Remove "&& false" once this round is resolved.
+        if [ "$CONTAINER_NETWORKING" = "on" ] && false; then
           add_config TUN y
           add_config VETH y
           add_config BRIDGE y
