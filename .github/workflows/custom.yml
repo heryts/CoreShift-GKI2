@@ -582,7 +582,6 @@ jobs:
           baseband_guard: ${{ inputs.baseband_guard }}
           droidspaces: ${{ inputs.droidspaces }}
           droidspaces_ntsync: ${{ inputs.droidspaces_ntsync }}
-          container_networking: ${{ inputs.container_features }}
           re_kernel: ${{ inputs.re_kernel }}
           debug_features: ${{ inputs.debug_features }}
           heavy_debug_features: ${{ inputs.heavy_debug_features }}
