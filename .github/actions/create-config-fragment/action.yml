@@ -565,7 +565,18 @@ runs:
           add_config SECCOMP_FILTER y
         fi
 
-        if [ "$CONTAINER_IPC" = "on" ]; then
+        # DEBUG: bisecting the container-mode bootloop, round 3.
+        # Round 1: DEVTMPFS alone off -> still bootlooped.
+        # Round 2: CONTAINER_NETWORKING also off -> still bootlooped
+        # (confirmed independent of re_kernel too).
+        # Forcing CONTAINER_IPC off now to test CONTAINER_CORE
+        # (namespaces/cgroups/seccomp, minus DEVTMPFS) completely alone.
+        # If this boots: SYSVIPC/POSIX_MQUEUE/IPC_NS (and by extension the
+        # original IPC KABI patch suspicion) is the real trigger.
+        # If this still bootloops: narrow inside CONTAINER_CORE next
+        # (namespaces vs cgroups vs seccomp).
+        # Remove "&& false" once this round is resolved.
+        if [ "$CONTAINER_IPC" = "on" ] && false; then
           add_config SYSCTL y
           add_config SYSVIPC y
           add_config SYSVIPC_SYSCTL y
