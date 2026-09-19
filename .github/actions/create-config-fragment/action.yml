@@ -548,7 +548,7 @@ runs:
           add_config NET_NS y
           add_config PID_NS y
 
-          add_config CGROUPS y
+           add_config CGROUP_PIDS y
           
           add_config DEVTMPFS y
           
