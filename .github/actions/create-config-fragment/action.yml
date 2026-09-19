@@ -547,6 +547,9 @@ runs:
           add_config UTS_NS y
           add_config NET_NS y
           add_config PID_NS y
+
+          add_config CGROUPS y
+          add_config CGROUP_DEVICE y
           
           add_config DEVTMPFS y
           
