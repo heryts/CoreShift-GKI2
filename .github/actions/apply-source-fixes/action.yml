@@ -1,9 +1,7 @@
 name: Apply source fixes
 description: >
-  Apply maintained/custom source fixes for selected kernel branches (mode=source,
-  runs before Init manager), and post-config fixups for unbuilt drivers on
-  android16-6.12 (mode=unbuilt-drivers, runs after Create private config fragment,
-  since it needs to read the final private.fragment).
+  Apply maintained/custom source fixes for selected kernel branches, and post-config fixups for unbuilt drivers on
+  kernel-6.12.
 inputs:
   kernel_version:
     required: true
@@ -17,9 +15,7 @@ inputs:
     default: "source"
     description: >
       Which fixups to apply: "source" (maintained/custom source patch fixes) or
-      "unbuilt-drivers" (trim rust_binder/ashmem from modules.bzl and KMI symbol
-      lists based on the final private.fragment). Call this action twice at the
-      two different points in the workflow, once per mode.
+      "unbuilt-drivers".
 runs:
   using: composite
   steps:
@@ -66,11 +62,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-
-        if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
-          echo "kernel_version=${{ inputs.kernel_version }}: fixes only apply to 6.12, skipping"
-          exit 0
-        fi
 
         ROOT_DIR="$GITHUB_WORKSPACE"
         COMMON_DIR="${KERNEL_COMMON_DIR:-$ROOT_DIR/kernel/common}"
