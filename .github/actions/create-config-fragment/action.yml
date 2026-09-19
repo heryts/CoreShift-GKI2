@@ -550,11 +550,9 @@ runs:
 
           add_config CGROUPS y
           add_config CGROUP_PIDS y
+          add_config CGROUP_DEVICE y
 
           add_config DEVTMPFS y
-
-          add_config SECCOMP y
-          add_config SECCOMP_FILTER y
         fi
 
         if [ "$CONTAINER_IPC" = "on" ]; then
