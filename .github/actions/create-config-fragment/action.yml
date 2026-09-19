@@ -564,6 +564,7 @@ runs:
         fi
 
         if [ "$CONTAINER_NETWORKING" = "on" ]; then
+          add_config VETH y
           add_config BRIDGE y
           add_config BRIDGE_NETFILTER y
           
