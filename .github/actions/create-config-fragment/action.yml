@@ -569,7 +569,6 @@ runs:
           add_config TUN y
           add_config VETH y
           add_config BRIDGE y
-          add_config BRIDGE_NETFILTER y
           
           add_config NETFILTER y
           add_config NETFILTER_ADVANCED y
