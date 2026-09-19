@@ -591,6 +591,7 @@ jobs:
           kernel_version: ${{ inputs.kernel_version }}
 
       - name: Apply source fixes for unbuilt drivers
+        if: inputs.kernel_version == '6.12'
         uses: ./.github/actions/apply-source-fixes
         with:
           kernel_version: ${{ inputs.kernel_version }}
