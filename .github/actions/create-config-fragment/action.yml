@@ -550,7 +550,6 @@ runs:
 
           add_config CGROUPS y
           add_config CGROUP_PIDS y
-          add_config CGROUP_DEVICE y
 
           add_config DEVTMPFS y
 
