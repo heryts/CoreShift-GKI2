@@ -282,15 +282,43 @@ runs:
         else
           echo "::warning::core SUSFS patch (commit $SUSFS_COMMIT) does not apply cleanly via 'git apply' (strict context match)"
           echo "== retrying with 'patch --fuzz=3 -N' (tolerates minor upstream GKI header drift, skips already-applied hunks) =="
-          if (patch --dry-run --fuzz=3 -N -p1 < "$SUSFS_PATCH") >/tmp/susfs_fuzz_dry_run.log 2>&1; then
-            patch --fuzz=3 -N -p1 < "$SUSFS_PATCH"
+          find . -name '*.rej' -delete
+          set +e
+          patch --fuzz=3 -N -p1 < "$SUSFS_PATCH" >/tmp/susfs_fuzz_apply.log 2>&1
+          PATCH_RC=$?
+          set -e
+          cat /tmp/susfs_fuzz_apply.log
+
+          UNEXPECTED_REJ=0
+          for rej in $(find . -name '*.rej' 2>/dev/null); do
+            case "$rej" in
+              ./fs/proc/base.c.rej|./fs/proc/task_mmu.c.rej) ;;
+              *) UNEXPECTED_REJ=1 ;;
+            esac
+          done
+
+          if [ "$PATCH_RC" -ne 0 ] && [ "$UNEXPECTED_REJ" -eq 0 ] && [ -f fs/proc/base.c.rej -o -f fs/proc/task_mmu.c.rej ]; then
+            echo
+            echo "== fixup: manually applying known SUS_MAP hunks rejected by patch .38 vs newer GKI tree =="
+
+            if [ -f fs/proc/base.c.rej ]; then
+              echo "cGF0aCA9ICJmcy9wcm9jL2Jhc2UuYyIKdGV4dCA9IG9wZW4ocGF0aCwgZW5jb2Rpbmc9InV0Zi04IikucmVhZCgpCmFuY2hvciA9ICIjaW5jbHVkZSA8bGludXgvY3B1ZnJlcV90aW1lcy5oPlxuIgpibG9jayA9ICIjaWYgZGVmaW5lZChDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVApIHx8IGRlZmluZWQoQ09ORklHX0tTVV9TVVNGU19PUEVOX1JFRElSRUNUKVxuI2luY2x1ZGUgPGxpbnV4L3N1c2ZzX2RlZi5oPlxuI2VuZGlmIC8vICNpZiBkZWZpbmVkKENPTkZJR19LU1VfU1VTRlNfU1VTX01BUCkgfHwgZGVmaW5lZChDT05GSUdfS1NVX1NVU0ZTX09QRU5fUkVESVJFQ1QpXG5cbiIKaWYgInN1c2ZzX2RlZi5oIiBpbiB0ZXh0OgogICAgcHJpbnQoImZzL3Byb2MvYmFzZS5jOiBTVVNGUyBpbmNsdWRlIGJsb2NrIGFscmVhZHkgcHJlc2VudCAtIG5vIGNoYW5nZXMgbWFkZSIpCmVsaWYgYW5jaG9yIG5vdCBpbiB0ZXh0OgogICAgcHJpbnQoIjo6ZXJyb3I6OmZzL3Byb2MvYmFzZS5jOiBjcHVmcmVxX3RpbWVzLmggYW5jaG9yIG5vdCBmb3VuZCAtIGNhbm5vdCBwbGFjZSBTVVNGUyBpbmNsdWRlIGJsb2NrIikKICAgIHJhaXNlIFN5c3RlbUV4aXQoMSkKZWxzZToKICAgIHRleHQgPSB0ZXh0LnJlcGxhY2UoYW5jaG9yLCBhbmNob3IgKyBibG9jaywgMSkKICAgIG9wZW4ocGF0aCwgInciLCBlbmNvZGluZz0idXRmLTgiKS53cml0ZSh0ZXh0KQogICAgcHJpbnQoImZzL3Byb2MvYmFzZS5jOiBpbnNlcnRlZCBTVVNGUyBpbmNsdWRlIGJsb2NrIGFmdGVyIGNwdWZyZXFfdGltZXMuaCIpCg==" | base64 -d | python3 -
+              rm -f fs/proc/base.c.rej fs/proc/base.c.orig
+            fi
+
+            if [ -f fs/proc/task_mmu.c.rej ]; then
+              echo "cGF0aCA9ICJmcy9wcm9jL3Rhc2tfbW11LmMiCnRleHQgPSBvcGVuKHBhdGgsIGVuY29kaW5nPSJ1dGYtOCIpLnJlYWQoKQoKYW5jaG9yMSA9ICJcdGRvIHtcblx0XHRzbWFwX2dhdGhlcl9zdGF0cyh2bWEsICZtc3MsIDApO1xuXHRcdGxhc3Rfdm1hX2VuZCA9IHZtYS0+dm1fZW5kO1xuIgpibG9jazEgPSAiXHRkbyB7XG4jaWZkZWYgQ09ORklHX0tTVV9TVVNGU19TVVNfTUFQXG5cdFx0aWYgKHZtYS0+dm1fZmlsZSAmJiBTVVNGU19JU19JTk9ERV9TVVNfTUFQKGZpbGVfaW5vZGUodm1hLT52bV9maWxlKSkpXG5cdFx0XHRnb3RvIGJ5cGFzc19vcmlnX2Zsb3c7XG4jZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuXHRcdHNtYXBfZ2F0aGVyX3N0YXRzKHZtYSwgJm1zcywgMCk7XG4jaWZkZWYgQ09ORklHX0tTVV9TVVNGU19TVVNfTUFQXG5ieXBhc3Nfb3JpZ19mbG93OlxuI2VuZGlmIC8vICNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcblx0XHRsYXN0X3ZtYV9lbmQgPSB2bWEtPnZtX2VuZDtcbiIKCmFuY2hvcjIgPSAiXHRcdFx0aWYgKHZtYS0+dm1fZW5kID4gbGFzdF92bWFfZW5kKSB7XG5cdFx0XHRcdHNtYXBfZ2F0aGVyX3N0YXRzKHZtYSwgJm1zcywgbGFzdF92bWFfZW5kKTtcblx0XHRcdFx0bGFzdF92bWFfZW5kID0gdm1hLT52bV9lbmQ7XG5cdFx0XHR9XG4iCmJsb2NrMiA9ICJcdFx0XHRpZiAodm1hLT52bV9lbmQgPiBsYXN0X3ZtYV9lbmQpIHtcbiNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcblx0XHRcdFx0aWYgKCF2bWEtPnZtX2ZpbGUgfHwgIShTVVNGU19JU19JTk9ERV9TVVNfTUFQKGZpbGVfaW5vZGUodm1hLT52bV9maWxlKSkpKSB7XG5cdFx0XHRcdFx0c21hcF9nYXRoZXJfc3RhdHModm1hLCAmbXNzLCBsYXN0X3ZtYV9lbmQpO1xuXHRcdFx0XHRcdGxhc3Rfdm1hX2VuZCA9IHZtYS0+dm1fZW5kO1xuXHRcdFx0XHR9XG4jZWxzZVxuXHRcdFx0XHRzbWFwX2dhdGhlcl9zdGF0cyh2bWEsICZtc3MsIGxhc3Rfdm1hX2VuZCk7XG5cdFx0XHRcdGxhc3Rfdm1hX2VuZCA9IHZtYS0+dm1fZW5kO1xuI2VuZGlmIC8vICNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcblx0XHRcdH1cbiIKCmlmICJTVVNGU19JU19JTk9ERV9TVVNfTUFQIiBpbiB0ZXh0OgogICAgcHJpbnQoImZzL3Byb2MvdGFza19tbXUuYzogU1VTX01BUCBodW5rcyBhbHJlYWR5IHByZXNlbnQgLSBubyBjaGFuZ2VzIG1hZGUiKQplbHNlOgogICAgaWYgYW5jaG9yMSBub3QgaW4gdGV4dDoKICAgICAgICBwcmludCgiOjplcnJvcjo6ZnMvcHJvYy90YXNrX21tdS5jOiBhbmNob3IxIChzbWFwX2dhdGhlcl9zdGF0cy8wKSBub3QgZm91bmQiKQogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoMSkKICAgIHRleHQgPSB0ZXh0LnJlcGxhY2UoYW5jaG9yMSwgYmxvY2sxLCAxKQoKICAgIGlmIGFuY2hvcjIgbm90IGluIHRleHQ6CiAgICAgICAgcHJpbnQoIjo6ZXJyb3I6OmZzL3Byb2MvdGFza19tbXUuYzogYW5jaG9yMiAoQ2FzZSA0IHZtYV9lbmQgYmxvY2spIG5vdCBmb3VuZCIpCiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgxKQogICAgdGV4dCA9IHRleHQucmVwbGFjZShhbmNob3IyLCBibG9jazIsIDEpCgogICAgb3BlbihwYXRoLCAidyIsIGVuY29kaW5nPSJ1dGYtOCIpLndyaXRlKHRleHQpCiAgICBwcmludCgiZnMvcHJvYy90YXNrX21tdS5jOiBpbnNlcnRlZCBTVVNfTUFQIGh1bmtzIGluIHNob3dfc21hcHNfcm9sbHVwKCkiKQo=" | base64 -d | python3 -
+              rm -f fs/proc/task_mmu.c.rej fs/proc/task_mmu.c.orig
+            fi
+
+            find . -name '*.orig' -delete 2>/dev/null || true
+            echo "== core SUSFS patch applied via fuzzy fallback + manual SUS_MAP fixup =="
+          elif [ "$PATCH_RC" -eq 0 ]; then
             echo "== core SUSFS patch applied via fuzzy fallback =="
+            find . -name '*.orig' -delete 2>/dev/null || true
           else
-            echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree, even with fuzz=3"
+            echo "::error::core SUSFS patch (commit $SUSFS_COMMIT) does not apply to this source tree, even with fuzz=3 + known SUS_MAP fixup"
             echo "== dumping reject hunks for diagnosis (manager=$MANAGER) =="
-            find . -name '*.rej' -delete
-            git apply --reject "$SUSFS_PATCH" 2>/tmp/susfs_reject.log || true
-            cat /tmp/susfs_reject.log || true
             for rej in $(find . -name '*.rej'); do
               echo "---- $rej ----"
               cat "$rej"
@@ -740,6 +768,7 @@ runs:
         echo
         echo "== SUSFS source git diff stat =="
         git -C "$COMMON_DIR" diff --stat
+
         echo
         echo "== SUSFS KernelSU git diff stat =="
         git -C "$KSU_ROOT" diff --stat 2>/dev/null || echo "(no separate KSU_ROOT diff for manager=$MANAGER)"
