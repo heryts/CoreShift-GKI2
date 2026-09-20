@@ -198,7 +198,7 @@ runs:
               case "$SUSFS_BRANCH" in
                 gki-android14-6.1)  REMOTE_SRC_DIR="android14-6.1";  REMOTE_SRC_FILE="50_add_susfs_in_gki-android14-6.1.patch" ;;
                 gki-android15-6.6)  REMOTE_SRC_DIR="android15-6.6";  REMOTE_SRC_FILE="50_add_susfs_in_gki-android15-6.6.patch" ;;
-                gki-android16-6.12) REMOTE_SRC_DIR="android16-6.12"; REMOTE_SRC_FILE="50_add_susfs_in_gki-android16-6.12.93.patch" ;;
+                gki-android16-6.12) REMOTE_SRC_DIR="android16-6.12"; REMOTE_SRC_FILE="50_add_susfs_in_gki-android16-6.12.38.patch" ;;
                 *)
                   echo "::error::no midori01/gki_ksu_workflow source mapping for branch $SUSFS_BRANCH"
                   exit 1
@@ -256,13 +256,6 @@ runs:
         if [ "$MANAGER" = "ResukiSU" ] && [ "$KERNEL_VERSION" = "6.1" ] && [ -f fs/namespace.c ]; then
           echo
           echo "== fixup: relocate stray '#include <trace/hooks/blk.h>' in fs/namespace.c (manager=ResukiSU) =="
-          echo "ResukiSU's fs/namespace.c already carries a vendor hook include directly after"
-          echo "#include \"internal.h\", which upstream GKI does not have there. That extra line sits"
-          echo "inside the core SUSFS patch's hunk #1 context window, so 'git apply' rejects the hunk"
-          echo "outright on a genuine context mismatch (fuzz can only misplace things, it can't fix a"
-          echo "line that is really not supposed to be there). Move the include earlier in the file,"
-          echo "outside the hunk's context range, so the patch applies cleanly via plain 'git apply'"
-          echo "with no fuzz and no offset-guessing involved."
           echo "cGF0aCA9ICJmcy9uYW1lc3BhY2UuYyIKdGV4dCA9IG9wZW4ocGF0aCwgZW5jb2Rpbmc9InV0Zi04IikucmVhZCgpCgpsaW5lID0gIiNpbmNsdWRlIDx0cmFjZS9ob29rcy9ibGsuaD5cbiIKYnJlYWtpbmcgPSAnI2luY2x1ZGUgImludGVybmFsLmgiXG4nICsgbGluZQphbmNob3IgPSAiI2luY2x1ZGUgPGxpbnV4L3N5c2NhbGxzLmg+XG4iCgppZiAic3VzZnNfZGVmLmgiIGluIHRleHQ6CiAgICBwcmludCgiZnMvbmFtZXNwYWNlLmM6IFNVU0ZTIGhlYWRlciBibG9jayBhbHJlYWR5IHByZXNlbnQgLSBubyBjaGFuZ2VzIG1hZGUiKQplbGlmIGJyZWFraW5nIG5vdCBpbiB0ZXh0OgogICAgcHJpbnQoImZzL25hbWVzcGFjZS5jOiB0cmFjZS9ob29rcy9ibGsuaCBub3QgaW4gdGhlIGJyZWFraW5nIHBvc2l0aW9uIChvciBhbHJlYWR5IHJlbG9jYXRlZCkgLSBubyBjaGFuZ2VzIG1hZGUiKQplbGlmIGFuY2hvciBub3QgaW4gdGV4dDoKICAgIHByaW50KCI6Ondhcm5pbmc6OmZzL25hbWVzcGFjZS5jOiBzeXNjYWxscy5oIGFuY2hvciBub3QgZm91bmQgLSB0cmFjZS9ob29rcy9ibGsuaCBub3QgcmVsb2NhdGVkIikKZWxzZToKICAgIHRleHQgPSB0ZXh0LnJlcGxhY2UobGluZSwgIiIsIDEpCiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKGFuY2hvciwgYW5jaG9yICsgbGluZSwgMSkKICAgIG9wZW4ocGF0aCwgInciLCBlbmNvZGluZz0idXRmLTgiKS53cml0ZSh0ZXh0KQogICAgcHJpbnQoInJlbG9jYXRlZCB0cmFjZS9ob29rcy9ibGsuaCBpbmNsdWRlIGFoZWFkIG9mIHRoZSBTVVNGUyBwYXRjaCdzIGNvbnRleHQgd2luZG93IikK" | base64 -d | python3 -
         fi
 
@@ -270,12 +263,6 @@ runs:
         if [ -f fs/proc/task_mmu.c ] && grep -qF 'if (!vma_data_pages(vma))' fs/proc/task_mmu.c; then
           echo
           echo "== fixup: alias renamed vma_data_pages() back to vma_pages() in fs/proc/task_mmu.c for patching =="
-          echo "This tree renames vma_pages() -> vma_data_pages(). The core SUSFS patch's show_smap()"
-          echo "hunk carries 'if (!vma_pages(vma))' as trailing (unchanged) context, so 'git apply' rejects"
-          echo "the whole hunk on a strict context mismatch, and 'patch --fuzz=3' can misplace the added"
-          echo "block mid-argument inside __show_smap()'s SEQ_PUT_DEC(...) call instead of fixing it."
-          echo "Temporarily restore the old name at this one call site so the hunk context matches"
-          echo "exactly, then rename it back once the patch has landed."
           sed -i 's/if (!vma_data_pages(vma))/if (!vma_pages(vma))/' fs/proc/task_mmu.c
           NEEDS_VMA_DATA_PAGES_RESTORE=1
         fi
@@ -283,11 +270,6 @@ runs:
         if grep -Eq '^\+[[:space:]]+$' "$SUSFS_PATCH"; then
           echo
           echo "== fixup: strip trailing whitespace from blank added lines in the core SUSFS patch =="
-          echo "Some hunks in the susfs4ksu patch (e.g. mm/memory.c's CONFIG_KSU_SUSFS_SUS_MAP block)"
-          echo "add a blank line that is actually just tabs with no real content. 'git apply' still"
-          echo "applies these fine, but flags them as a whitespace error on every single run. Clean the"
-          echo "added line itself (never a context or removed line, so hunk matching is untouched) so"
-          echo "the patch applies with zero whitespace warnings and the merged source has no stray tabs."
           CLEAN_SUSFS_PATCH="${RUNNER_TEMP:-/tmp}/$(basename "$SUSFS_PATCH").whitespace-clean"
           sed -E 's/^\+[[:space:]]+$/+/' "$SUSFS_PATCH" > "$CLEAN_SUSFS_PATCH"
           SUSFS_PATCH="$CLEAN_SUSFS_PATCH"
@@ -327,10 +309,6 @@ runs:
 
         echo
         echo "== check/apply try_umount SUSFS support patch (midori01/gki_ksu_workflow 55_try_umount_for_susfs.patch) =="
-        echo "midori01/KernelSU's xx.patch (and related enablement patches) now call susfs_try_umount()/"
-        echo "susfs_add_try_umount(), but the core susfs4ksu patch used here doesn't define them yet under"
-        echo "CONFIG_KSU_SUSFS_TRY_UMOUNT. Apply this add-on patch (fully #ifdef-guarded, safe even if"
-        echo "CONFIG_KSU_SUSFS_TRY_UMOUNT ends up disabled) so the symbols exist before manager enablement"
         echo "patches are applied."
 
         TRY_UMOUNT_PATCH_URL="https://raw.githubusercontent.com/midori01/gki_ksu_workflow/main/.github/patches/55_try_umount_for_susfs.patch"
@@ -361,16 +339,11 @@ runs:
         if [ "$KERNEL_VERSION" = "6.12" ] && [ -f fs/proc/task_mmu.c ]; then
           echo
           echo "== fixup: relocate CONFIG_KSU_SUSFS_SUS_MAP hunk in fs/proc/task_mmu.c =="
-          echo "This tree renames vma_pages() -> vma_data_pages(), so the core SUSFS patch's"
-          echo "show_smap() context match fails and 'patch --fuzz=3' can misplace the hunk"
-          echo "mid-argument inside __show_smap()'s SEQ_PUT_DEC(...) call, breaking compilation."
           echo "aW1wb3J0IHJlCmltcG9ydCBzeXMKCnBhdGggPSAiZnMvcHJvYy90YXNrX21tdS5jIgp0ZXh0ID0gb3BlbihwYXRoLCBlbmNvZGluZz0idXRmLTgiKS5yZWFkKCkKCiMgUGF0dGVybiB0aGUgZnV6enkgcGF0Y2ggcHJvZHVjZXMgd2hlbiBpdCBtaXNwbGFjZXMgdGhlIGh1bmsgaW5zaWRlIF9fc2hvd19zbWFwKCksCiMgc3BsaXR0aW5nIHRoZSBTRVFfUFVUX0RFQygiLi4uU3dhcFBzcy4uLiIsIDxhcmc+KSBjYWxsIGluIHR3by4KYmFkX2Jsb2NrID0gKAogICAgJ1x0U0VRX1BVVF9ERUMoIiBrQlxcblN3YXBQc3M6ICAgICAgICAiLFxuJwogICAgJyNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcbicKICAgICdcdGlmICh2bWEtPnZtX2ZpbGUpIHtcbicKICAgICdcdFx0aWYgKFNVU0ZTX0lTX0lOT0RFX1NVU19NQVAoZmlsZV9pbm9kZSh2bWEtPnZtX2ZpbGUpKSlcbicKICAgICdcdFx0XHRyZXR1cm4gMDtcbicKICAgICdcdH1cbicKICAgICcjZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuJwogICAgJ1xuJwogICAgJ1x0XHRcdFx0XHRtc3MtPnN3YXBfcHNzID4+IFBTU19TSElGVCk7JwopCmdvb2RfY2FsbCA9ICgKICAgICdcdFNFUV9QVVRfREVDKCIga0JcXG5Td2FwUHNzOiAgICAgICAgIixcbicKICAgICdcdFx0XHRcdFx0bXNzLT5zd2FwX3BzcyA+PiBQU1NfU0hJRlQpOycKKQoKaWYgYmFkX2Jsb2NrIGluIHRleHQ6CiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKGJhZF9ibG9jaywgZ29vZF9jYWxsKQogICAgcHJpbnQoInJlbW92ZWQgbWlzcGxhY2VkIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUCBibG9jayBmcm9tIF9fc2hvd19zbWFwKCkiKQplbHNlOgogICAgcHJpbnQoIm1pc3BsYWNlZCBibG9jayBub3QgZm91bmQgaW4gX19zaG93X3NtYXAoKSAoYWxyZWFkeSBjbGVhbiwgb3IgdXBzdHJlYW0gcGF0Y2ggY2hhbmdlZCkgLSBza2lwcGluZyByZW1vdmFsIikKCnN1c2ZzX2Jsb2NrID0gKAogICAgJyNpZmRlZiBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVBcbicKICAgICdcdGlmICh2bWEtPnZtX2ZpbGUpIHtcbicKICAgICdcdFx0aWYgKFNVU0ZTX0lTX0lOT0RFX1NVU19NQVAoZmlsZV9pbm9kZSh2bWEtPnZtX2ZpbGUpKSlcbicKICAgICdcdFx0XHRyZXR1cm4gMDtcbicKICAgICdcdH1cbicKICAgICcjZW5kaWYgLy8gI2lmZGVmIENPTkZJR19LU1VfU1VTRlNfU1VTX01BUFxuJwopCgppZiBzdXNmc19ibG9jayBub3QgaW4gdGV4dDoKICAgIHBhdHRlcm4gPSByZS5jb21waWxlKAogICAgICAgIHInKHN0YXRpYyBpbnQgc2hvd19zbWFwXChzdHJ1Y3Qgc2VxX2ZpbGUgXCptLCB2b2lkIFwqdlwpXG4nCiAgICAgICAgcidce1xuJwogICAgICAgIHInXHRzdHJ1Y3Qgdm1fYXJlYV9zdHJ1Y3QgXCp2bWEgPSB2O1xuJwogICAgICAgIHInXHRzdHJ1Y3QgbWVtX3NpemVfc3RhdHMgbXNzID0gXHtcfTtcbiknCiAgICAgICAgcidcbj8nCiAgICAgICAgcicoXHRpZiBcKCF2bWFfKD86ZGF0YV8pP3BhZ2VzXCh2bWFcKVwpXG4pJwogICAgKQoKICAgIGRlZiBfaW5zZXJ0KG0pOgogICAgICAgIHJldHVybiBtLmdyb3VwKDEpICsgIlxuIiArIHN1c2ZzX2Jsb2NrICsgIlxuIiArIG0uZ3JvdXAoMikKCiAgICBuZXdfdGV4dCwgbiA9IHBhdHRlcm4uc3VibihfaW5zZXJ0LCB0ZXh0LCBjb3VudD0xKQogICAgaWYgbiA9PSAxOgogICAgICAgIHRleHQgPSBuZXdfdGV4dAogICAgICAgIHByaW50KCJpbnNlcnRlZCBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVAgYmxvY2sgYXQgdGhlIHN0YXJ0IG9mIHNob3dfc21hcCgpIikKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoIjo6ZXJyb3I6OmNvdWxkIG5vdCBsb2NhdGUgc2hvd19zbWFwKCkgaW5zZXJ0aW9uIHBvaW50IGZvciBDT05GSUdfS1NVX1NVU0ZTX1NVU19NQVAgZml4dXAiKQogICAgICAgIHN5cy5leGl0KDEpCmVsc2U6CiAgICBwcmludCgiQ09ORklHX0tTVV9TVVNGU19TVVNfTUFQIGJsb2NrIGFscmVhZHkgcHJlc2VudCBpbiBzaG93X3NtYXAoKSAtIHNraXBwaW5nIGluc2VydGlvbiIpCgpvcGVuKHBhdGgsICJ3IiwgZW5jb2Rpbmc9InV0Zi04Iikud3JpdGUodGV4dCkK" | base64 -d | python3 -
         fi
 
         if [ "$MANAGER" = "KernelSU-Next" ] || [ "$MANAGER" = "MidoriSU-Next-Deinlined" ]; then
           echo "== fixing set_nameidata() call-site/declaration mismatch =="
-          echo "50_add_susfs_in_*.patch adds a 4th arg at call sites but this source tree's"
-          echo "set_nameidata() declaration wasn't updated to accept it; strip the extra arg."
           sed -i -E 's/set_nameidata\(([^,]+), ([^,]+), ([^,]+), NULL\);/set_nameidata(\1, \2, \3);/' fs/namei.c
           grep -n 'set_nameidata(' fs/namei.c
         fi
@@ -464,9 +437,6 @@ runs:
 
         elif [ "$MANAGER" = "MidoriSU-XX-Manual-Deinlined" ] || [ "$MANAGER" = "MidoriSU-BranchLink" ] || [ "$MANAGER" = "MidoriSU-Syscall-Table-Tamper" ]; then
           echo "== $MANAGER: applying prerequisite commit patch xx~1.patch before xx.patch =="
-          echo "(midori01/gki_ksu_workflow applies this in its separate 'Setup Extra Features and"
-          echo "Fixes' step, before 'Setup SUSFS'; xx.patch alone is only the diff of the final"
-          echo "commit and assumes xx~1's changes are already present in the tree.)"
 
           XX1_PATCH_URL="https://github.com/midori01/KernelSU/commit/xx~1.patch"
           XX1_PATCH="${RUNNER_TEMP:-/tmp}/backslashxx-susfs-xx~1.patch"
@@ -544,9 +514,6 @@ runs:
           esac
 
           echo "== $MANAGER: applying prerequisite commit patch(es) before ${MIDORISU_ENABLE_PATCH_NAME} =="
-          echo "(midori01/gki_ksu_workflow applies these in its separate 'Setup Extra Features and"
-          echo "Fixes' step, before 'Setup SUSFS'; the final commit patch alone assumes these"
-          echo "prerequisite commits' changes are already present in the tree.)"
           for PREREQ_NAME in $MIDORISU_PREREQ_PATCHES; do
             PREREQ_URL="https://github.com/midori01/KernelSU/commit/${PREREQ_NAME}"
             PREREQ_PATCH="${RUNNER_TEMP:-/tmp}/midorisu-prereq-${PREREQ_NAME}"
@@ -566,9 +533,6 @@ runs:
           done
 
           echo "== check/apply $MANAGER SUSFS enablement patch (midori01/KernelSU ${MIDORISU_ENABLE_PATCH_NAME}) =="
-          echo "(kow.patch/xx.patch are applied as-is here, same as official/next/resuki - matching"
-          echo "midori01/gki_ksu_workflow's own build-kernel.yml. The 'De-inlined' SUSFS hook type"
-          echo "comes from the core SUSFS patch step above, not from transforming this patch.)"
 
           MIDORISU_ENABLE_PATCH_URL="https://github.com/midori01/KernelSU/commit/${MIDORISU_ENABLE_PATCH_NAME}"
           MIDORISU_ENABLE_PATCH="${RUNNER_TEMP:-/tmp}/midorisu-susfs-${MIDORISU_ENABLE_PATCH_NAME}"
@@ -589,28 +553,12 @@ runs:
           for APK_SIGN_FILE in "kernel/manager/apk_sign.c" "$KSU_ROOT/kernel/manager/apk_sign.c"; do
             if [ -f "$APK_SIGN_FILE" ] && ! grep -q "MidoriSU Manager (com.midori.supermanager)" "$APK_SIGN_FILE"; then
               if grep -q 'apk_sign_key_t apk_sign_keys\[\]' "$APK_SIGN_FILE"; then
-                # ReSukiSU-based layout (MidoriSU-Resuki-Deinlined): apk_sign.c keeps a flat
-                # apk_sign_key_t apk_sign_keys[] = { {size, sha256}, ... } table; check_v2_signature()
-                # takes (path, *signature_index), not (path, size, hash), and there's no per-entry
-                # `if (check_v2_signature(...)) return true;` to anchor on. '// KOWX712/KernelSU' only
-                # labels one *array entry* here, so the range-based sed below walks forward to the next
-                # unrelated `return true;` in the file (e.g. inside read_length_prefixed_end()) and
-                # injects a call into a function with no `path` in scope - compile error ("use of
-                # undeclared identifier 'path'"). Add a table entry instead, right after the array
-                # opens (unconditional, not gated behind CONFIG_KSU_MULTI_MANAGER_SUPPORT).
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (apk_sign_keys[] table layout) =="
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                   { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
               elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
-                # post-multi-manager upstream layout (tiann/KernelSU "Enable multi manager
-                # support", now also seen downstream e.g. in backslashxx/KernelSU): no
-                # "// KOWX712/KernelSU" anchor and no apk_sign_keys[] table anymore;
-                # is_manager_apk() gates on KSU_MANAGER_PACKAGE (if set) then does
-                # check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH).
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (EXPECTED_SIZE/EXPECTED_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
-                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
-                  # package name) gets rejected before the signature is ever checked.
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
                 fi
                 sed -i '/if (check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {/,/^    }$/{
@@ -621,17 +569,8 @@ runs:
                 \t\treturn true;
                 }' "$APK_SIGN_FILE"
               elif grep -q 'return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);' "$APK_SIGN_FILE"; then
-                # KernelSU-Next layout (MidoriSU-Next-Deinlined, and upstream KernelSU-Next
-                # itself): is_manager_apk() has no "// KOWX712/KernelSU" anchor and no
-                # apk_sign_keys[] table; it does the same KSU_MANAGER_PACKAGE gate as the
-                # EXPECTED_SIZE/EXPECTED_HASH layout above, but the final check is a bare
-                # `return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);`
-                # - no wrapping if(...)/return-true block to anchor on - so insert the
-                # dual-sign check right before that final return instead.
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} (EXPECTED_MANAGER_SIZE/EXPECTED_MANAGER_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
-                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
-                  # package name) gets rejected before the signature is ever checked.
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
                 fi
                 sed -i '/return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);/i\
@@ -640,11 +579,6 @@ runs:
                 \t\treturn true;' "$APK_SIGN_FILE"
               else
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after ${MIDORISU_ENABLE_PATCH_NAME} =="
-                # NOTE: same anchor caveat as init-manager - verify '// KOWX712/KernelSU' exists
-                # in this fork's apk_sign.c, otherwise this insertion silently no-ops. ReSukiSU-based
-                # apk_sign_keys[] layouts, the EXPECTED_SIZE/EXPECTED_HASH layout, and the
-                # EXPECTED_MANAGER_SIZE/EXPECTED_MANAGER_HASH layout are handled by the branches
-                # above.
                 sed -i '/\/\/ KOWX712\/KernelSU/,/return true;/{
                 /return true;/a\
                 \
@@ -693,14 +627,8 @@ runs:
                 sed -i '/apk_sign_key_t apk_sign_keys\[\] = {/a\
                 { 0x368, "b9ee6759de4794f954883458b722b97ae6527cb7709a051db9a2348c0eea1e42" }, // MidoriSU Manager (com.midori.supermanager)' "$APK_SIGN_FILE"
               elif grep -q 'check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {' "$APK_SIGN_FILE"; then
-                # post-multi-manager upstream layout (KOWX712/KernelSU "Enable multi manager
-                # support"): no "// KOWX712/KernelSU" anchor and no apk_sign_keys[] table anymore;
-                # is_manager_apk() gates on KSU_MANAGER_PACKAGE (if set) then does
-                # check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH).
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after kow.patch (EXPECTED_SIZE/EXPECTED_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
-                  # widen the package-name gate too, otherwise MidoriSU Manager's apk (different
-                  # package name) gets rejected before the signature is ever checked.
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
                 fi
                 sed -i '/if (check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {/,/^    }$/{
@@ -711,11 +639,6 @@ runs:
                 \t\treturn true;
                 }' "$APK_SIGN_FILE"
               elif grep -q 'return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);' "$APK_SIGN_FILE"; then
-                # KernelSU-Next layout: is_manager_apk() has no "// KOWX712/KernelSU" anchor and
-                # no apk_sign_keys[] table; same KSU_MANAGER_PACKAGE gate as the EXPECTED_SIZE/
-                # EXPECTED_HASH layout above, but the final check is a bare
-                # `return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);`
-                # with no wrapping if(...)/return-true block to anchor on.
                 echo "== $MANAGER: re-applying MidoriSU Manager signature after kow.patch (EXPECTED_MANAGER_SIZE/EXPECTED_MANAGER_HASH layout) =="
                 if grep -q 'if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {' "$APK_SIGN_FILE"; then
                   sed -i 's/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {/if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE)) \&\&\n        strncmp(pkg, "com.midori.supermanager", sizeof("com.midori.supermanager"))) {/' "$APK_SIGN_FILE"
@@ -817,7 +740,6 @@ runs:
         echo
         echo "== SUSFS source git diff stat =="
         git -C "$COMMON_DIR" diff --stat
-
         echo
         echo "== SUSFS KernelSU git diff stat =="
         git -C "$KSU_ROOT" diff --stat 2>/dev/null || echo "(no separate KSU_ROOT diff for manager=$MANAGER)"
