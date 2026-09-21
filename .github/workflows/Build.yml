@@ -472,12 +472,6 @@ jobs:
         with:
           remove_bundled_staging: "true"
 
-      - name: Apply midori01 source prep
-        if: inputs.source_mode == 'midori01'
-        uses: ./.github/actions/apply-midori01-source
-        with:
-          kernel_version: ${{ inputs.kernel_version }}
-
       - name: Apply source fixes
         if: steps.source-repo.outputs.is_alt_source == 'true'
         uses: ./.github/actions/apply-source-fixes
