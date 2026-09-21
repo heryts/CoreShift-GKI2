@@ -60,7 +60,9 @@ index c6a2e1098..f568903ef 100644
  	return error;
  }
  #endif
-@@ -522,6 +535,14 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+@@ -520,8 +533,16 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+ 	int error = vfs_fstat(fd, &stat);
+ 
  	if (!error)
  		error = cp_new_stat64(&stat, statbuf);
  
