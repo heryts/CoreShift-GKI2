@@ -1,7 +1,7 @@
 name: Apply source fixes
 description: >
-  Apply maintained/custom source fixes for selected kernel branches, and post-config fixups for unbuilt drivers on
-  kernel-6.12.
+  Apply maintained/custom source fixes for selected kernel branches, the midori01 source prep (6.12 only), and
+  post-config fixups for unbuilt drivers on kernel-6.12.
 inputs:
   kernel_version:
     required: true
@@ -9,7 +9,7 @@ inputs:
   source_mode:
     required: false
     default: ""
-    description: Selected source mode. Only used when mode=source.
+    description: Selected source mode. Only used when mode=source (midori01 runs the midori01 prep here).
   mode:
     required: false
     default: "source"
@@ -19,6 +19,85 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Apply midori01 source prep (drop protected exports, strip -dirty)
+      if: inputs.mode == 'source' && inputs.source_mode == 'midori01'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+          echo "midori01 source prep only applies to kernel_version=6.12, skipping"
+          exit 0
+        fi
+
+        COMMON_DIR="${KERNEL_COMMON_DIR:-$GITHUB_WORKSPACE/kernel/common}"
+        cd "$COMMON_DIR"
+
+        echo "== midori01 source =="
+        echo "HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)"
+        echo "version: $(sed -n 's/^VERSION *= *//p' Makefile | head -n1).$(sed -n 's/^PATCHLEVEL *= *//p' Makefile | head -n1).$(sed -n 's/^SUBLEVEL *= *//p' Makefile | head -n1)"
+
+        # midori01 does `rm common/android/abi_gki_protected_exports_*`. With plain make that is
+        # enough; Kleaf also references the file from a BUILD/.bzl file (protected_exports_list),
+        # so the reference has to go too or Bazel fails on the missing input.
+        echo
+        echo "== drop GKI protected exports list =="
+        found=0
+        while IFS= read -r f; do
+          [ -n "$f" ] || continue
+          echo "  removing $f"
+          rm -f "$f"
+          found=1
+        done < <(find . -path ./.git -prune -o -type f -name 'abi_gki_protected_exports*' -print)
+        [ "$found" = 1 ] || echo "  no abi_gki_protected_exports* files in this tree"
+
+        python3 - <<'PY'
+        import os, re, sys
+
+        # A line that is only: [key (: or =)] "path/abi_gki_protected_exports_xxx" [,]
+        pat = re.compile(
+            r'^\s*(?:"?protected_exports_list"?\s*[:=]\s*)?"[^"\n]*abi_gki_protected_exports[^"\n]*"\s*,?\s*(?:#.*)?$'
+        )
+        changed = 0
+        leftovers = []
+        for root, dirs, files in os.walk("."):
+            dirs[:] = [d for d in dirs if d != ".git"]
+            for name in files:
+                if not (name in ("BUILD", "BUILD.bazel", "MODULE.bazel") or name.endswith(".bzl")):
+                    continue
+                path = os.path.join(root, name)
+                try:
+                    lines = open(path, encoding="utf-8").read().split("\n")
+                except (UnicodeDecodeError, OSError):
+                    continue
+                kept = [l for l in lines if not pat.match(l)]
+                if len(kept) != len(lines):
+                    open(path, "w", encoding="utf-8").write("\n".join(kept))
+                    print("  stripped %d protected-exports reference(s) from %s" % (len(lines) - len(kept), path))
+                    changed += 1
+                for i, l in enumerate(kept, 1):
+                    if "abi_gki_protected_exports" in l:
+                        leftovers.append("%s:%d: %s" % (path, i, l.strip()))
+        if leftovers:
+            # A glob() over the removed file is harmless; a hard label is not, but Bazel will
+            # name it clearly. Warn instead of failing so a harmless leftover can't block a build.
+            print("::warning::protected-exports references remain in Bazel files (fine if they are glob()s; if Bazel fails on a missing input, look here):")
+            for l in leftovers:
+                print("  " + l)
+        if not changed:
+            print("  no Bazel references to strip")
+        PY
+
+        echo
+        echo "== strip ' -dirty' from setlocalversion (same as midori01) =="
+        if [ -f scripts/setlocalversion ]; then
+          sed -i 's/ -dirty//g' scripts/setlocalversion
+        fi
+
+        echo
+        echo "== working tree after midori01 prep =="
+        git status --short 2>/dev/null | head -n 20 || true
+
     - name: Apply maintained/custom source fixes
       if: inputs.mode == 'source'
       shell: bash
