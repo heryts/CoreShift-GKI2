@@ -71,7 +71,7 @@ runs:
         case "$source_mode" in
           google-lts|pixel)
             ;;
-          maintained|custom)
+          maintained|custom|gki_ksu)
             local_manifest_src="$GITHUB_WORKSPACE/.github/manifests/minimal/${BRANCH}.xml"
             if [ ! -f "$local_manifest_src" ]; then
               echo "::error::missing minimal manifest for branch=$BRANCH: $local_manifest_src"
