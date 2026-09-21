@@ -69,9 +69,11 @@ runs:
         official_project_count="${official_project_count:-0}"
 
         case "$source_mode" in
-          google-lts|pixel)
+          google-lts|pixel|midori01)
+            # midori01 keeps the full official manifest: the minimal 6.12 manifest drops the
+            # glibc sysroot project and Kleaf then fails on glob('build-tools/sysroot/**').
             ;;
-          maintained|custom|midori01)
+          maintained|custom)
             local_manifest_src="$GITHUB_WORKSPACE/.github/manifests/minimal/${BRANCH}.xml"
             if [ ! -f "$local_manifest_src" ]; then
               echo "::error::missing minimal manifest for branch=$BRANCH: $local_manifest_src"
