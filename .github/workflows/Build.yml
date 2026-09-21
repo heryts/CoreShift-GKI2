@@ -19,7 +19,7 @@ on:
       source_mode:
         type: choice
         required: true
-        options: ["google-lts", "maintained", "pixel", "cloudfox", "custom", "gki_ksu"]
+        options: ["google-lts", "maintained", "pixel", "cloudfox", "custom", "midori01"]
         default: "google-lts"
       pixel_branch:
         type: choice
@@ -143,8 +143,8 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ inputs.source_mode }}" = "gki_ksu" ] && [ "${{ inputs.kernel_version }}" != "6.12" ]; then
-            echo "::error::source_mode=gki_ksu is only wired up for kernel_version=6.12"
+          if [ "${{ inputs.source_mode }}" = "midori01" ] && [ "${{ inputs.kernel_version }}" != "6.12" ]; then
+            echo "::error::source_mode=midori01 is only wired up for kernel_version=6.12"
             exit 1
           fi
 
@@ -429,7 +429,7 @@ jobs:
                 effective_source_ref="android12-5.10-cloudfox"
               fi
               ;;
-            gki_ksu)
+            midori01)
               # Same kernel/common tree midori01/gki_ksu_workflow builds 6.12 from
               # (its default: the android16-6.12-lts branch). Pin with source_ref if needed.
               effective_source_repo="https://android.googlesource.com/kernel/common"
@@ -448,7 +448,7 @@ jobs:
 
           is_alt_source="false"
           case "${{ inputs.source_mode }}" in
-            maintained|cloudfox|custom|gki_ksu)
+            maintained|cloudfox|custom|midori01)
               is_alt_source="true"
               ;;
           esac
@@ -472,9 +472,9 @@ jobs:
         with:
           remove_bundled_staging: "true"
 
-      - name: Apply gki_ksu source prep
-        if: inputs.source_mode == 'gki_ksu'
-        uses: ./.github/actions/apply-gki-ksu-source
+      - name: Apply midori01 source prep
+        if: inputs.source_mode == 'midori01'
+        uses: ./.github/actions/apply-midori01-source
         with:
           kernel_version: ${{ inputs.kernel_version }}
 

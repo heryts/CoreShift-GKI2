@@ -25,7 +25,7 @@ runs:
       run: |
         set -euo pipefail
 
-        if [ "${{ inputs.source_mode }}" = "google-lts" ] || [ "${{ inputs.source_mode }}" = "gki_ksu" ]; then
+        if [ "${{ inputs.source_mode }}" = "google-lts" ] || [ "${{ inputs.source_mode }}" = "midori01" ]; then
           echo "source fixes: skipped for ${{ inputs.source_mode }}"
           exit 0
         fi

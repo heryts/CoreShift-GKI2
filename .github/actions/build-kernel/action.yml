@@ -203,7 +203,7 @@ runs:
 
           if [ "${{ inputs.kmi_bypass }}" = "on" ]; then
             case "${{ inputs.source_mode }}" in
-              maintained|custom|gki_ksu)
+              maintained|custom|midori01)
               echo "Kleaf KMI symbol-list strict mode bypass enabled for source_mode=${{ inputs.source_mode }}"
               bazel_args+=("--nokmi_symbol_list_strict_mode")
                 ;;
